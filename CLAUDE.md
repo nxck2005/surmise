@@ -38,7 +38,10 @@ break copied v1 examples:
   `View` returns a struct, not a string. Build content with a `tea.View` value
   and set `.Content`; alt-screen, background/foreground colour and window title
   are **fields on `tea.View`** (see `internal/ui/app.go`), not program options.
-- Key messages are **`tea.KeyPressMsg`**, matched via `.String()`.
+- Key messages are **`tea.KeyPressMsg`**, matched via `.String()`. Mouse
+  messages are `tea.MouseClickMsg` / `MouseMotionMsg` / `MouseWheelMsg`, and the
+  mouse is enabled by the **`MouseMode` field on `tea.View`**, not a program
+  option.
 
 When unsure of a v2 API, read the module source under
 `~/go/pkg/mod/charm.land/` rather than guessing from memory.
@@ -76,7 +79,32 @@ deliberate — the same game/store can later be driven by a server.
   intent back to the root, not nested `tea.Model`s. `theme.go` holds the entire
   palette plus `renderPanel` (the btop-style rounded, titled border);
   `board.go` renders tiles and the keyboard. Per `IDEA.md`, a new puzzle is
-  **tab then enter**.
+  **tab then enter**. `hit.go` carries mouse support (below).
+
+## Mouse
+
+**Anything the keys can do, a click can do too** — keep it that way when adding
+a keybind. The parity pieces: the on-screen keyboard types (its `⏎`/`⌫` caps
+submit and delete), menu choices and list rows are clicked directly, a typed
+tile is clicked to erase back to it, the `×` in the panel border quits, and the
+**bottom help line doubles as the button bar** — each hint with an `action` is
+a click target.
+
+Positions can't be predicted through the two levels of centring, so `hit.go`
+**measures them**: `hitMap.mark` prefixes each clickable atom with a zero-width
+APC escape, and `View` calls `hitMap.scan` on the finished frame to record where
+the markers landed, stripping them before the string reaches Bubble Tea. Hence
+`view()`/`help()` take a `*hitMap` (nil-safe — nil marks nothing).
+
+- A click resolves to an `action`, and `Model.dispatch` routes it into the same
+  intent methods the key handlers use (`typeLetter`, `submit`, `applyChoice`,
+  `openSelected`, `back`…). **Never let the two paths diverge**: add the
+  behaviour as a method, then call it from both.
+- `action` is comparable and doubles as the hover key; hover highlighting is one
+  cue in one place (`hoverStyle` in `theme.go`).
+- Marking must never move anything, which
+  `TestMarkersDoNotAffectLayout` enforces by composing each screen with and
+  without a `hitMap` and comparing bytes.
 
 ## UI layout
 
@@ -107,6 +135,17 @@ asserting on `View().Content` (`internal/ui/app_test.go`) — no TTY needed.
 framework actually produces; keep it passing if you extend the key helper.
 `newModel` resets to the menu so tests start games explicitly, even though the
 app itself opens on a puzzle.
+
+Mouse tests (`internal/ui/mouse_test.go`) work the same way: `draw` sizes the
+terminal and renders, then `click`/`point` look the target up with
+`hitMap.find` and send a `MouseClickMsg`/`MouseMotionMsg` at its centre — so no
+test hard-codes coordinates. `TestClickTargetsMatchGlyphs` is the geometry
+guard: it checks a recorded rect really covers the glyphs it claims (an
+off-by-one in `scan` fails it).
+
+To drive real mouse input end to end, spawn the binary in a pty and write SGR
+sequences to it: `\x1b[<0;COL;ROWM` then `…m` is a left click, `\x1b[<35;COL;ROWM`
+is bare motion (coordinates 1-based).
 
 To eyeball real rendering, set `m.width/height` and print `m.View().Content`
 from a throwaway test, or drive the built binary in a sized pty; strip ANSI with

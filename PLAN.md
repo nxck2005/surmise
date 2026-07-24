@@ -26,6 +26,9 @@ What exists:
   reviewable when finished and resumable when not.
 - **Profile screen**: win rate, avg attempts, avg solve time, current/max
   streak, guess-distribution histogram, and a per-mode breakdown.
+- **Full mouse control**: every keybind has an on-screen target — the keyboard
+  caps type (with `⏎`/`⌫`), rows and help-bar hints are buttons, and hover
+  tracks the pointer. See "Mouse support" below.
 - **btop-style UI**: a rounded, titled panel boxes the content and is centred in
   the terminal; near-black background; monkeytype "serika" palette; on-screen
   keyboard rendered as filled keycaps; spaced, enlarged board tiles.
@@ -117,7 +120,7 @@ internal/ui     Bubble Tea layer       ← the only package that knows about a t
 - `theme.go` holds the **entire palette** and shared style helpers, plus
   `renderPanel` (the btop-style border). Restyling is a one-file change.
 - `board.go` renders tiles and the keyboard. `format.go` has duration/percent
-  helpers.
+  helpers. `hit.go` holds mouse hit-testing (see below).
 
 ---
 
@@ -147,6 +150,64 @@ together:
   `m.height`.
 - Colours: menu items and the panel title are accent; the selected menu row is
   flanked symmetrically (`› label ‹`) so the marker doesn't throw off centring.
+
+---
+
+## Mouse support (`hit.go`)
+
+The rule is **parity**: anything the keyboard can do, a click can do. That is a
+constraint on future work, not just a feature — a new keybind needs an on-screen
+target, and `TestPlayingByClickingOnly` fails if the board stops being playable
+with a mouse alone.
+
+Parity needed new affordances, since several keybinds pointed at nothing on
+screen. What was added: `⏎` and `⌫` caps on the on-screen keyboard (Wordle has
+them too, and they fit — row 0 stays the widest at 59 cells, so the panel didn't
+grow), an `×` inlaid at the right end of the panel's top rule, and the **bottom
+help line reworked into the button bar** — each hint carrying an `action` is a
+click target, which is why it can list every control without looking any
+different from the plain hint line it replaced.
+
+### Why marker-and-scan, and not geometry
+
+Hit-testing has to answer "what is at cell (x, y)?", but by then the element has
+been through **two levels of centring plus the panel** — and lipgloss rounds the
+odd cell *left* when joining (`join.go`) and *right* when placing
+(`position.go`). Re-deriving that arithmetic is possible, and would break
+silently the first time a style changed.
+
+So positions are measured, not predicted. `hitMap.mark` prefixes each clickable
+atom with a zero-width APC escape carrying an id; `View` composes the frame as
+before and then calls `hitMap.scan`, which finds where each marker actually
+landed and strips them all before the string reaches Bubble Tea. The escape is
+invisible to layout because `ansi.StringWidth` — what lipgloss measures with —
+runs a full ANSI state machine and counts it as zero; terminals never see it
+anyway. `TestMarkersDoNotAffectLayout` composes every screen with and without a
+hit map and demands byte-identical output, so this can't silently drift.
+
+The trade is one extra pass over the frame per render, which at this size is
+nothing. It also means clickable regions cost nothing to maintain: mark the
+atom, and moving it around the layout keeps working.
+
+### Rules to keep
+
+- **One behaviour, two inputs.** `Model.dispatch` never reimplements anything:
+  it calls the same methods keys do (`typeLetter`/`deleteLetter`/`trimTo`,
+  `submit`, `startNew`, `exit`, `applyChoice`, `openSelected`, `back`). Adding a
+  click path means *extracting* an intent method, never copying a handler body.
+  This is also why `applyChoice`/`openSelected` were split out of the key
+  handlers.
+- **Clicks obey the puzzle lifecycle** like keys do — the click path for a new
+  puzzle goes through `startNew`, so `persisted` and the peek/commit split still
+  hold (`TestHelpBarButtons` checks no phantom entry is saved).
+- `action` is comparable so it doubles as the hover key; hover is stored on the
+  root `Model` and carried into the next frame's `hitMap`.
+- Hover uses `MouseModeAllMotion` (motion with no button held). On the menu and
+  list the pointer moves the selection, which is why one click is enough to act;
+  elsewhere `hoverStyle` (one line in `theme.go`) underlines the target.
+- `View` writes `m.hits`, which `Update` reads. That is safe because Bubble Tea
+  calls `View` synchronously right after `Update` on the same goroutine
+  (`tea.go`), and `go test -race` covers it.
 
 ---
 
@@ -181,6 +242,16 @@ peek/commit split, or you'll get phantom 0/6 entries or number gaps.
   synthetic keys match what the framework actually produces — **keep it passing
   if you extend the key helper.** `newModel` resets to the menu so tests can
   start games explicitly even though the app opens on a puzzle.
+- **Mouse input is tested the same way** (`mouse_test.go`): `draw` renders at a
+  fixed size, then `click`/`point` resolve a target through `hitMap.find` and
+  send a synthetic `MouseClickMsg`/`MouseMotionMsg` at its centre, so no test
+  hard-codes a coordinate. Two tests carry the weight:
+  `TestMarkersDoNotAffectLayout` (marking changes no bytes) and
+  `TestClickTargetsMatchGlyphs` (a recorded rect really covers the glyphs it
+  claims — an off-by-one in `scan` fails it, which was checked by injecting one).
+  To exercise the real input path, spawn the binary in a pty and write SGR mouse
+  sequences: `\x1b[<0;COL;ROWM` + `…m` is a left click, `\x1b[<35;COL;ROWM` bare
+  motion, both 1-based.
 - **To eyeball real rendering**, drive the built binary in a sized pty, or write
   a throwaway Go test that sets `m.width/height` and prints `m.View().Content`.
   Strip ANSI with `sed -E 's/\x1b\[[0-9;]*m//g'`. The terminal bg/fg are set via
