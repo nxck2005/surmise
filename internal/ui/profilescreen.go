@@ -32,7 +32,7 @@ func (m *profileScreen) reload(s store.Store) {
 	m.summary = stats.Compute(games)
 }
 
-func (m *profileScreen) view() string {
+func (m *profileScreen) view(h *hitMap) string {
 	if m.err != nil {
 		return titleStyle.Render("profile") + "\n\n" +
 			errorStyle.Render(fmt.Sprintf("could not read puzzles: %v", m.err))
@@ -143,6 +143,6 @@ func (m *profileScreen) renderByMode() string {
 	return mutedStyle.Render("by mode") + "\n" + strings.Join(rows, "\n")
 }
 
-func (m *profileScreen) help() string {
-	return helpStyle.Render("esc menu")
+func (m *profileScreen) help(h *hitMap) string {
+	return renderHelp(h, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
 }

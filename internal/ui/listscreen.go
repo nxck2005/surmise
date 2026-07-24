@@ -68,6 +68,21 @@ func (m *listScreen) move(delta int) {
 	m.cursor = min(max(m.cursor+delta, 0), len(m.items)-1)
 }
 
+// scroll pans the visible window without moving the selection, which is what a
+// mouse wheel should do. The selection follows the pointer instead (see the
+// hover handling in app.go), so the two never fight.
+func (m *listScreen) scroll(delta int) {
+	m.offset = min(max(m.offset+delta, 0), max(len(m.items)-visibleRows, 0))
+}
+
+// point selects the row the pointer is over. Hovering moves the selection, the
+// way it does on a web page, so a click has no separate "select" step.
+func (m *listScreen) point(row int) {
+	if row >= 0 && row < len(m.items) {
+		m.cursor = row
+	}
+}
+
 // clampOffset scrolls the window just far enough to keep the cursor visible.
 func (m *listScreen) clampOffset() {
 	if m.cursor < m.offset {
@@ -79,7 +94,7 @@ func (m *listScreen) clampOffset() {
 	m.offset = max(m.offset, 0)
 }
 
-func (m *listScreen) view() string {
+func (m *listScreen) view(h *hitMap) string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("puzzles"))
 	b.WriteString("\n\n")
@@ -95,7 +110,10 @@ func (m *listScreen) view() string {
 
 	end := min(m.offset+visibleRows, len(m.items))
 	for i := m.offset; i < end; i++ {
-		b.WriteString(m.renderRow(m.items[i], i == m.cursor))
+		// One click opens a puzzle; esc comes straight back, so there is no
+		// need to make selecting a separate step.
+		b.WriteString(h.mark(action{kind: actListRow, index: i},
+			m.renderRow(m.items[i], i == m.cursor)))
 		b.WriteString("\n")
 	}
 
@@ -142,6 +160,10 @@ func describeStatus(s store.Summary) (text string, c color.Color) {
 	}
 }
 
-func (m *listScreen) help() string {
-	return helpStyle.Render("↑/↓ move · enter open · esc menu")
+func (m *listScreen) help(h *hitMap) string {
+	return renderHelp(h,
+		helpItem{keys: "↑/↓", label: "move"},
+		helpItem{keys: "enter", label: "open", act: action{kind: actListRow, index: m.cursor}},
+		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+	)
 }

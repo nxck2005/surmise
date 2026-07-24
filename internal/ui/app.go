@@ -45,6 +45,13 @@ type Model struct {
 	list    listScreen
 	profile profileScreen
 
+	// hits is where the last frame drew its clickable regions; hover is what the
+	// pointer was last over, which the next frame highlights. Both are written
+	// by View, which the framework calls on the same goroutine as Update
+	// immediately afterwards, so there is no race between drawing and clicking.
+	hits  *hitMap
+	hover action
+
 	width, height int
 	err           error
 	quitting      bool
@@ -84,8 +91,105 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+
+	case tea.MouseClickMsg:
+		// Only the left button acts; a click on nothing is a no-op. Release is
+		// deliberately ignored, so a target fires the moment it is pressed.
+		if msg.Button != tea.MouseLeft {
+			return m, nil
+		}
+		if a, ok := m.hits.at(msg.X, msg.Y); ok {
+			return m, m.dispatch(a)
+		}
+
+	case tea.MouseMotionMsg:
+		m.handleMotion(msg.X, msg.Y)
+
+	case tea.MouseWheelMsg:
+		// The puzzle list is the only thing long enough to scroll.
+		if m.screen == screenList {
+			switch msg.Button {
+			case tea.MouseWheelUp:
+				m.list.scroll(-1)
+			case tea.MouseWheelDown:
+				m.list.scroll(1)
+			}
+		}
 	}
 	return m, nil
+}
+
+// handleMotion records what the pointer is over so the next render can
+// highlight it. On the menu and the puzzle list the selection follows the
+// pointer as well, which is what makes one click enough to act.
+func (m *Model) handleMotion(x, y int) {
+	a, _ := m.hits.at(x, y) // off any target, a is the zero action: no hover
+	m.hover = a
+
+	switch a.kind {
+	case actMenuChoice:
+		m.menu.point(a.index)
+	case actListRow:
+		m.list.point(a.index)
+	}
+}
+
+// dispatch performs a clicked action. Every branch routes into the same methods
+// the key handlers call, so clicking and typing cannot drift apart.
+func (m *Model) dispatch(a action) tea.Cmd {
+	switch a.kind {
+	case actQuit:
+		return m.quit()
+
+	case actBack:
+		return m.back()
+
+	case actMenuChoice:
+		if m.screen != screenMenu || a.index >= len(m.menu.choices) {
+			return nil
+		}
+		m.menu.point(a.index)
+		return m.applyChoice(m.menu.choices[a.index])
+
+	case actListRow:
+		if m.screen != screenList {
+			return nil
+		}
+		m.list.point(a.index)
+		return m.openSelected()
+	}
+
+	// Everything left belongs to the board.
+	if m.screen != screenGame || m.game == nil {
+		return nil
+	}
+	switch a.kind {
+	case actLetter:
+		m.game.typeLetter(a.letter)
+	case actBackspace:
+		m.game.deleteLetter()
+	case actTrim:
+		m.game.trimTo(a.index)
+	case actSubmit:
+		return m.game.submit()
+	case actNewPuzzle:
+		// A click is already deliberate, so it needs no tab-then-enter confirm.
+		m.game.confirmNew = false
+		return m.game.startNew()
+	case actCancelNew:
+		m.game.confirmNew = false
+	}
+	return nil
+}
+
+// back is what esc does: leave the board, saving on the way out, and return to
+// the menu.
+func (m *Model) back() tea.Cmd {
+	if m.screen == screenGame && m.game != nil {
+		m.game.exit()
+	}
+	m.screen = screenMenu
+	return nil
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -119,13 +223,17 @@ func (m *Model) updateMenu(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if !chosen {
 		return m, nil
 	}
+	return m, m.applyChoice(choice)
+}
 
-	switch choice.kind {
+// applyChoice acts on a menu entry, whether it was chosen with enter or clicked.
+func (m *Model) applyChoice(c choice) tea.Cmd {
+	switch c.kind {
 	case choiceNewGame:
-		g, err := newPuzzle(m.store, choice.length)
+		g, err := newPuzzle(m.store, c.length)
 		if err != nil {
 			m.err = err
-			return m, nil
+			return nil
 		}
 		m.game = newGameScreen(m.store, g, false)
 		m.screen = screenGame
@@ -139,9 +247,9 @@ func (m *Model) updateMenu(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenProfile
 
 	case choiceQuit:
-		return m, m.quit()
+		return m.quit()
 	}
-	return m, nil
+	return nil
 }
 
 func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -150,19 +258,25 @@ func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case back:
 		m.screen = screenMenu
 	case open:
-		summary, ok := m.list.selected()
-		if !ok {
-			return m, nil
-		}
-		g, err := m.store.Load(summary.ID)
-		if err != nil {
-			m.err = err
-			return m, nil
-		}
-		m.game = newGameScreen(m.store, g, true)
-		m.screen = screenGame
+		return m, m.openSelected()
 	}
 	return m, nil
+}
+
+// openSelected resumes — or reviews — the highlighted puzzle.
+func (m *Model) openSelected() tea.Cmd {
+	summary, ok := m.list.selected()
+	if !ok {
+		return nil
+	}
+	g, err := m.store.Load(summary.ID)
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	m.game = newGameScreen(m.store, g, true)
+	m.screen = screenGame
+	return nil
 }
 
 // quit saves any open puzzle before exiting, so quitting mid-game is a pause
@@ -183,12 +297,31 @@ func (m *Model) View() tea.View {
 	v.BackgroundColor = colorBg
 	v.ForegroundColor = colorText
 	v.WindowTitle = "wortle"
+	// Clicking is a first-class input here: every keybind has an on-screen
+	// target. All-motion mode is what makes hover highlighting possible, since
+	// it reports the pointer with no button held.
+	v.MouseMode = tea.MouseModeAllMotion
 
 	if m.quitting {
 		return v
 	}
 
-	body, help := m.activeScreen()
+	// Clickable regions are collected fresh each frame; only the hover carries
+	// over from the last one.
+	h := &hitMap{hover: m.hover}
+
+	// Composition finished, so the markers left by mark() now sit at their
+	// final coordinates: record them and strip them back out.
+	v.Content = h.scan(m.frame(h))
+	m.hits = h
+	return v
+}
+
+// frame composes the whole screen. It is separate from View so a test can
+// compose the same screen with no hit map and prove that marking changes not one
+// cell of the result (TestMarkersDoNotAffectLayout).
+func (m *Model) frame(h *hitMap) string {
+	body, help := m.activeScreen(h)
 	if m.err != nil {
 		body = lipgloss.JoinVertical(lipgloss.Left,
 			body, "", errorStyle.Render(fmt.Sprintf("error: %v", m.err)))
@@ -200,14 +333,23 @@ func (m *Model) View() tea.View {
 	// panel in the terminal. The border hugs the content, not the terminal
 	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
 	// panel is emitted on its own.
-	panel := renderPanel(m.screenTitle(), content)
+	panel := renderPanel(m.screenTitle(), m.closeBox(h), content)
 	if m.width > 0 && m.height > 0 {
-		v.Content = lipgloss.Place(m.width, m.height,
+		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center, panel)
-	} else {
-		v.Content = panel
 	}
-	return v
+	return panel
+}
+
+// closeBox is the × inlaid at the right end of the panel's top border. Quitting
+// has to be reachable with the mouse from every screen, not just the menu.
+func (m *Model) closeBox(h *hitMap) string {
+	quit := action{kind: actQuit}
+	style := mutedStyle
+	if h.hovered(quit) {
+		style = hoverStyle(errorStyle)
+	}
+	return " " + h.mark(quit, style.Render("×")) + " "
 }
 
 // screenTitle is the label shown in the panel's top border.
@@ -222,16 +364,16 @@ func (m *Model) screenTitle() string {
 	}
 }
 
-func (m *Model) activeScreen() (body, help string) {
+func (m *Model) activeScreen(h *hitMap) (body, help string) {
 	switch m.screen {
 	case screenGame:
-		return m.game.view(), m.game.help()
+		return m.game.view(h), m.game.help(h)
 	case screenList:
-		return m.list.view(), m.list.help()
+		return m.list.view(h), m.list.help(h)
 	case screenProfile:
-		return m.profile.view(), m.profile.help()
+		return m.profile.view(h), m.profile.help(h)
 	default:
-		return m.menu.view(), m.menu.help()
+		return m.menu.view(h), m.menu.help(h)
 	}
 }
 
@@ -290,7 +432,14 @@ func (m *menuScreen) update(msg tea.KeyPressMsg) (choice, bool) {
 	return choice{}, false
 }
 
-func (m *menuScreen) view() string {
+// point selects a row, for the pointer to move the cursor with.
+func (m *menuScreen) point(i int) {
+	if i >= 0 && i < len(m.choices) {
+		m.cursor = i
+	}
+}
+
+func (m *menuScreen) view(h *hitMap) string {
 	heading := titleStyle.Render("wortle") + mutedStyle.Render("  wordle for the terminal")
 
 	// Every row is centred to a common width so the list sits under the middle
@@ -306,19 +455,27 @@ func (m *menuScreen) view() string {
 
 	rows := make([]string, len(m.choices))
 	for i, c := range m.choices {
+		var row string
 		if i == m.cursor {
-			rows[i] = center.Render(accentStyle.Bold(true).Render("› " + c.label + " ‹"))
+			row = center.Render(accentStyle.Bold(true).Render("› " + c.label + " ‹"))
 		} else {
-			rows[i] = center.Render(mutedStyle.Render(c.label))
+			row = center.Render(mutedStyle.Render(c.label))
 		}
+		// The whole centred row is the click target, so it is forgiving to aim
+		// at. Hovering it moves the cursor, which is highlight enough.
+		rows[i] = h.mark(action{kind: actMenuChoice, index: i}, row)
 	}
 
 	list := lipgloss.JoinVertical(lipgloss.Center, rows...)
 	return lipgloss.JoinVertical(lipgloss.Center, heading, "", list)
 }
 
-func (m *menuScreen) help() string {
-	return helpStyle.Render("↑/↓ move · enter select · q quit")
+func (m *menuScreen) help(h *hitMap) string {
+	return renderHelp(h,
+		helpItem{keys: "↑/↓", label: "move"},
+		helpItem{keys: "enter", label: "select", act: action{kind: actMenuChoice, index: m.cursor}},
+		helpItem{keys: "q", label: "quit", act: action{kind: actQuit}},
+	)
 }
 
 // compile-time check that the root model satisfies the framework contract.

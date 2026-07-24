@@ -66,6 +66,14 @@ func (m *gameScreen) leave() error {
 	return m.store.Save(m.g)
 }
 
+// exit leaves the board for the menu, banking time and saving on the way out.
+// Both esc and a click on the menu button come through here.
+func (m *gameScreen) exit() {
+	if err := m.leave(); err != nil {
+		m.notify("could not save: %v", err)
+	}
+}
+
 // elapsed is play time including the session in progress.
 func (m *gameScreen) elapsed() time.Duration {
 	d := m.g.Elapsed()
@@ -99,9 +107,7 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 
 	switch key {
 	case "esc":
-		if err := m.leave(); err != nil {
-			m.notify("could not save: %v", err)
-		}
+		m.exit()
 		return nil, true
 
 	case "tab":
@@ -109,9 +115,7 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, false
 
 	case "backspace":
-		if len(m.typing) > 0 {
-			m.typing = m.typing[:len(m.typing)-1]
-		}
+		m.deleteLetter()
 
 	case "enter":
 		return m.submit(), false
@@ -120,11 +124,35 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	// Letter input. Single printable ASCII letters only; anything else is a
 	// keybind we do not handle.
 	if len(key) == 1 && key[0] >= 'a' && key[0] <= 'z' {
-		if !m.g.Status.Done() && len(m.typing) < m.g.Length {
-			m.typing += key
-		}
+		m.typeLetter(key[0])
 	}
 	return nil, false
+}
+
+// typeLetter, deleteLetter and trimTo are the editing intents, kept separate
+// from key matching so a click on the on-screen keyboard or on a typed tile
+// reaches exactly the same code a keystroke does.
+func (m *gameScreen) typeLetter(c byte) {
+	if c < 'a' || c > 'z' {
+		return
+	}
+	if !m.g.Status.Done() && len(m.typing) < m.g.Length {
+		m.typing += string(c)
+	}
+}
+
+func (m *gameScreen) deleteLetter() {
+	if len(m.typing) > 0 {
+		m.typing = m.typing[:len(m.typing)-1]
+	}
+}
+
+// trimTo erases the row being typed back to slot i, so clicking the third tile
+// leaves the first two letters standing.
+func (m *gameScreen) trimTo(i int) {
+	if i >= 0 && i < len(m.typing) {
+		m.typing = m.typing[:i]
+	}
 }
 
 func (m *gameScreen) submit() tea.Cmd {
@@ -206,7 +234,7 @@ func newPuzzle(s store.Store, length int) (*game.Game, error) {
 	return game.New(length, number)
 }
 
-func (m *gameScreen) view() string {
+func (m *gameScreen) view(h *hitMap) string {
 	g := m.g
 
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -218,11 +246,11 @@ func (m *gameScreen) view() string {
 	sections := []string{
 		header,
 		"",
-		renderBoard(g, m.typing),
+		renderBoard(g, m.typing, h),
 		"",
-		renderKeyboard(g.LetterStates()),
+		renderKeyboard(g.LetterStates(), h),
 		"",
-		m.statusLine(),
+		m.statusLine(h),
 	}
 	// Centre the sections relative to each other so the header and status line
 	// sit under the middle of the board and keyboard rather than hugging the
@@ -232,10 +260,16 @@ func (m *gameScreen) view() string {
 
 // statusLine carries whichever of the transient message, the end-of-game
 // result, or the restart prompt is most important right now.
-func (m *gameScreen) statusLine() string {
+func (m *gameScreen) statusLine(h *hitMap) string {
 	if m.confirmNew {
-		return accentStyle.Render("enter") + mutedStyle.Render(" to start a new puzzle · ") +
-			accentStyle.Render("esc") + mutedStyle.Render(" to cancel")
+		// Both halves of the prompt are clickable, so a player who armed the
+		// prompt with tab is not stranded without a keyboard.
+		confirm := action{kind: actNewPuzzle}
+		cancel := action{kind: actCancelNew}
+		return h.mark(confirm, accentStyle.Render("enter")) +
+			mutedStyle.Render(" to start a new puzzle · ") +
+			h.mark(cancel, accentStyle.Render("esc")) +
+			mutedStyle.Render(" to cancel")
 	}
 	if m.message != "" && time.Now().Before(m.msgUntil) {
 		return errorStyle.Render(m.message)
@@ -253,6 +287,11 @@ func (m *gameScreen) statusLine() string {
 	}
 }
 
-func (m *gameScreen) help() string {
-	return helpStyle.Render("type a word · enter submit · tab+enter new puzzle · esc menu")
+func (m *gameScreen) help(h *hitMap) string {
+	return renderHelp(h,
+		helpItem{label: "type a word"},
+		helpItem{keys: "enter", label: "submit", act: action{kind: actSubmit}},
+		helpItem{keys: "tab+enter", label: "new puzzle", act: action{kind: actNewPuzzle}},
+		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+	)
 }

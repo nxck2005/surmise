@@ -10,7 +10,7 @@ import (
 
 // renderBoard draws every attempt row: guesses already played, the row being
 // typed, then empty rows. reveal shows the answer's letters for a lost game.
-func renderBoard(g *game.Game, typing string) string {
+func renderBoard(g *game.Game, typing string, h *hitMap) string {
 	rows := make([]string, 0, g.MaxAttempts)
 
 	for i, guess := range g.Guesses {
@@ -18,7 +18,7 @@ func renderBoard(g *game.Game, typing string) string {
 	}
 
 	if !g.Status.Done() {
-		rows = append(rows, renderTypingRow(typing, g.Length))
+		rows = append(rows, renderTypingRow(typing, g.Length, h))
 	}
 
 	for len(rows) < g.MaxAttempts {
@@ -57,11 +57,18 @@ func renderScoredRow(guess string, marks []game.Mark) string {
 	return joinTiles(cells)
 }
 
-func renderTypingRow(typing string, length int) string {
+func renderTypingRow(typing string, length int, h *hitMap) string {
 	cells := make([]string, length)
 	for i := range cells {
 		if i < len(typing) {
-			cells[i] = tileActive.Render(strings.ToUpper(string(typing[i])))
+			// A typed letter is a click target: clicking it erases the row back
+			// to that slot, which is how a mouse edits a mistake mid-word.
+			trim := action{kind: actTrim, index: i}
+			style := tileActive
+			if h.hovered(trim) {
+				style = hoverStyle(style)
+			}
+			cells[i] = h.mark(trim, style.Render(strings.ToUpper(string(typing[i]))))
 		} else if i == len(typing) {
 			// Mark the caret position so the player can see where input lands.
 			cells[i] = tileEmpty.Foreground(colorAccent).Render("_")
@@ -97,21 +104,46 @@ func joinTiles(cells []string) string {
 // keyboardRows is the QWERTY layout used for the letter-state display.
 var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 
+// Enter and backspace flank the bottom row, as on Wordle's own keyboard. They
+// are what a mouse submits and deletes with, and they cost no vertical space:
+// row 0 stays the widest at 59 cells, row 2 grows from 41 to 53.
+const (
+	keyEnterLabel = "⏎"
+	keyDelLabel   = "⌫"
+)
+
 // renderKeyboard shows the best-known state of every letter, which is the
-// player's main aid for narrowing down the answer.
-func renderKeyboard(states map[byte]game.Mark) string {
+// player's main aid for narrowing down the answer. Every cap is clickable.
+func renderKeyboard(states map[byte]game.Mark, h *hitMap) string {
 	// Width of the widest row, used to centre the shorter ones beneath it.
-	width := lipgloss.Width(renderKeyboardRow(keyboardRows[0], states))
+	// Measured without the hit map so the throwaway render marks nothing.
+	width := lipgloss.Width(renderKeyboardRow(keyboardRows[0], states, nil))
 
 	rows := make([]string, len(keyboardRows))
 	for i, letters := range keyboardRows {
-		row := renderKeyboardRow(letters, states)
+		row := renderKeyboardRow(letters, states, h)
+		if i == len(keyboardRows)-1 {
+			row = joinTiles([]string{
+				renderCommandKey(keyEnterLabel, action{kind: actSubmit}, h),
+				row,
+				renderCommandKey(keyDelLabel, action{kind: actBackspace}, h),
+			})
+		}
 		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(row)
 	}
 	return stackSpaced(rows)
 }
 
-func renderKeyboardRow(letters string, states map[byte]game.Mark) string {
+// renderCommandKey draws one of the two non-letter caps.
+func renderCommandKey(label string, a action, h *hitMap) string {
+	style := keyUnused
+	if h.hovered(a) {
+		style = hoverStyle(style)
+	}
+	return h.mark(a, style.Render(label))
+}
+
+func renderKeyboardRow(letters string, states map[byte]game.Mark, h *hitMap) string {
 	cells := make([]string, len(letters))
 	for i := range letters {
 		c := letters[i]
@@ -128,7 +160,12 @@ func renderKeyboardRow(letters string, states map[byte]game.Mark) string {
 				style = keyAbsent
 			}
 		}
-		cells[i] = style.Render(letter)
+
+		typeIt := action{kind: actLetter, letter: c}
+		if h.hovered(typeIt) {
+			style = hoverStyle(style)
+		}
+		cells[i] = h.mark(typeIt, style.Render(letter))
 	}
 	// A one-space gutter keeps adjacent keycaps' backgrounds from merging into
 	// a single bar, the same reason the board tiles are spaced.
