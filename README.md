@@ -26,6 +26,8 @@ Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
   pick it back up. Each puzzle gets a number: `wortle #42`.
 - **A profile screen** — win rate, average attempts, average solve time,
   current and best streak, guess distribution.
+- **A colour legend on the board**, so a theme that does not use green and
+  yellow is still readable at a glance. It steps aside on small terminals.
 - **13 bundled themes** and a live-preview picker. Themes are plain text files;
   writing one is editing a handful of key/value lines.
 - **Full mouse support.** Anything the keys can do, a click can do too — the

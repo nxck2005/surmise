@@ -120,6 +120,12 @@ Elements: `title`, `text`, `muted`, `accent`, `error`, `help`, `help_hover`,
 `key.unused`, `key.correct`, `key.present`, `key.absent`, `status.won`,
 `status.lost`, `status.playing`.
 
+The legend on the puzzle screen (`A correct spot · A wrong spot · A not in
+word`) has no element of its own: it is drawn with `tile.correct`,
+`tile.present` and `tile.absent`, so whatever you do to the tiles it explains,
+it does too. Note that a large `tile_width` makes the legend the widest thing on
+the screen — wortle hides it rather than overflow a narrow terminal.
+
 ## When something is wrong
 
 A line the parser cannot read becomes a warning naming its line number; the rest

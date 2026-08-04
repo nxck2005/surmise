@@ -392,3 +392,63 @@ func TestKeyboardKeepsBestLetterState(t *testing.T) {
 		t.Error("keyboard not rendered")
 	}
 }
+
+// The legend is what makes a theme's tile colours readable: it must be on the
+// board whenever there is room for it.
+func TestLegendOnBoard(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	view := sgr.ReplaceAllString(m.View().Content, "")
+	for _, want := range []string{"correct spot", "wrong spot", "not in word"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("legend missing %q\n%s", want, view)
+		}
+	}
+}
+
+// The legend is the first thing to go when the terminal cannot hold the board,
+// the keyboard and one more row — on either axis.
+func TestLegendYieldsToASmallTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		w, h int
+	}{
+		{"short", 100, 24},
+		{"narrow", 50, 40},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newModel(t)
+			send(t, m, "down", "enter")
+			m.Update(tea.WindowSizeMsg{Width: tc.w, Height: tc.h})
+
+			view := sgr.ReplaceAllString(m.View().Content, "")
+			if strings.Contains(view, "correct spot") {
+				t.Errorf("legend still drawn at %dx%d\n%s", tc.w, tc.h, view)
+			}
+			if !strings.Contains(view, "Q") {
+				t.Errorf("board and keyboard should survive\n%s", view)
+			}
+		})
+	}
+}
+
+// The legend explains the board only if it is drawn the same way the board is.
+// Rendering the sample letter through the very style a scored tile uses is what
+// guarantees that, so the two must come out byte-identical.
+func TestLegendMatchesTheTilesItExplains(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	send(t, m, "c", "r", "a", "n", "e", "enter") // every letter correct
+	view := m.View().Content
+
+	// One from the board's A tile, one from the legend's correct swatch.
+	tile := st.tileCorrect.Render(legendSample)
+	if n := strings.Count(view, tile); n < 2 {
+		t.Errorf("legend swatch and scored tile render differently: %d matches for %q", n, tile)
+	}
+}

@@ -40,7 +40,16 @@ type gameScreen struct {
 	// banked into the game on the way out so idle time between sessions is not
 	// counted.
 	sessionStart time.Time
+
+	// width and height are the terminal's, pushed down by the root. The board is
+	// the tallest screen in the app, so it is the one that has to decide whether
+	// an optional row — the colour legend — fits. Zero means "not measured yet".
+	width, height int
 }
+
+// resize records the terminal size. The root calls it on every WindowSizeMsg
+// and when a board is opened.
+func (m *gameScreen) resize(w, h int) { m.width, m.height = w, h }
 
 // newGameScreen wraps a puzzle. saved reports whether it is already on disk:
 // true for a puzzle loaded from the list, false for a freshly created one.
@@ -252,10 +261,37 @@ func (m *gameScreen) view(h *hitMap) string {
 		"",
 		m.statusLine(h),
 	}
+	// Last, under the status line and spaced off it like every other section: a
+	// reference the player consults, not something to read past on the way to
+	// the board.
+	if legend := renderLegend(); m.fits(legend) {
+		sections = append(sections, "", legend)
+	}
 	// Centre the sections relative to each other so the header and status line
 	// sit under the middle of the board and keyboard rather than hugging the
 	// left edge.
 	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+}
+
+// fits reports whether the terminal can afford the legend row. The board plus
+// keyboard already nears a 24-row terminal, and tile_width is themeable, so the
+// legend is the first thing to go when either axis runs short. An unmeasured
+// size (before the first WindowSizeMsg) counts as unbounded.
+func (m *gameScreen) fits(legend string) bool {
+	if m.width <= 0 || m.height <= 0 {
+		return true
+	}
+
+	// What the screen costs without the legend: header, blank, board rows with a
+	// blank between each, blank, three keyboard rows likewise, blank, status.
+	body := 1 + 1 + (2*m.g.MaxAttempts - 1) + 1 + 5 + 1 + 1
+	// Plus the help bar and its margin, and the panel's padding and border.
+	chrome := 2 + 2*st.metric.PanelPadY + 2
+	// The legend costs two rows: itself and the blank that spaces it off.
+	if body+chrome+2 > m.height {
+		return false
+	}
+	return lipgloss.Width(legend)+2*st.metric.PanelPadX+2 <= m.width
 }
 
 // statusLine carries whichever of the transient message, the end-of-game
