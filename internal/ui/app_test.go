@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -47,6 +48,18 @@ func newModel(t *testing.T) *Model {
 	m := New(s, nil, "")
 	m.screen = screenMenu
 	return m
+}
+
+// freezeClock stops the elapsed timer in the game header, which otherwise
+// advances between renders and makes any two frames unequal a second apart.
+// elapsed() already treats a zero sessionStart as "no session in progress", so
+// this is a state the screen genuinely has — a puzzle that is not being played
+// right now — not a value invented for the test. Tests that compare one frame
+// against another must call it, or they fail on a slow machine.
+func freezeClock(m *Model) {
+	if m.game != nil {
+		m.game.sessionStart = time.Time{}
+	}
 }
 
 // send feeds keystrokes and returns the rendered screen.
