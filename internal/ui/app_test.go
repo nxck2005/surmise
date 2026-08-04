@@ -350,6 +350,48 @@ func TestOpeningPuzzleFromList(t *testing.T) {
 	}
 }
 
+// Reviewing a finished puzzle must not count as playing it. The clock stops on
+// the guess that ends the game, so reopening it from the list and reading the
+// board can add neither solve time nor a fresh UpdatedAt — the first would
+// inflate the profile's average, the second would reorder the completion
+// sequence the streaks are computed from.
+func TestReviewingAFinishedPuzzleAddsNoTime(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	id := m.game.g.ID
+	send(t, m, "esc")
+
+	solved, err := m.store.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reopen it from the list and sit on it, as a player reviewing a win does.
+	m.list.reload(m.store)
+	m.screen = screenList
+	send(t, m, "enter")
+	if m.game.g.ID != id {
+		t.Fatalf("opened %q, want the solved puzzle %q", m.game.g.ID, id)
+	}
+	m.game.sessionStart = time.Now().Add(-2 * time.Minute)
+	send(t, m, "esc")
+
+	reviewed, err := m.store.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reviewed.ElapsedMS != solved.ElapsedMS {
+		t.Errorf("elapsed = %dms after review, want %dms unchanged",
+			reviewed.ElapsedMS, solved.ElapsedMS)
+	}
+	if !reviewed.UpdatedAt.Equal(solved.UpdatedAt) {
+		t.Errorf("UpdatedAt moved from %v to %v while reviewing",
+			solved.UpdatedAt, reviewed.UpdatedAt)
+	}
+}
+
 func TestProfileReflectsPlay(t *testing.T) {
 	m := newModel(t)
 	send(t, m, "down", "enter")
