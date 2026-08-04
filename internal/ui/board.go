@@ -101,6 +101,34 @@ func joinTiles(cells []string) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, spaced...)
 }
 
+// legendSample is the letter the legend shows in each of the three scored
+// states. Repeating one letter is what makes the row read as "the same letter,
+// three answers" rather than as a word.
+const legendSample = "A"
+
+// renderLegend explains the tile colours. Themes are free to repaint correct,
+// present and absent — several bundled ones drop the green/yellow convention
+// entirely — so the board's own colours are not self-explanatory.
+//
+// It renders through the very styles renderScoredRow uses, so the legend cannot
+// drift from the tiles it describes: a [style.tile.correct] override or a wider
+// tile_width moves both together. There is no click target here, hence no
+// hitMap: the legend is a label, not a control.
+func renderLegend() string {
+	groups := []string{
+		legendEntry(st.tileCorrect, "correct spot"),
+		legendEntry(st.tilePresent, "wrong spot"),
+		legendEntry(st.tileAbsent, "not in word"),
+	}
+	return strings.Join(groups, st.help.Render(st.glyph.Separator))
+}
+
+// legendEntry is one swatch and its label, sharing the board's tile gutter so
+// the filled background does not run into the text.
+func legendEntry(tile lipgloss.Style, label string) string {
+	return joinTiles([]string{tile.Render(legendSample), st.muted.Render(label)})
+}
+
 // keyboardRows is the QWERTY layout used for the letter-state display.
 var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 

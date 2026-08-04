@@ -87,8 +87,9 @@ deliberate — the same game/store can later be driven by a server.
   `themeScreen`, and an inline menu). Screens are plain structs that render to
   strings and report intent back to the root, not nested `tea.Model`s.
   `theme.go` turns a `theme.Theme` into lipgloss styles and holds `renderPanel`
-  (the btop-style rounded, titled border); `board.go` renders tiles and the
-  keyboard. Per `IDEA.md`, a new puzzle is **tab then enter**. `hit.go` carries
+  (the btop-style rounded, titled border); `board.go` renders tiles, the
+  keyboard and the colour legend. Per `IDEA.md`, a new puzzle is **tab then
+  enter**. `hit.go` carries
   mouse support (below).
 
 ## Theming
@@ -150,6 +151,17 @@ probably still joining with `lipgloss.Left`. Adjacent filled backgrounds need a
 gutter or they merge (`joinTiles`, `stackSpaced`). Board tiles are **one row
 tall on purpose** — the tallest mode plus keyboard and panel already nears a
 24-row terminal, so don't make them multi-line without gating on `m.height`.
+
+The **colour legend** at the foot of the board is the worked example of that
+gating, and the pattern to copy for any further optional row: the root pushes
+the terminal size down with `gameScreen.resize` (from `New`, `openGame` and
+every `WindowSizeMsg`), and `gameScreen.fits` drops the legend when the height
+or the width the themed tiles need is not there. An unmeasured size (before the
+first `WindowSizeMsg`) counts as unbounded, which is what keeps the headless
+tests rendering the whole screen. The legend renders through `st.tileCorrect` /
+`tilePresent` / `tileAbsent` themselves — never a parallel set of swatch styles,
+or the key and the board it explains can disagree.
+
 More detail and rationale in `PLAN.md`.
 
 ## Puzzle lifecycle

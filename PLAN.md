@@ -31,7 +31,9 @@ What exists:
   tracks the pointer. See "Mouse support" below.
 - **btop-style UI**: a rounded, titled panel boxes the content and is centred in
   the terminal; near-black background; monkeytype "serika" palette; on-screen
-  keyboard rendered as filled keycaps; spaced, enlarged board tiles.
+  keyboard rendered as filled keycaps; spaced, enlarged board tiles; a colour
+  legend under the status line, drawn with the tile styles themselves and
+  dropped when the terminal is too small for it.
 - **Themes**: the whole look is data. 13 bundled themes, a picker with live
   preview, and user themes as one file each in `<data>/themes/*.toml`. See
   "Theme system" below and `docs/THEMES.md`.
@@ -152,6 +154,18 @@ together:
   approaches a 24-row terminal. Making tiles multi-line boxes overflows small
   terminals (`Place` will clip). If you want chunkier tiles, gate it on
   `m.height`.
+- **The colour legend is the first thing to drop.** The board screen carries a
+  one-line key (`A correct spot · A wrong spot · A not in word`) at the foot of
+  the body, under the status line and spaced off it like every other section,
+  because themes may repaint the three scored colours to anything and
+  green/yellow is not a given. It is drawn with `st.tileCorrect` /
+  `tilePresent` / `tileAbsent` themselves — not a parallel set of swatch styles
+  — so a `[style.tile.*]` override or a wider `tile_width` moves the legend and
+  the board together, and there is nothing to keep in sync. It is also the one
+  optional row on the tallest screen, so `gameScreen.fits` drops it when the
+  terminal cannot spare the height, or the width the themed tiles need. That is
+  why the root pushes its size down via `gameScreen.resize`; an unmeasured size
+  (before the first `WindowSizeMsg`) counts as unbounded.
 - Colours: menu items and the panel title are accent; the selected menu row is
   flanked symmetrically (`› label ‹`) so the marker doesn't throw off centring.
   Both markers now come from the theme, and the centring width is measured from

@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/wortle/internal/game"
 	"github.com/nxck2005/wortle/internal/store"
 	"github.com/nxck2005/wortle/internal/theme"
 	"github.com/nxck2005/wortle/internal/words"
@@ -96,9 +97,16 @@ func New(s store.Store, lib *theme.Library, override string) *Model {
 		m.screen = screenMenu
 		return m
 	}
-	m.game = newGameScreen(s, g, false)
-	m.screen = screenGame
+	m.openGame(g, false)
 	return m
+}
+
+// openGame installs a puzzle as the active screen, handing it the current
+// terminal size: the board is the one screen that trims itself to fit.
+func (m *Model) openGame(g *game.Game, saved bool) {
+	m.game = newGameScreen(m.store, g, saved)
+	m.game.resize(m.width, m.height)
+	m.screen = screenGame
 }
 
 // applyStartupTheme resolves which theme to open with: an explicit override
@@ -126,6 +134,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		if m.game != nil {
+			m.game.resize(m.width, m.height)
+		}
 		return m, nil
 
 	case tickMsg:
@@ -330,8 +341,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 			m.err = err
 			return nil
 		}
-		m.game = newGameScreen(m.store, g, false)
-		m.screen = screenGame
+		m.openGame(g, false)
 
 	case choiceList:
 		m.list.reload(m.store)
@@ -384,8 +394,7 @@ func (m *Model) openSelected() tea.Cmd {
 		m.err = err
 		return nil
 	}
-	m.game = newGameScreen(m.store, g, true)
-	m.screen = screenGame
+	m.openGame(g, true)
 	return nil
 }
 
