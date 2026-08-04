@@ -79,7 +79,7 @@ type settingsStore interface {
 }
 
 // New builds the root model over a store and opens straight into a puzzle, the
-// way monkeytype drops you onto a test. The menu is one esc away. This first
+// way a typing test drops you straight into typing. The menu is one esc away. This first
 // puzzle is transient until played, so launching and quitting saves nothing.
 //
 // lib is the available themes; nil means the bundled set. override forces a
@@ -526,8 +526,7 @@ type menuScreen struct {
 }
 
 func newMenuScreen() menuScreen {
-	// Word lengths lead the menu; they are the game's difficulty modes, the
-	// way 15/30/60 lead monkeytype.
+	// Word lengths lead the menu; they are the game's difficulty modes.
 	choices := make([]choice, 0, len(words.Lengths)+3)
 	for _, n := range words.Lengths {
 		choices = append(choices, choice{

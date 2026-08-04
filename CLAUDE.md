@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Wortle: a Wordle TUI in Go, styled after monkeytype, built with Bubble Tea.
+Wortle: a Wordle TUI in Go, styled after minimal typing-test UIs, built with
+Bubble Tea.
 Word-length modes (4/5/6) are the difficulty axis. Puzzles are resumable and
 saved to disk; there is a stats/profile screen. The app opens straight onto a
 5-letter puzzle (menu is one `esc` away).

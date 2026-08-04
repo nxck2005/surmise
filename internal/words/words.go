@@ -18,7 +18,7 @@ import (
 var data embed.FS
 
 // Lengths are the supported word lengths, in menu order. These are the game's
-// difficulty modes, analogous to monkeytype's 15/30/60 second tests.
+// difficulty modes.
 var Lengths = []int{4, 5, 6}
 
 type lists struct {

@@ -1,4 +1,4 @@
-Wordle TUI app, written in Go, stylized like monkeytype, with Bubble Tea.
+Wordle TUI app, written in Go, stylized like a minimal typing test, with Bubble Tea.
 
 press tab and enter to generate new puzzle
 
@@ -6,9 +6,9 @@ if theres any progress on any puzzle, save it as Wordle #(ID). there will be a l
 
 id can be UUID or something else. 
 
-should have monkeytype like profile section, with leaderboard and general performance metrics, we’ll get more ideas for it later. so dont bottle yourself in with any of this in this doc. one metric that i can suggest is average number of attempts to solve a wordle and average time taken
+should have a typing-test like profile section, with leaderboard and general performance metrics, we’ll get more ideas for it later. so dont bottle yourself in with any of this in this doc. one metric that i can suggest is average number of attempts to solve a wordle and average time taken
 
-Add categories for 5 letter words, 6 letter words and 4 letter words, as the main 3. (like 15, 30, 60 in monkeytype)
+Add categories for 5 letter words, 6 letter words and 4 letter words, as the main 3. (like 15, 30, 60 second typing tests)
 
 after this project is solidified, i aim to make this global, like w a leaderboard and such. will have a central server somewhere so people can “sign in” w an id (don’t know how this might work, auth seems like too much?)
 

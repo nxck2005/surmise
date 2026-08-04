@@ -14,7 +14,7 @@ behind an interface, keep word length a variable.
 
 ## Current state (as of this writing)
 
-Milestone 1 is **done and working**: a playable, persistent, monkeytype-styled
+Milestone 1 is **done and working**: a playable, persistent, typing-test-styled
 Wordle TUI with a stats profile. All packages build, `go vet` is clean, and
 `go test -race ./...` passes.
 
@@ -30,7 +30,7 @@ What exists:
   caps type (with `⏎`/`⌫`), rows and help-bar hints are buttons, and hover
   tracks the pointer. See "Mouse support" below.
 - **btop-style UI**: a rounded, titled panel boxes the content and is centred in
-  the terminal; near-black background; monkeytype "serika" palette; on-screen
+  the terminal; near-black background; "serika" palette; on-screen
   keyboard rendered as filled keycaps; spaced, enlarged board tiles; a colour
   legend under the status line, drawn with the tile styles themselves and
   dropped when the terminal is too small for it.

@@ -28,7 +28,7 @@ type gameScreen struct {
 	msgUntil time.Time
 
 	// confirmNew is set by Tab and cleared by Enter or Esc, giving the
-	// monkeytype-style two-key restart from IDEA.md.
+	// two-key restart from IDEA.md.
 	confirmNew bool
 
 	// persisted is false for a fresh puzzle until its first guess. A puzzle

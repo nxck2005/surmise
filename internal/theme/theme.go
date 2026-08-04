@@ -127,7 +127,7 @@ func (t *Theme) Override(element string) Override {
 	return t.Styles[element]
 }
 
-// Default is the built-in look: monkeytype's "serika dark", with Wordle's tile
+// Default is the built-in look: "serika dark", with Wordle's tile
 // colours desaturated to sit inside it. It is the base every loaded theme is
 // overlaid onto, so a four-line theme file is valid.
 func Default() *Theme {

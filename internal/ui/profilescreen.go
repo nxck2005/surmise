@@ -15,7 +15,7 @@ import (
 // distributionWidth is the character width of the longest histogram bar.
 const distributionWidth = 24
 
-// profileScreen shows aggregate performance, in the spirit of monkeytype's
+// profileScreen shows aggregate performance, in the spirit of a typing test's
 // account page.
 type profileScreen struct {
 	summary stats.Summary
@@ -75,7 +75,7 @@ func (m *profileScreen) view(h *hitMap) string {
 
 type stat struct{ label, value string }
 
-// renderStatRow lays out stats as monkeytype-style label-over-value blocks.
+// renderStatRow lays out stats as label-over-value blocks.
 func renderStatRow(stats []stat) string {
 	blocks := make([]string, len(stats))
 	for i, s := range stats {
@@ -121,7 +121,7 @@ func (m *profileScreen) renderDistribution() string {
 }
 
 // renderByMode breaks the headline figures down per word length, so the modes
-// can be compared the way monkeytype compares test lengths.
+// can be compared.
 func (m *profileScreen) renderByMode() string {
 	var rows []string
 	for _, n := range words.Lengths {
