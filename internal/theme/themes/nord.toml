@@ -1,0 +1,16 @@
+name = "nord"
+
+[colors]
+bg        = "#2e3440"
+text      = "#eceff4"
+accent    = "#88c0d0"
+muted     = "#616e88"
+error     = "#bf616a"
+
+correct   = "#a3be8c"
+present   = "#ebcb8b"
+absent    = "#434c5e"
+
+slot      = "#4c566a"
+key_face  = "#3b4252"
+key_spent = "#292e39"

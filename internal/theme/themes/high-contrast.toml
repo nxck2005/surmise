@@ -1,0 +1,32 @@
+name = "high contrast"
+
+# Wordle's colour-blind scheme: orange for "right letter, right place" and blue
+# for "right letter, wrong place", which stay distinguishable to the roughly one
+# player in twelve who cannot separate the green from the yellow. Everything
+# else is pushed to maximum contrast.
+
+[colors]
+bg        = "#000000"
+text      = "#ffffff"
+accent    = "#f5793a"
+muted     = "#9c9c9c"
+error     = "#ff5c5c"
+
+correct   = "#f5793a"
+present   = "#85c0f9"
+absent    = "#3a3a3c"
+
+slot      = "#787c7e"
+key_face  = "#6e6e70"
+key_spent = "#1c1c1e"
+
+correct_text     = "#000000"
+present_text     = "#000000"
+absent_text      = "#c9c9c9"
+key_absent_text  = "#8a8a8a"
+
+[style.title]
+bold = true
+
+[style.tile.empty]
+faint = false

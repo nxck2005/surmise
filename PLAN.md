@@ -32,6 +32,9 @@ What exists:
 - **btop-style UI**: a rounded, titled panel boxes the content and is centred in
   the terminal; near-black background; monkeytype "serika" palette; on-screen
   keyboard rendered as filled keycaps; spaced, enlarged board tiles.
+- **Themes**: the whole look is data. 13 bundled themes, a picker with live
+  preview, and user themes as one file each in `<data>/themes/*.toml`. See
+  "Theme system" below and `docs/THEMES.md`.
 
 ---
 
@@ -117,8 +120,9 @@ internal/ui     Bubble Tea layer       ← the only package that knows about a t
   **plain structs** (`gameScreen`, `listScreen`, `profileScreen`, inline menu)
   that render to strings and report intent back — **not** nested `tea.Model`s.
   This keeps all message plumbing in one place.
-- `theme.go` holds the **entire palette** and shared style helpers, plus
-  `renderPanel` (the btop-style border). Restyling is a one-file change.
+- `theme.go` turns a `theme.Theme` into lipgloss styles and holds `renderPanel`
+  (the btop-style border). It is the **only** place a style is built from a
+  colour. See "Theme system" below.
 - `board.go` renders tiles and the keyboard. `format.go` has duration/percent
   helpers. `hit.go` holds mouse hit-testing (see below).
 
@@ -150,6 +154,87 @@ together:
   `m.height`.
 - Colours: menu items and the panel title are accent; the selected menu row is
   flanked symmetrically (`› label ‹`) so the marker doesn't throw off centring.
+  Both markers now come from the theme, and the centring width is measured from
+  them rather than assuming two cells each.
+
+---
+
+## Theme system
+
+The look used to be ~11 colour constants and ~25 styles derived from them at
+package-init in `ui/theme.go`. That made restyling a rebuild, and — because the
+styles were computed once from the colours — made a runtime palette change
+impossible: reassigning `colorAccent` would not have updated `titleStyle`.
+
+### Shape
+
+- **`internal/theme`** owns the schema as data: a palette, glyphs, metrics, and
+  per-element overrides. It has no Bubble Tea dependency (lipgloss only, for
+  colour parsing), matching the rest of the UI-agnostic core.
+- **`ui/theme.go`** builds a `styles` struct from a `theme.Theme`. The active
+  one lives in a single package-level pointer, `st`, swapped wholesale by
+  `setTheme`. One pointer rather than thirty variables because styles are
+  *derived* — a palette change must rebuild all of them together — and because
+  the swap is then atomic, which is what makes live preview possible.
+
+### The file format, and why it is hand-rolled
+
+Flat TOML: comments, `[section]` headers, `key = value`. Parsed by ~150 lines in
+`parse.go` rather than by a TOML library. The schema is flat, so full TOML would
+be unused, and this project has no non-Charm direct dependencies to spend (the
+same reasoning that got bubbles removed). The readable subset is also what makes
+a theme shareable: one file, obvious to edit, diffable.
+
+Loading is **forgiving in the store's tradition** (a damaged counter is
+recovered from, not fatal): a line that will not parse becomes a `Warning`
+naming its line number and the rest of the theme still loads. `Parse` starts
+from `Default()` and overlays, so a four-line theme file is valid.
+
+Colour values take hex, an ANSI number 0-255, or the name of another palette
+entry. The `terminal` bundled theme is built entirely from ANSI numbers, which
+is what that third form is for.
+
+Text-on-tile colours (`correct_text` and friends) are **resolved at read time,
+not load time**, so a theme that sets only `bg` still moves the letters inside
+filled tiles with it. That is the difference between light themes working and
+not.
+
+### Bundled themes
+
+Embedded `themes/*.toml`, in exactly the format a user writes — so each is a
+worked example, and `TestBundledThemesAreClean` holds them to it (no warnings, a
+name, a complete palette). The colour-blind palette that used to be a roadmap
+item is just `high-contrast.toml` now.
+
+### Persistence and selection
+
+`settings.json` sits beside `meta.json`, read/written through the narrow
+`settingsStore` interface in `app.go` rather than by widening `store.Store` —
+puzzles and preferences are different concerns, and a future remote store might
+serve one without the other. Resolution order: `-theme` → `$WORTLE_THEME` →
+`settings.json` → `serika dark`. A name that resolves to nothing is reported on
+the error line, never swallowed.
+
+Themes live under the data dir, so `-data` isolates the look as well as the
+history. `EnsureDir` seeds an empty themes directory with `example.toml` — a
+copy of the default with its `name` stripped (otherwise the copy would shadow
+the built-in it came from, and editing it would look like the built-in had
+changed).
+
+### What themes may and may not do
+
+Colours **must not move the layout**: hit regions are measured from the composed
+frame, so anything that shifted a cell would move every click target with it.
+`TestBundledThemesDoNotMoveTheLayout` strips ANSI and compares.
+
+Glyphs and metrics *are* allowed to reshape things — that is the point of
+`tile_width` — and because targets are measured rather than predicted, the mouse
+follows for free (`TestClickTargetsFollowThemeMetrics` proves it at
+`tile_width = 11`). Themes that change shape are exempted from the layout test
+by comparing their `Glyphs`/`Metrics` against the default.
+
+`st` is package state, so any test that calls `setTheme` must restore it —
+`withTheme` in `theme_test.go` does.
 
 ---
 
@@ -266,10 +351,14 @@ Nothing below is committed to; it's the shape of where this goes.
 
 ### Near-term polish (small, safe)
 - Optional `--length` / config for the default mode instead of the hardcoded 5
-  (`defaultLength` in `app.go`).
+  (`defaultLength` in `app.go`). `store.Settings` is now the place for it —
+  add a field beside `Theme`.
 - A confirm/delete action in the puzzle list (puzzles are currently only added).
 - Hard/expert mode (revealed hints must be reused), per real Wordle.
-- Colour-blind palette toggle (Wordle's blue/orange scheme).
+- ~~Colour-blind palette toggle~~ — done, as the `high contrast` theme.
+- Theme extras worth having once people write them: a `[style.*]` key for the
+  panel title separate from the accent, and hot-reload of the themes directory
+  while the picker is open.
 
 ### Larger (the IDEA.md ambitions)
 - **Networked play / global leaderboard.** The `Store` interface is the seam:

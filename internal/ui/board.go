@@ -47,11 +47,11 @@ func renderScoredRow(guess string, marks []game.Mark) string {
 		letter := strings.ToUpper(string(guess[i]))
 		switch marks[i] {
 		case game.Correct:
-			cells[i] = tileCorrect.Render(letter)
+			cells[i] = st.tileCorrect.Render(letter)
 		case game.Present:
-			cells[i] = tilePresent.Render(letter)
+			cells[i] = st.tilePresent.Render(letter)
 		default:
-			cells[i] = tileAbsent.Render(letter)
+			cells[i] = st.tileAbsent.Render(letter)
 		}
 	}
 	return joinTiles(cells)
@@ -64,16 +64,16 @@ func renderTypingRow(typing string, length int, h *hitMap) string {
 			// A typed letter is a click target: clicking it erases the row back
 			// to that slot, which is how a mouse edits a mistake mid-word.
 			trim := action{kind: actTrim, index: i}
-			style := tileActive
+			style := st.tileActive
 			if h.hovered(trim) {
-				style = hoverStyle(style)
+				style = st.hover(style)
 			}
 			cells[i] = h.mark(trim, style.Render(strings.ToUpper(string(typing[i]))))
 		} else if i == len(typing) {
 			// Mark the caret position so the player can see where input lands.
-			cells[i] = tileEmpty.Foreground(colorAccent).Render("_")
+			cells[i] = st.caret.Render(st.glyph.Caret)
 		} else {
-			cells[i] = tileEmpty.Render("·")
+			cells[i] = st.tileEmpty.Render(st.glyph.Empty)
 		}
 	}
 	return joinTiles(cells)
@@ -82,7 +82,7 @@ func renderTypingRow(typing string, length int, h *hitMap) string {
 func renderEmptyRow(length int) string {
 	cells := make([]string, length)
 	for i := range cells {
-		cells[i] = tileEmpty.Render("·")
+		cells[i] = st.tileEmpty.Render(st.glyph.Empty)
 	}
 	return joinTiles(cells)
 }
@@ -106,11 +106,8 @@ var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 
 // Enter and backspace flank the bottom row, as on Wordle's own keyboard. They
 // are what a mouse submits and deletes with, and they cost no vertical space:
-// row 0 stays the widest at 59 cells, row 2 grows from 41 to 53.
-const (
-	keyEnterLabel = "⏎"
-	keyDelLabel   = "⌫"
-)
+// row 0 stays the widest at 59 cells, row 2 grows from 41 to 53. Their glyphs
+// come from the theme, since not every font draws ⏎ and ⌫ well.
 
 // renderKeyboard shows the best-known state of every letter, which is the
 // player's main aid for narrowing down the answer. Every cap is clickable.
@@ -124,9 +121,9 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap) string {
 		row := renderKeyboardRow(letters, states, h)
 		if i == len(keyboardRows)-1 {
 			row = joinTiles([]string{
-				renderCommandKey(keyEnterLabel, action{kind: actSubmit}, h),
+				renderCommandKey(st.glyph.Enter, action{kind: actSubmit}, h),
 				row,
-				renderCommandKey(keyDelLabel, action{kind: actBackspace}, h),
+				renderCommandKey(st.glyph.Delete, action{kind: actBackspace}, h),
 			})
 		}
 		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(row)
@@ -136,9 +133,9 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap) string {
 
 // renderCommandKey draws one of the two non-letter caps.
 func renderCommandKey(label string, a action, h *hitMap) string {
-	style := keyUnused
+	style := st.keyUnused
 	if h.hovered(a) {
-		style = hoverStyle(style)
+		style = st.hover(style)
 	}
 	return h.mark(a, style.Render(label))
 }
@@ -149,21 +146,21 @@ func renderKeyboardRow(letters string, states map[byte]game.Mark, h *hitMap) str
 		c := letters[i]
 		letter := strings.ToUpper(string(c))
 
-		style := keyUnused
+		style := st.keyUnused
 		if mark, played := states[c]; played {
 			switch mark {
 			case game.Correct:
-				style = keyCorrect
+				style = st.keyCorrect
 			case game.Present:
-				style = keyPresent
+				style = st.keyPresent
 			default:
-				style = keyAbsent
+				style = st.keyAbsent
 			}
 		}
 
 		typeIt := action{kind: actLetter, letter: c}
 		if h.hovered(typeIt) {
-			style = hoverStyle(style)
+			style = st.hover(style)
 		}
 		cells[i] = h.mark(typeIt, style.Render(letter))
 	}

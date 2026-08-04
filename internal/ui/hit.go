@@ -41,6 +41,7 @@ const (
 	actNone       actionKind = iota
 	actMenuChoice            // index: menu row
 	actListRow               // index: puzzle list row
+	actThemeRow              // index: theme picker row
 	actLetter                // letter: on-screen keyboard cap
 	actSubmit                // enter
 	actBackspace             // backspace

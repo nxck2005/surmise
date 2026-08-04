@@ -1,0 +1,20 @@
+name = "solarized dark"
+
+[colors]
+bg        = "#002b36"
+text      = "#eee8d5"
+accent    = "#b58900"
+muted     = "#586e75"
+error     = "#dc322f"
+
+correct   = "#859900"
+present   = "#b58900"
+absent    = "#073642"
+
+slot      = "#586e75"
+key_face  = "#073642"
+key_spent = "#00212b"
+
+absent_text     = "#657b83"
+key_absent_text = "#40616b"
+key_unused_text = "#eee8d5"

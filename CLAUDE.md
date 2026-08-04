@@ -19,6 +19,8 @@ locking into a tight design.
 
 ```sh
 go run .                 # play; add -data <dir> to use a scratch save location
+go run . -themes         # list themes (and their parse warnings) and exit
+go run . -theme dracula  # start with a theme, without changing the saved choice
 go build ./...
 go test ./...
 go test -race ./internal/...
@@ -73,20 +75,52 @@ deliberate — the same game/store can later be driven by a server.
 - **`internal/stats`** — recomputes the profile from all saved games each time
   (cheap at this scale, never drifts). Averages cover wins only.
 
+- **`internal/theme`** — the styleable surface **as data**: palette, glyphs,
+  metrics and per-element overrides, with a hand-rolled reader for the flat
+  TOML-ish theme file format (no TOML dependency). Bundled themes are embedded
+  `themes/*.toml` in exactly the format users write, so each doubles as a worked
+  example. Bad input is a `Warning` naming the line, never fatal — the picker
+  and `-themes` show them.
+
 - **`internal/ui`** — one root `Model` (`app.go`) owns a screen enum and routes
-  keys to screen structs (`gameScreen`, `listScreen`, `profileScreen`, and an
-  inline menu). Screens are plain structs that render to strings and report
-  intent back to the root, not nested `tea.Model`s. `theme.go` holds the entire
-  palette plus `renderPanel` (the btop-style rounded, titled border);
-  `board.go` renders tiles and the keyboard. Per `IDEA.md`, a new puzzle is
-  **tab then enter**. `hit.go` carries mouse support (below).
+  keys to screen structs (`gameScreen`, `listScreen`, `profileScreen`,
+  `themeScreen`, and an inline menu). Screens are plain structs that render to
+  strings and report intent back to the root, not nested `tea.Model`s.
+  `theme.go` turns a `theme.Theme` into lipgloss styles and holds `renderPanel`
+  (the btop-style rounded, titled border); `board.go` renders tiles and the
+  keyboard. Per `IDEA.md`, a new puzzle is **tab then enter**. `hit.go` carries
+  mouse support (below).
+
+## Theming
+
+Themes are data, not code. `internal/theme` owns the schema; `ui/theme.go` is
+the only place that builds a lipgloss style from a colour. Adding a themeable
+element means adding a field to `styles` and a name to `theme.Elements` — never
+a new colour constant at a call site.
+
+The active look is **one package-level pointer**, `st`, swapped wholesale by
+`setTheme`. Styles are derived from the palette, so a palette change has to
+rebuild all of them at once; that is also what makes live preview in the picker
+work. Read `st` at render time, never capture a style at init.
+
+- Persisted in `settings.json` beside `meta.json`, via the narrow
+  `settingsStore` interface in `app.go` (`store.Store` stays about puzzles).
+  `-theme` and `$WORTLE_THEME` override for one run.
+- Colours must not move the layout: `TestBundledThemesDoNotMoveTheLayout` strips
+  ANSI and compares. Glyph and metric changes *are* allowed to reshape things —
+  hit regions are measured, so click targets follow
+  (`TestClickTargetsFollowThemeMetrics`).
+- `st` is package state, so a test that calls `setTheme` must restore it;
+  use `withTheme` (`theme_test.go`).
+- User-facing reference: `docs/THEMES.md`.
 
 ## Mouse
 
 **Anything the keys can do, a click can do too** — keep it that way when adding
 a keybind. The parity pieces: the on-screen keyboard types (its `⏎`/`⌫` caps
 submit and delete), menu choices and list rows are clicked directly, a typed
-tile is clicked to erase back to it, the `×` in the panel border quits, and the
+tile is clicked to erase back to it, theme rows preview on hover and commit on
+click, the `×` in the panel border quits, and the
 **bottom help line doubles as the button bar** — each hint with an `action` is
 a click target.
 
@@ -101,7 +135,7 @@ the markers landed, stripping them before the string reaches Bubble Tea. Hence
   `openSelected`, `back`…). **Never let the two paths diverge**: add the
   behaviour as a method, then call it from both.
 - `action` is comparable and doubles as the hover key; hover highlighting is one
-  cue in one place (`hoverStyle` in `theme.go`).
+  cue in one place (`st.hover` in `theme.go`, themeable as `[style.hover]`).
 - Marking must never move anything, which
   `TestMarkersDoNotAffectLayout` enforces by composing each screen with and
   without a `hitMap` and comparing bytes.

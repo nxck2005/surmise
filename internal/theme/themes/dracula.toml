@@ -1,0 +1,16 @@
+name = "dracula"
+
+[colors]
+bg        = "#282a36"
+text      = "#f8f8f2"
+accent    = "#bd93f9"
+muted     = "#6272a4"
+error     = "#ff5555"
+
+correct   = "#50fa7b"
+present   = "#f1fa8c"
+absent    = "#44475a"
+
+slot      = "#6272a4"
+key_face  = "#44475a"
+key_spent = "#21222c"

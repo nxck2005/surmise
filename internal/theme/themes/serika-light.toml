@@ -1,0 +1,28 @@
+name = "serika light"
+author = "monkeytype"
+
+# The light counterpart. Note the text-on-tile overrides: on a pale ground the
+# letters inside a filled tile want to stay dark rather than follow `bg`.
+
+[colors]
+bg        = "#e1e1e3"
+text      = "#323437"
+accent    = "#e2b714"
+muted     = "#aaaeb3"
+error     = "#ca4754"
+
+correct   = "#6aaa64"
+present   = "#c9b458"
+absent    = "#a4a6a8"
+
+slot      = "#b8babd"
+key_face  = "#c8cacd"
+key_spent = "#cfd1d3"
+
+correct_text     = "#ffffff"
+present_text     = "#323437"
+absent_text      = "#e1e1e3"
+key_correct_text = "#ffffff"
+key_present_text = "#323437"
+key_absent_text  = "#8e9195"
+key_unused_text  = "#323437"

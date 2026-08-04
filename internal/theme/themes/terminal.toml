@@ -1,0 +1,26 @@
+name = "terminal"
+
+# Built entirely from ANSI colour numbers rather than hex, so it inherits
+# whatever palette the terminal itself is configured with. The one theme that
+# looks different on every machine, and the reason colour values accept 0-255.
+
+[colors]
+bg        = 0
+text      = 7
+accent    = 3
+muted     = 8
+error     = 1
+
+correct   = 2
+present   = 3
+absent    = 8
+
+slot      = 8
+key_face  = 8
+key_spent = 0
+
+correct_text    = 0
+present_text    = 0
+absent_text     = 7
+key_unused_text = 15
+key_absent_text = 8

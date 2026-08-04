@@ -34,15 +34,15 @@ func (m *profileScreen) reload(s store.Store) {
 
 func (m *profileScreen) view(h *hitMap) string {
 	if m.err != nil {
-		return titleStyle.Render("profile") + "\n\n" +
-			errorStyle.Render(fmt.Sprintf("could not read puzzles: %v", m.err))
+		return st.title.Render("profile") + "\n\n" +
+			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err))
 	}
 
 	s := m.summary
-	sections := []string{titleStyle.Render("profile"), ""}
+	sections := []string{st.title.Render("profile"), ""}
 
 	if s.Played == 0 && s.InPlay == 0 {
-		sections = append(sections, mutedStyle.Render("no games played yet"))
+		sections = append(sections, st.muted.Render("no games played yet"))
 		return lipgloss.JoinVertical(lipgloss.Left, sections...)
 	}
 
@@ -62,7 +62,7 @@ func (m *profileScreen) view(h *hitMap) string {
 
 	if s.InPlay > 0 {
 		sections = append(sections, "",
-			mutedStyle.Render(fmt.Sprintf("%d puzzle(s) still in play", s.InPlay)))
+			st.muted.Render(fmt.Sprintf("%d puzzle(s) still in play", s.InPlay)))
 	}
 
 	sections = append(sections, "", m.renderDistribution())
@@ -81,8 +81,8 @@ func renderStatRow(stats []stat) string {
 	for i, s := range stats {
 		blocks[i] = lipgloss.NewStyle().Width(20).Render(
 			lipgloss.JoinVertical(lipgloss.Left,
-				mutedStyle.Render(s.label),
-				accentStyle.Bold(true).Render(s.value),
+				st.muted.Render(s.label),
+				st.accent.Bold(true).Render(s.value),
 			),
 		)
 	}
@@ -94,7 +94,7 @@ func renderStatRow(stats []stat) string {
 func (m *profileScreen) renderDistribution() string {
 	dist := m.summary.Distribution
 	if len(dist) == 0 {
-		return mutedStyle.Render("no solved puzzles yet")
+		return st.muted.Render("no solved puzzles yet")
 	}
 
 	attempts := make([]int, 0, len(dist))
@@ -108,14 +108,14 @@ func (m *profileScreen) renderDistribution() string {
 	sort.Ints(attempts)
 
 	var b strings.Builder
-	b.WriteString(mutedStyle.Render("guess distribution"))
+	b.WriteString(st.muted.Render("guess distribution"))
 	b.WriteString("\n")
 	for _, a := range attempts {
 		n := dist[a]
 		width := max(n*distributionWidth/peak, 1)
-		bar := lipgloss.NewStyle().Foreground(colorCorrect).Render(strings.Repeat("█", width))
+		bar := st.bar.Render(strings.Repeat(st.glyph.Bar, width))
 		fmt.Fprintf(&b, "%s %s %s\n",
-			mutedStyle.Render(fmt.Sprintf("%2d", a)), bar, textStyle.Render(fmt.Sprint(n)))
+			st.muted.Render(fmt.Sprintf("%2d", a)), bar, st.text.Render(fmt.Sprint(n)))
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -130,17 +130,17 @@ func (m *profileScreen) renderByMode() string {
 			continue
 		}
 		rows = append(rows, fmt.Sprintf("%s  %s  %s  %s",
-			textStyle.Render(fmt.Sprintf("%d letters", n)),
-			mutedStyle.Render(fmt.Sprintf("%-12s", fmt.Sprintf("%d played", mode.Played))),
-			mutedStyle.Render(fmt.Sprintf("%-10s", formatPercent(mode.WinRate))),
-			mutedStyle.Render(fmt.Sprintf("avg %s in %s",
+			st.text.Render(fmt.Sprintf("%d letters", n)),
+			st.muted.Render(fmt.Sprintf("%-12s", fmt.Sprintf("%d played", mode.Played))),
+			st.muted.Render(fmt.Sprintf("%-10s", formatPercent(mode.WinRate))),
+			st.muted.Render(fmt.Sprintf("avg %s in %s",
 				formatFloat(mode.AvgAttempts), formatDuration(mode.AvgTime))),
 		))
 	}
 	if len(rows) == 0 {
 		return ""
 	}
-	return mutedStyle.Render("by mode") + "\n" + strings.Join(rows, "\n")
+	return st.muted.Render("by mode") + "\n" + strings.Join(rows, "\n")
 }
 
 func (m *profileScreen) help(h *hitMap) string {

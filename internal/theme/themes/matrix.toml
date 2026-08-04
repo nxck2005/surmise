@@ -1,0 +1,33 @@
+name = "matrix"
+
+# One hue, and a demonstration of the non-colour knobs: a squarer border, an
+# underscore for the empty cell, and italics on secondary text.
+
+[colors]
+bg        = "#000000"
+text      = "#00ff41"
+accent    = "#7dff9a"
+muted     = "#008f11"
+error     = "#ff003c"
+
+correct   = "#00ff41"
+present   = "#008f11"
+absent    = "#0b1f0b"
+
+slot      = "#00560f"
+key_face  = "#0d2b0d"
+key_spent = "#050f05"
+
+key_unused_text = "#00ff41"
+absent_text     = "#005c10"
+
+[glyphs]
+border = "normal"
+empty  = "_"
+caret  = "▮"
+
+[style.muted]
+italic = true
+
+[style.title]
+bold = true
