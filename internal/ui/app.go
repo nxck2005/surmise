@@ -27,6 +27,7 @@ const (
 	screenList
 	screenProfile
 	screenThemes
+	screenSettings
 )
 
 // tickInterval drives the on-screen clock and expires transient messages.
@@ -47,12 +48,17 @@ type Model struct {
 	themeLib  *theme.Library
 	themeName string
 
-	screen  screen
-	menu    menuScreen
-	game    *gameScreen
-	list    listScreen
-	profile profileScreen
-	themes  themeScreen
+	// length is the word length a puzzle started from here gets: the resolved
+	// default, not necessarily what the open board is playing.
+	length int
+
+	screen   screen
+	menu     menuScreen
+	game     *gameScreen
+	list     listScreen
+	profile  profileScreen
+	themes   themeScreen
+	settings settingsScreen
 
 	// hits is where the last frame drew its clickable regions; hover is what the
 	// pointer was last over, which the next frame highlights. Both are written
@@ -66,8 +72,19 @@ type Model struct {
 	quitting      bool
 }
 
-// defaultLength is the word length the app opens on, matching classic Wordle.
+// defaultLength is the word length the app opens on when nothing else says
+// otherwise, matching classic Wordle.
 const defaultLength = 5
+
+// Options are the one-run overrides, from flags or the environment. Every zero
+// value means "use whatever was saved", so a new override is additive here
+// rather than another positional argument to New.
+type Options struct {
+	// Theme forces a theme by name without changing the saved choice.
+	Theme string
+	// Length forces the starting word length, likewise without saving it.
+	Length int
+}
 
 // settingsStore is the part of a store that remembers preferences. It is a
 // separate interface rather than part of store.Store because a remote backend
@@ -82,16 +99,17 @@ type settingsStore interface {
 // way a typing test drops you straight into typing. The menu is one esc away. This first
 // puzzle is transient until played, so launching and quitting saves nothing.
 //
-// lib is the available themes; nil means the bundled set. override forces a
-// theme by name (the -theme flag), and is empty for "use whatever was saved".
-func New(s store.Store, lib *theme.Library, override string) *Model {
+// lib is the available themes; nil means the bundled set. opts carries the
+// one-run overrides; its zero value means "use whatever was saved".
+func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	if lib == nil {
 		lib = theme.Bundled()
 	}
 	m := &Model{store: s, themeLib: lib, menu: newMenuScreen()}
-	m.applyStartupTheme(override)
+	m.applyStartupTheme(opts.Theme)
+	m.applyStartupLength(opts.Length)
 
-	g, err := newPuzzle(s, defaultLength)
+	g, err := newPuzzle(s, m.length)
 	if err != nil {
 		m.err = err
 		m.screen = screenMenu
@@ -126,6 +144,49 @@ func (m *Model) applyStartupTheme(override string) {
 	}
 	m.themeName = t.Name
 	setTheme(t)
+}
+
+// applyStartupLength resolves the mode the app opens on, the same way
+// applyStartupTheme resolves the look: an explicit override first, then the
+// saved choice, then the built-in default. An unsupported length is reported
+// rather than silently corrected — a typo in -length should be visible — but is
+// never fatal, and a saved zero simply means nothing was ever chosen.
+func (m *Model) applyStartupLength(override int) {
+	m.length = defaultLength
+
+	want := override
+	if want == 0 {
+		want = m.settingsOf().Length
+	}
+	switch {
+	case want == 0:
+	case words.SupportedLength(want):
+		m.length = want
+	default:
+		m.err = fmt.Errorf("no %d-letter mode — using %d", want, defaultLength)
+	}
+}
+
+// settingsOf reads the saved preferences, or their defaults from a store that
+// does not keep any.
+func (m *Model) settingsOf() store.Settings {
+	if ss, ok := m.store.(settingsStore); ok {
+		return ss.Settings()
+	}
+	return store.Settings{}
+}
+
+// saveSettings writes preferences back, reporting a failure on the error line.
+// Callers read-modify-write through settingsOf so one field never clobbers
+// another.
+func (m *Model) saveSettings(s store.Settings) {
+	ss, ok := m.store.(settingsStore)
+	if !ok {
+		return
+	}
+	if err := ss.SaveSettings(s); err != nil {
+		m.err = err
+	}
 }
 
 func (m *Model) Init() tea.Cmd { return tick() }
@@ -194,6 +255,8 @@ func (m *Model) handleMotion(x, y int) {
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
 		m.themes.point(a.index)
+	case actSettingNext, actSettingPrev:
+		m.settings.point(a.index)
 	}
 }
 
@@ -227,6 +290,20 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		m.themes.point(a.index)
 		return m.commitTheme()
+
+	case actSettingNext, actSettingPrev:
+		if m.screen != screenSettings {
+			return nil
+		}
+		m.settings.point(a.index)
+		// Same cycle methods the arrow keys call, so the two paths cannot drift.
+		if a.kind == actSettingNext {
+			m.settings.cycle(1)
+		} else {
+			m.settings.cycle(-1)
+		}
+		m.commitSettings(a.index)
+		return nil
 	}
 
 	// Everything left belongs to the board.
@@ -278,13 +355,10 @@ func (m *Model) commitTheme() tea.Cmd {
 	m.themes.saved = e.Name
 	setTheme(e.Theme)
 
-	if ss, ok := m.store.(settingsStore); ok {
-		s := ss.Settings()
-		s.Theme = e.Name
-		if err := ss.SaveSettings(s); err != nil {
-			m.err = err
-		}
-	}
+	s := m.settingsOf()
+	s.Theme = e.Name
+	m.saveSettings(s)
+
 	m.screen = screenMenu
 	return nil
 }
@@ -315,6 +389,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateList(msg)
 	case screenThemes:
 		return m.updateThemes(msg)
+	case screenSettings:
+		return m.updateSettings(msg)
 	case screenProfile:
 		if key := msg.String(); key == "esc" || key == "q" {
 			m.screen = screenMenu
@@ -341,6 +417,13 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 			m.err = err
 			return nil
 		}
+		m.length = c.length
+		// With "remember last" on, playing a mode is how the default is set —
+		// the settings screen is then a display of what you last played.
+		if s := m.settingsOf(); s.RememberLast && s.Length != c.length {
+			s.Length = c.length
+			m.saveSettings(s)
+		}
 		m.openGame(g, false)
 
 	case choiceList:
@@ -354,6 +437,10 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 	case choiceThemes:
 		m.themes.reload(m.themeLib, m.themeName)
 		m.screen = screenThemes
+
+	case choiceSettings:
+		m.settings.reload(m.settingsOf())
+		m.screen = screenSettings
 
 	case choiceQuit:
 		return m.quit()
@@ -381,6 +468,35 @@ func (m *Model) updateThemes(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.commitTheme()
 	}
 	return m, nil
+}
+
+func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	changed, back := m.settings.update(msg)
+	if back {
+		return m, m.back()
+	}
+	if changed {
+		m.commitSettings(m.settings.cursor)
+	}
+	return m, nil
+}
+
+// commitSettings writes what the settings screen now holds. There is nothing
+// to preview here, unlike the theme picker, so every change is saved as it is
+// made and esc has nothing to undo.
+//
+// row is what was just changed: only a change to the mode moves the length this
+// run is playing, so toggling the other setting cannot quietly discard a
+// -length override.
+func (m *Model) commitSettings(row int) {
+	s := m.settingsOf()
+	s.Length, s.RememberLast = m.settings.length, m.settings.rememberLast
+	m.saveSettings(s)
+
+	if row == rowLength {
+		// Take effect now rather than at the next launch.
+		m.length = m.settings.length
+	}
 }
 
 // openSelected resumes — or reviews — the highlighted puzzle.
@@ -482,6 +598,8 @@ func (m *Model) screenTitle() string {
 		return "profile"
 	case screenThemes:
 		return "themes"
+	case screenSettings:
+		return "settings"
 	default:
 		return "wortle"
 	}
@@ -497,6 +615,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.profile.view(h), m.profile.help(h)
 	case screenThemes:
 		return m.themes.view(h), m.themes.help(h)
+	case screenSettings:
+		return m.settings.view(h), m.settings.help(h)
 	default:
 		return m.menu.view(h), m.menu.help(h)
 	}
@@ -511,6 +631,7 @@ const (
 	choiceList
 	choiceProfile
 	choiceThemes
+	choiceSettings
 	choiceQuit
 )
 
@@ -527,7 +648,7 @@ type menuScreen struct {
 
 func newMenuScreen() menuScreen {
 	// Word lengths lead the menu; they are the game's difficulty modes.
-	choices := make([]choice, 0, len(words.Lengths)+3)
+	choices := make([]choice, 0, len(words.Lengths)+5)
 	for _, n := range words.Lengths {
 		choices = append(choices, choice{
 			kind:   choiceNewGame,
@@ -539,6 +660,7 @@ func newMenuScreen() menuScreen {
 		choice{kind: choiceList, label: "puzzles"},
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},
+		choice{kind: choiceSettings, label: "settings"},
 		choice{kind: choiceQuit, label: "quit"},
 	)
 	return menuScreen{choices: choices}

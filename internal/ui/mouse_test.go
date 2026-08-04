@@ -122,6 +122,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"list", func() { m.list.reload(m.store); m.screen = screenList }},
 		{"profile", func() { m.profile.reload(m.store); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
+		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()
@@ -180,6 +181,85 @@ func TestClickTargetsMatchGlyphs(t *testing.T) {
 	r, _ := m.hits.find(action{kind: actMenuChoice, index: 1})
 	if got := at(t, frame, r); !strings.Contains(got, "5 letters") {
 		t.Errorf("menu row 1 covers %q, want it to contain %q", got, "5 letters")
+	}
+
+	// The settings step arrows are single glyphs, so they pin scan down the way
+	// the keycaps do on the board.
+	m.settings.reload(m.settingsOf())
+	m.screen = screenSettings
+	frame = draw(t, m)
+	if r, ok := m.hits.find(action{kind: actSettingPrev}); !ok {
+		t.Error("no step-back target on the settings screen")
+	} else if got := at(t, frame, r); got != st.glyph.ValuePrev {
+		t.Errorf("step-back rect %+v covers %q, want %q", r, got, st.glyph.ValuePrev)
+	}
+
+	// The value and the › share one action — both step forward — so the value
+	// is the first zone marked with it and the arrow is the last.
+	next := action{kind: actSettingNext, index: rowRememberLast}
+	first, _ := m.hits.find(next)
+	if got := at(t, frame, first); !strings.Contains(got, "off") {
+		t.Errorf("remember-last value covers %q, want it to contain %q", got, "off")
+	}
+	if got := at(t, frame, lastZone(t, m, next)); got != st.glyph.ValueNext {
+		t.Errorf("step-forward rect covers %q, want %q", got, st.glyph.ValueNext)
+	}
+}
+
+// lastZone is the final region recorded for an action, for the cases where one
+// action is deliberately drawn twice.
+func lastZone(t *testing.T, m *Model, a action) rect {
+	t.Helper()
+	for i := len(m.hits.zones) - 1; i >= 0; i-- {
+		if m.hits.zones[i].act == a {
+			return m.hits.zones[i].rect
+		}
+	}
+	t.Fatalf("nothing on screen for %+v", a)
+	return rect{}
+}
+
+// Both settings are changeable with the mouse alone, in both directions.
+func TestSettingsByClickingOnly(t *testing.T) {
+	m := newModel(t)
+	m.settings.reload(m.settingsOf())
+	m.screen = screenSettings
+
+	// Clicking the value steps forward; the ‹ steps back to where it started.
+	click(t, m, action{kind: actSettingNext, index: rowLength})
+	if m.settings.length != 6 {
+		t.Fatalf("length = %d after clicking ›, want 6", m.settings.length)
+	}
+	click(t, m, action{kind: actSettingPrev, index: rowLength})
+	if m.settings.length != defaultLength {
+		t.Errorf("length = %d after clicking ‹, want %d", m.settings.length, defaultLength)
+	}
+
+	click(t, m, action{kind: actSettingNext, index: rowRememberLast})
+	if !m.settings.rememberLast {
+		t.Error("clicking the remember-last row did not turn it on")
+	}
+
+	// And a click writes through, not just into the screen struct.
+	s, ok := m.store.(settingsStore)
+	if !ok {
+		t.Fatal("test store does not keep settings")
+	}
+	if got := s.Settings(); !got.RememberLast || got.Length != defaultLength {
+		t.Errorf("saved settings = %+v, want the clicked values", got)
+	}
+}
+
+// Hovering a settings row moves the cursor onto it, so one click is enough to
+// change the row you are pointing at.
+func TestHoveringSettingsMovesTheCursor(t *testing.T) {
+	m := newModel(t)
+	m.settings.reload(m.settingsOf())
+	m.screen = screenSettings
+
+	point(t, m, action{kind: actSettingNext, index: rowRememberLast})
+	if m.settings.cursor != rowRememberLast {
+		t.Errorf("cursor = %d after hovering the second row, want %d", m.settings.cursor, rowRememberLast)
 	}
 }
 
@@ -384,7 +464,7 @@ func TestWheelScrollsTheList(t *testing.T) {
 		}
 	}
 
-	m := New(s, nil, "")
+	m := New(s, nil, Options{})
 	m.list.reload(s)
 	m.screen = screenList
 	draw(t, m)

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -20,15 +21,30 @@ func main() {
 	// screenshotting and theme authoring bearable.
 	themeName := flag.String("theme", os.Getenv("WORTLE_THEME"), "theme to start with (default: last used)")
 	listThemes := flag.Bool("themes", false, "list available themes and exit")
+	// -length likewise overrides the saved default mode for one run. A value
+	// the game has no words for is reported by the UI on its error line rather
+	// than refused here, so a typo costs a note, not a launch.
+	length := flag.Int("length", envLength(), "word length to start with: 4, 5 or 6 (default: last used)")
 	flag.Parse()
 
-	if err := run(*dataDir, *themeName, *listThemes); err != nil {
+	if err := run(*dataDir, *themeName, *length, *listThemes); err != nil {
 		fmt.Fprintln(os.Stderr, "wortle:", err)
 		os.Exit(1)
 	}
 }
 
-func run(dataDir, themeName string, listThemes bool) error {
+// envLength is the default for -length: $WORTLE_LENGTH, matching how
+// $WORTLE_THEME defaults -theme. Unset or unreadable means zero — "use whatever
+// was saved" — which is the same fallback an unsupported value gets.
+func envLength() int {
+	n, err := strconv.Atoi(os.Getenv("WORTLE_LENGTH"))
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func run(dataDir, themeName string, length int, listThemes bool) error {
 	if dataDir == "" {
 		var err error
 		if dataDir, err = store.DefaultDir(); err != nil {
@@ -55,7 +71,7 @@ func run(dataDir, themeName string, listThemes bool) error {
 		return err
 	}
 
-	_, err = tea.NewProgram(ui.New(s, lib, themeName)).Run()
+	_, err = tea.NewProgram(ui.New(s, lib, ui.Options{Theme: themeName, Length: length})).Run()
 	return err
 }
 

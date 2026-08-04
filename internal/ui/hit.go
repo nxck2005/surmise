@@ -38,17 +38,19 @@ const (
 type actionKind int
 
 const (
-	actNone       actionKind = iota
-	actMenuChoice            // index: menu row
-	actListRow               // index: puzzle list row
-	actThemeRow              // index: theme picker row
-	actLetter                // letter: on-screen keyboard cap
-	actSubmit                // enter
-	actBackspace             // backspace
-	actTrim                  // index: erase the typed row back to this slot
-	actNewPuzzle             // tab+enter
-	actCancelNew             // dismiss the armed new-puzzle prompt
-	actBack                  // esc
+	actNone        actionKind = iota
+	actMenuChoice             // index: menu row
+	actListRow                // index: puzzle list row
+	actThemeRow               // index: theme picker row
+	actSettingNext            // index: settings row, next value
+	actSettingPrev            // index: settings row, previous value
+	actLetter                 // letter: on-screen keyboard cap
+	actSubmit                 // enter
+	actBackspace              // backspace
+	actTrim                   // index: erase the typed row back to this slot
+	actNewPuzzle              // tab+enter
+	actCancelNew              // dismiss the armed new-puzzle prompt
+	actBack                   // esc
 	actQuit
 )
 

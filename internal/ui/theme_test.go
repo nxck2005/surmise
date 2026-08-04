@@ -128,7 +128,7 @@ func TestThemePickerPersistsChoice(t *testing.T) {
 	}
 	withTheme(t, theme.Default())
 
-	m := New(s, theme.Bundled(), "")
+	m := New(s, theme.Bundled(), Options{})
 	m.screen = screenMenu
 	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
 
@@ -147,7 +147,7 @@ func TestThemePickerPersistsChoice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m2 := New(reopened, theme.Bundled(), ""); m2.themeName != m.themeName {
+	if m2 := New(reopened, theme.Bundled(), Options{}); m2.themeName != m.themeName {
 		t.Errorf("reopened with %q, want %q", m2.themeName, m.themeName)
 	}
 }
@@ -235,7 +235,7 @@ func TestUnknownThemeNameFallsBackVisibly(t *testing.T) {
 	}
 	withTheme(t, theme.Default())
 
-	m := New(s, theme.Bundled(), "no such theme")
+	m := New(s, theme.Bundled(), Options{Theme: "no such theme"})
 	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
 
 	if m.themeName != theme.DefaultName {
