@@ -2,7 +2,7 @@
 
 # wortle
 
-**Wordle for the terminal.** A [monkeytype](https://monkeytype.com)-styled TUI in Go.
+**Wordle for the terminal.** A fast, themeable TUI in Go.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/nxck2005/wortle.svg)](https://pkg.go.dev/github.com/nxck2005/wortle)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nxck2005/wortle)](https://goreportcard.com/report/github.com/nxck2005/wortle)
@@ -20,8 +20,8 @@ Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
 
 ## What you get
 
-- **4, 5 and 6-letter modes**, the way monkeytype has 15/30/60. Length is the
-  difficulty axis; nothing in the code hardcodes five.
+- **4, 5 and 6-letter modes.** Length is the difficulty axis; nothing in the
+  code hardcodes five.
 - **Resumable puzzles.** Every guess is written to disk, so quit mid-word and
   pick it back up. Each puzzle gets a number: `wortle #42`.
 - **A profile screen** — win rate, average attempts, average solve time,
@@ -39,7 +39,7 @@ Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
 | letters | type a guess |
 | <kbd>enter</kbd> | submit |
 | <kbd>backspace</kbd> | delete a letter |
-| <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle (monkeytype-style restart) |
+| <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle |
 | <kbd>esc</kbd> | back to the menu |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
@@ -100,3 +100,7 @@ events and assert on the rendered frame, so no TTY is involved.
 See [PLAN.md](PLAN.md) for the design decisions and roadmap, and
 [internal/words/data/SOURCES.md](internal/words/data/SOURCES.md) for word-list
 provenance.
+
+---
+
+Look and feel inspired by [monkeytype](https://monkeytype.com).
