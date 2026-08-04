@@ -7,3 +7,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # One PR for all of them. Every action lives on adjacent `uses:` lines in
+    # ci.yml, so separate PRs edit overlapping hunks and whichever merges second
+    # conflicts (as actions/checkout#3 did behind actions/setup-go#2).
+    groups:
+      actions:
+        patterns:
+          - "*"
