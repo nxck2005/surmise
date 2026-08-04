@@ -118,6 +118,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"menu", func() { m.screen, m.game.confirmNew = screenMenu, false }},
 		{"list", func() { m.list.reload(m.store); m.screen = screenList }},
 		{"profile", func() { m.profile.reload(m.store); m.screen = screenProfile }},
+		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()
@@ -380,7 +381,7 @@ func TestWheelScrollsTheList(t *testing.T) {
 		}
 	}
 
-	m := New(s)
+	m := New(s, nil, "")
 	m.list.reload(s)
 	m.screen = screenList
 	draw(t, m)

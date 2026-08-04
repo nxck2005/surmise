@@ -1,0 +1,16 @@
+name = "gruvbox dark"
+
+[colors]
+bg        = "#282828"
+text      = "#ebdbb2"
+accent    = "#fabd2f"
+muted     = "#928374"
+error     = "#fb4934"
+
+correct   = "#b8bb26"
+present   = "#d79921"
+absent    = "#3c3836"
+
+slot      = "#665c54"
+key_face  = "#504945"
+key_spent = "#1d2021"

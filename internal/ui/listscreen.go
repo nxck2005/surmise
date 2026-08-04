@@ -96,15 +96,15 @@ func (m *listScreen) clampOffset() {
 
 func (m *listScreen) view(h *hitMap) string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("puzzles"))
+	b.WriteString(st.title.Render("puzzles"))
 	b.WriteString("\n\n")
 
 	switch {
 	case m.err != nil:
-		b.WriteString(errorStyle.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
+		b.WriteString(st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
 		return b.String()
 	case len(m.items) == 0:
-		b.WriteString(mutedStyle.Render("no puzzles yet — start one from the menu"))
+		b.WriteString(st.muted.Render("no puzzles yet — start one from the menu"))
 		return b.String()
 	}
 
@@ -118,7 +118,7 @@ func (m *listScreen) view(h *hitMap) string {
 	}
 
 	if len(m.items) > visibleRows {
-		b.WriteString(mutedStyle.Render(fmt.Sprintf("\n  %d–%d of %d",
+		b.WriteString(st.muted.Render(fmt.Sprintf("\n  %d–%d of %d",
 			m.offset+1, end, len(m.items))))
 	}
 	return b.String()
@@ -136,11 +136,11 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 	status := fmt.Sprintf("%-14s", statusText)
 	right := " " + formatDuration(s.Elapsed)
 
-	rowStyle := mutedStyle
-	prefix := "  "
+	rowStyle := st.muted
+	prefix := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
 	if selected {
-		rowStyle = textStyle
-		prefix = accentStyle.Render("› ")
+		rowStyle = st.text
+		prefix = st.cursor.Render(st.glyph.Cursor)
 	}
 
 	return prefix +
@@ -152,11 +152,11 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 func describeStatus(s store.Summary) (text string, c color.Color) {
 	switch s.Status {
 	case game.Won:
-		return fmt.Sprintf("solved %d/%d", s.Attempts, s.Length+1), colorCorrect
+		return fmt.Sprintf("solved %d/%d", s.Attempts, s.Length+1), st.statusWon
 	case game.Lost:
-		return "failed", colorError
+		return "failed", st.statusLost
 	default:
-		return fmt.Sprintf("in play %d/%d", s.Attempts, s.Length+1), colorAccent
+		return fmt.Sprintf("in play %d/%d", s.Attempts, s.Length+1), st.statusPlaying
 	}
 }
 

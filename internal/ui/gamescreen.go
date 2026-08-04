@@ -238,8 +238,8 @@ func (m *gameScreen) view(h *hitMap) string {
 	g := m.g
 
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
-		titleStyle.Render(fmt.Sprintf("wortle #%d", g.Number)),
-		mutedStyle.Render(fmt.Sprintf("   %d letters   %s   %d/%d",
+		st.title.Render(fmt.Sprintf("wortle #%d", g.Number)),
+		st.muted.Render(fmt.Sprintf("   %d letters   %s   %d/%d",
 			g.Length, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
 	)
 
@@ -266,24 +266,24 @@ func (m *gameScreen) statusLine(h *hitMap) string {
 		// prompt with tab is not stranded without a keyboard.
 		confirm := action{kind: actNewPuzzle}
 		cancel := action{kind: actCancelNew}
-		return h.mark(confirm, accentStyle.Render("enter")) +
-			mutedStyle.Render(" to start a new puzzle · ") +
-			h.mark(cancel, accentStyle.Render("esc")) +
-			mutedStyle.Render(" to cancel")
+		return h.mark(confirm, st.accent.Render("enter")) +
+			st.muted.Render(" to start a new puzzle · ") +
+			h.mark(cancel, st.accent.Render("esc")) +
+			st.muted.Render(" to cancel")
 	}
 	if m.message != "" && time.Now().Before(m.msgUntil) {
-		return errorStyle.Render(m.message)
+		return st.err.Render(m.message)
 	}
 
 	switch m.g.Status {
 	case game.Won:
-		return accentStyle.Render(fmt.Sprintf("solved in %d — %s",
+		return st.accent.Render(fmt.Sprintf("solved in %d — %s",
 			m.g.Attempts(), formatDuration(m.g.Elapsed())))
 	case game.Lost:
-		return errorStyle.Render("out of guesses — ") +
-			textStyle.Render(strings.ToUpper(m.g.Answer))
+		return st.err.Render("out of guesses — ") +
+			st.text.Render(strings.ToUpper(m.g.Answer))
 	default:
-		return mutedStyle.Render(fmt.Sprintf("%d guesses left", m.g.Remaining()))
+		return st.muted.Render(fmt.Sprintf("%d guesses left", m.g.Remaining()))
 	}
 }
 

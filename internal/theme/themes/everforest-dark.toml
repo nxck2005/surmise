@@ -1,0 +1,16 @@
+name = "everforest dark"
+
+[colors]
+bg        = "#2d353b"
+text      = "#d3c6aa"
+accent    = "#dbbc7f"
+muted     = "#7a8478"
+error     = "#e67e80"
+
+correct   = "#a7c080"
+present   = "#dbbc7f"
+absent    = "#3d484d"
+
+slot      = "#56635f"
+key_face  = "#475258"
+key_spent = "#232a2e"

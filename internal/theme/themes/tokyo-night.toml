@@ -1,0 +1,16 @@
+name = "tokyo night"
+
+[colors]
+bg        = "#1a1b26"
+text      = "#c0caf5"
+accent    = "#7aa2f7"
+muted     = "#565f89"
+error     = "#f7768e"
+
+correct   = "#9ece6a"
+present   = "#e0af68"
+absent    = "#292e42"
+
+slot      = "#414868"
+key_face  = "#343b58"
+key_spent = "#16161e"

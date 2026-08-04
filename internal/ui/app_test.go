@@ -44,7 +44,7 @@ func newModel(t *testing.T) *Model {
 	if err != nil {
 		t.Fatalf("NewJSON: %v", err)
 	}
-	m := New(s)
+	m := New(s, nil, "")
 	m.screen = screenMenu
 	return m
 }
@@ -76,7 +76,7 @@ func TestStartsOnDefaultPuzzle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(s)
+	m := New(s, nil, "")
 	if m.screen != screenGame {
 		t.Fatalf("screen = %v, want game", m.screen)
 	}
@@ -92,7 +92,7 @@ func TestUnplayedPuzzleIsNotSaved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(s) // opens on a puzzle, unplayed
+	m := New(s, nil, "") // opens on a puzzle, unplayed
 
 	m.quit() // as if the player launched and immediately quit
 
@@ -280,7 +280,7 @@ func TestProgressSurvivesQuitAndReappearsInList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := New(s)
+	m := New(s, nil, "")
 	send(t, m, "down", "enter")
 	m.game.g.Answer = "crane"
 	send(t, m, "a", "b", "o", "u", "t", "enter")
@@ -292,7 +292,7 @@ func TestProgressSurvivesQuitAndReappearsInList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m2 := New(reopened)
+	m2 := New(reopened, nil, "")
 	m2.list.reload(reopened)
 
 	if len(m2.list.items) != 1 || m2.list.items[0].ID != id {

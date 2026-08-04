@@ -1,0 +1,16 @@
+name = "catppuccin mocha"
+
+[colors]
+bg        = "#1e1e2e"
+text      = "#cdd6f4"
+accent    = "#f5c2e7"
+muted     = "#6c7086"
+error     = "#f38ba8"
+
+correct   = "#a6e3a1"
+present   = "#f9e2af"
+absent    = "#313244"
+
+slot      = "#585b70"
+key_face  = "#45475a"
+key_spent = "#181825"

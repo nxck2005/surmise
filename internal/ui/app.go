@@ -14,6 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/wortle/internal/store"
+	"github.com/nxck2005/wortle/internal/theme"
 	"github.com/nxck2005/wortle/internal/words"
 )
 
@@ -24,6 +25,7 @@ const (
 	screenGame
 	screenList
 	screenProfile
+	screenThemes
 )
 
 // tickInterval drives the on-screen clock and expires transient messages.
@@ -39,11 +41,17 @@ func tick() tea.Cmd {
 type Model struct {
 	store store.Store
 
+	// themes is every theme available this run; themeName is the committed
+	// choice, which the picker restores when a preview is abandoned.
+	themeLib  *theme.Library
+	themeName string
+
 	screen  screen
 	menu    menuScreen
 	game    *gameScreen
 	list    listScreen
 	profile profileScreen
+	themes  themeScreen
 
 	// hits is where the last frame drew its clickable regions; hover is what the
 	// pointer was last over, which the next frame highlights. Both are written
@@ -60,11 +68,27 @@ type Model struct {
 // defaultLength is the word length the app opens on, matching classic Wordle.
 const defaultLength = 5
 
+// settingsStore is the part of a store that remembers preferences. It is a
+// separate interface rather than part of store.Store because a remote backend
+// might well serve puzzles without owning the local look; a store that does not
+// implement it simply cannot persist a theme choice.
+type settingsStore interface {
+	Settings() store.Settings
+	SaveSettings(store.Settings) error
+}
+
 // New builds the root model over a store and opens straight into a puzzle, the
 // way monkeytype drops you onto a test. The menu is one esc away. This first
 // puzzle is transient until played, so launching and quitting saves nothing.
-func New(s store.Store) *Model {
-	m := &Model{store: s, menu: newMenuScreen()}
+//
+// lib is the available themes; nil means the bundled set. override forces a
+// theme by name (the -theme flag), and is empty for "use whatever was saved".
+func New(s store.Store, lib *theme.Library, override string) *Model {
+	if lib == nil {
+		lib = theme.Bundled()
+	}
+	m := &Model{store: s, themeLib: lib, menu: newMenuScreen()}
+	m.applyStartupTheme(override)
 
 	g, err := newPuzzle(s, defaultLength)
 	if err != nil {
@@ -75,6 +99,25 @@ func New(s store.Store) *Model {
 	m.game = newGameScreen(s, g, false)
 	m.screen = screenGame
 	return m
+}
+
+// applyStartupTheme resolves which theme to open with: an explicit override
+// first, then whatever was saved, then the default. A name that resolves to
+// nothing is reported rather than swallowed, so a typo in -theme is visible.
+func (m *Model) applyStartupTheme(override string) {
+	want := override
+	if want == "" {
+		if ss, ok := m.store.(settingsStore); ok {
+			want = ss.Settings().Theme
+		}
+	}
+
+	t, ok := m.themeLib.Resolve(want)
+	if !ok {
+		m.err = fmt.Errorf("no theme named %q — using %s", want, theme.DefaultName)
+	}
+	m.themeName = t.Name
+	setTheme(t)
 }
 
 func (m *Model) Init() tea.Cmd { return tick() }
@@ -106,14 +149,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.handleMotion(msg.X, msg.Y)
 
 	case tea.MouseWheelMsg:
-		// The puzzle list is the only thing long enough to scroll.
-		if m.screen == screenList {
-			switch msg.Button {
-			case tea.MouseWheelUp:
-				m.list.scroll(-1)
-			case tea.MouseWheelDown:
-				m.list.scroll(1)
-			}
+		// The puzzle list and the theme list are the only things long enough
+		// to scroll.
+		delta := 0
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			delta = -1
+		case tea.MouseWheelDown:
+			delta = 1
+		}
+		switch m.screen {
+		case screenList:
+			m.list.scroll(delta)
+		case screenThemes:
+			m.themes.scroll(delta)
 		}
 	}
 	return m, nil
@@ -131,6 +180,9 @@ func (m *Model) handleMotion(x, y int) {
 		m.menu.point(a.index)
 	case actListRow:
 		m.list.point(a.index)
+	case actThemeRow:
+		// Hovering a theme previews it, the same as arrowing onto it.
+		m.themes.point(a.index)
 	}
 }
 
@@ -157,6 +209,13 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		m.list.point(a.index)
 		return m.openSelected()
+
+	case actThemeRow:
+		if m.screen != screenThemes {
+			return nil
+		}
+		m.themes.point(a.index)
+		return m.commitTheme()
 	}
 
 	// Everything left belongs to the board.
@@ -185,11 +244,45 @@ func (m *Model) dispatch(a action) tea.Cmd {
 // back is what esc does: leave the board, saving on the way out, and return to
 // the menu.
 func (m *Model) back() tea.Cmd {
-	if m.screen == screenGame && m.game != nil {
+	switch {
+	case m.screen == screenGame && m.game != nil:
 		m.game.exit()
+	case m.screen == screenThemes:
+		// Leaving the picker without choosing puts back the saved theme, so a
+		// preview is never accidentally permanent.
+		m.restoreTheme()
 	}
 	m.screen = screenMenu
 	return nil
+}
+
+// commitTheme keeps whatever the picker is currently previewing and writes it
+// to the settings file. Both enter and a click land here.
+func (m *Model) commitTheme() tea.Cmd {
+	e, ok := m.themes.selected()
+	if !ok || e.Theme == nil {
+		return nil
+	}
+	m.themeName = e.Name
+	m.themes.saved = e.Name
+	setTheme(e.Theme)
+
+	if ss, ok := m.store.(settingsStore); ok {
+		s := ss.Settings()
+		s.Theme = e.Name
+		if err := ss.SaveSettings(s); err != nil {
+			m.err = err
+		}
+	}
+	m.screen = screenMenu
+	return nil
+}
+
+// restoreTheme puts back the committed theme after an abandoned preview.
+func (m *Model) restoreTheme() {
+	if t, ok := m.themeLib.Get(m.themeName); ok {
+		setTheme(t)
+	}
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -209,6 +302,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case screenList:
 		return m.updateList(msg)
+	case screenThemes:
+		return m.updateThemes(msg)
 	case screenProfile:
 		if key := msg.String(); key == "esc" || key == "q" {
 			m.screen = screenMenu
@@ -246,6 +341,10 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.profile.reload(m.store)
 		m.screen = screenProfile
 
+	case choiceThemes:
+		m.themes.reload(m.themeLib, m.themeName)
+		m.screen = screenThemes
+
 	case choiceQuit:
 		return m.quit()
 	}
@@ -259,6 +358,17 @@ func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenMenu
 	case open:
 		return m, m.openSelected()
+	}
+	return m, nil
+}
+
+func (m *Model) updateThemes(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	commit, back := m.themes.update(msg)
+	switch {
+	case back:
+		return m, m.back()
+	case commit:
+		return m, m.commitTheme()
 	}
 	return m, nil
 }
@@ -294,8 +404,10 @@ func (m *Model) quit() tea.Cmd {
 func (m *Model) View() tea.View {
 	var v tea.View
 	v.AltScreen = true
-	v.BackgroundColor = colorBg
-	v.ForegroundColor = colorText
+	// Read from the active style set every frame, so switching theme in the
+	// picker recolours the terminal itself and not just the panel.
+	v.BackgroundColor = st.bg
+	v.ForegroundColor = st.fg
 	v.WindowTitle = "wortle"
 	// Clicking is a first-class input here: every keybind has an on-screen
 	// target. All-motion mode is what makes hover highlighting possible, since
@@ -324,7 +436,7 @@ func (m *Model) frame(h *hitMap) string {
 	body, help := m.activeScreen(h)
 	if m.err != nil {
 		body = lipgloss.JoinVertical(lipgloss.Left,
-			body, "", errorStyle.Render(fmt.Sprintf("error: %v", m.err)))
+			body, "", st.err.Render(fmt.Sprintf("error: %v", m.err)))
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center, body, help)
@@ -345,11 +457,11 @@ func (m *Model) frame(h *hitMap) string {
 // has to be reachable with the mouse from every screen, not just the menu.
 func (m *Model) closeBox(h *hitMap) string {
 	quit := action{kind: actQuit}
-	style := mutedStyle
+	style := st.muted
 	if h.hovered(quit) {
-		style = hoverStyle(errorStyle)
+		style = st.hover(st.err)
 	}
-	return " " + h.mark(quit, style.Render("×")) + " "
+	return " " + h.mark(quit, style.Render(st.glyph.Close)) + " "
 }
 
 // screenTitle is the label shown in the panel's top border.
@@ -359,6 +471,8 @@ func (m *Model) screenTitle() string {
 		return "puzzles"
 	case screenProfile:
 		return "profile"
+	case screenThemes:
+		return "themes"
 	default:
 		return "wortle"
 	}
@@ -372,6 +486,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.list.view(h), m.list.help(h)
 	case screenProfile:
 		return m.profile.view(h), m.profile.help(h)
+	case screenThemes:
+		return m.themes.view(h), m.themes.help(h)
 	default:
 		return m.menu.view(h), m.menu.help(h)
 	}
@@ -385,6 +501,7 @@ const (
 	choiceNewGame choiceKind = iota
 	choiceList
 	choiceProfile
+	choiceThemes
 	choiceQuit
 )
 
@@ -413,6 +530,7 @@ func newMenuScreen() menuScreen {
 	choices = append(choices,
 		choice{kind: choiceList, label: "puzzles"},
 		choice{kind: choiceProfile, label: "profile"},
+		choice{kind: choiceThemes, label: "themes"},
 		choice{kind: choiceQuit, label: "quit"},
 	)
 	return menuScreen{choices: choices}
@@ -440,14 +558,15 @@ func (m *menuScreen) point(i int) {
 }
 
 func (m *menuScreen) view(h *hitMap) string {
-	heading := titleStyle.Render("wortle") + mutedStyle.Render("  wordle for the terminal")
+	heading := st.title.Render("wortle") + st.muted.Render("  wordle for the terminal")
 
 	// Every row is centred to a common width so the list sits under the middle
 	// of the heading. The selected item is flanked symmetrically so its marker
 	// does not throw off the centring.
+	marks := lipgloss.Width(st.glyph.Cursor) + lipgloss.Width(st.glyph.CursorRight)
 	width := 0
 	for _, c := range m.choices {
-		if w := lipgloss.Width(c.label) + 4; w > width {
+		if w := lipgloss.Width(c.label) + marks; w > width {
 			width = w
 		}
 	}
@@ -457,9 +576,9 @@ func (m *menuScreen) view(h *hitMap) string {
 	for i, c := range m.choices {
 		var row string
 		if i == m.cursor {
-			row = center.Render(accentStyle.Bold(true).Render("› " + c.label + " ‹"))
+			row = center.Render(st.menuPick.Render(st.glyph.Cursor + c.label + st.glyph.CursorRight))
 		} else {
-			row = center.Render(mutedStyle.Render(c.label))
+			row = center.Render(st.muted.Render(c.label))
 		}
 		// The whole centred row is the click target, so it is forgiving to aim
 		// at. Hovering it moves the cursor, which is highlight enough.
