@@ -106,4 +106,4 @@ provenance.
 
 ---
 
-Look and feel inspired by minimal, keyboard-first typing tests.
+Inspired by [monkeytype](https://monkeytype.com).
