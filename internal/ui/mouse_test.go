@@ -108,6 +108,9 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 	m.game.g.Answer = "crane"
 	send(t, m, "a", "b", "o", "u", "t", "enter")
 	send(t, m, "c", "r")
+	// The marked and unmarked frames are rendered one after the other, so a
+	// second boundary between them would read as marking having moved things.
+	freezeClock(m)
 
 	for _, tc := range []struct {
 		name  string

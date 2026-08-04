@@ -73,6 +73,10 @@ func TestBundledThemesDoNotMoveTheLayout(t *testing.T) {
 	send(t, m, "enter")
 	m.game.g.Answer = "crane"
 	send(t, m, "a", "b", "o", "u", "t", "enter", "c", "r")
+	// want is captured once and compared against a frame per theme; without
+	// this the header's timer ticks partway through and every theme after the
+	// tick "moves the layout".
+	freezeClock(m)
 
 	withTheme(t, theme.Default())
 	want := sgr.ReplaceAllString(m.frame(nil), "")
