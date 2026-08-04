@@ -82,6 +82,8 @@ type Glyphs struct {
 	Cursor      string // selection marker, left side
 	CursorRight string // selection marker, right side (menu rows are flanked)
 	Separator   string // between hints on the help bar
+	ValuePrev   string // settings row: step to the previous value
+	ValueNext   string // settings row: step to the next value
 	Enter       string // submit keycap
 	Delete      string // backspace keycap
 	Bar         string // profile histogram
@@ -152,6 +154,8 @@ func Default() *Theme {
 			Cursor:      "› ",
 			CursorRight: " ‹",
 			Separator:   " · ",
+			ValuePrev:   "‹",
+			ValueNext:   "›",
 			Enter:       "⏎",
 			Delete:      "⌫",
 			Bar:         "█",

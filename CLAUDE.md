@@ -22,6 +22,7 @@ locking into a tight design.
 go run .                 # play; add -data <dir> to use a scratch save location
 go run . -themes         # list themes (and their parse warnings) and exit
 go run . -theme dracula  # start with a theme, without changing the saved choice
+go run . -length 6       # start in a mode, without changing the saved default
 go build ./...
 go test ./...
 go test -race ./internal/...
@@ -85,13 +86,29 @@ deliberate — the same game/store can later be driven by a server.
 
 - **`internal/ui`** — one root `Model` (`app.go`) owns a screen enum and routes
   keys to screen structs (`gameScreen`, `listScreen`, `profileScreen`,
-  `themeScreen`, and an inline menu). Screens are plain structs that render to
+  `themeScreen`, `settingsScreen`, and an inline menu). Screens are plain structs that render to
   strings and report intent back to the root, not nested `tea.Model`s.
   `theme.go` turns a `theme.Theme` into lipgloss styles and holds `renderPanel`
   (the btop-style rounded, titled border); `board.go` renders tiles, the
   keyboard and the colour legend. Per `IDEA.md`, a new puzzle is **tab then
   enter**. `hit.go` carries
   mouse support (below).
+
+## Settings
+
+`store.Settings` (`settings.json`) is the whole of the persisted preferences:
+`Theme`, `Length` (the mode the app opens on) and `RememberLast`. **Every field's
+zero value means "nothing chosen"** — `Length == 0` resolves to `defaultLength`,
+never to an invalid mode — so an older settings file stays readable. Resolution
+for the mode mirrors the theme's: `-length` → `$WORTLE_LENGTH` → `settings.json`
+→ `defaultLength`, and an unsupported value is reported on the error line rather
+than being fatal (`applyStartupLength`).
+
+Overrides reach the UI through **`ui.Options`**, whose zero value means "use what
+was saved"; add a field there rather than another argument to `ui.New`. Read and
+write preferences through `Model.settingsOf`/`saveSettings` (read-modify-write,
+so the theme and the mode never clobber each other), not by reaching for the
+`settingsStore` interface directly.
 
 ## Theming
 

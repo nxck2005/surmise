@@ -12,6 +12,13 @@ import (
 // rarely, and safe to lose: every field has a working zero value.
 type Settings struct {
 	Theme string `json:"theme,omitempty"`
+	// Length is the word length the app opens on. Zero means "no choice made",
+	// which the UI reads as its own default rather than as an invalid mode.
+	Length int `json:"length,omitempty"`
+	// RememberLast makes playing a mode set Length, so the app reopens on
+	// whatever was last played. Off by default: the zero value is the one that
+	// leaves Length alone.
+	RememberLast bool `json:"remember_last,omitempty"`
 }
 
 const settingsName = "settings.json"

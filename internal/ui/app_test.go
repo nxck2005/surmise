@@ -30,6 +30,10 @@ func key(s string) tea.KeyPressMsg {
 		code = tea.KeyDown
 	case "up":
 		code = tea.KeyUp
+	case "left":
+		code = tea.KeyLeft
+	case "right":
+		code = tea.KeyRight
 	default:
 		panic("unhandled key " + s)
 	}
@@ -45,7 +49,7 @@ func newModel(t *testing.T) *Model {
 	if err != nil {
 		t.Fatalf("NewJSON: %v", err)
 	}
-	m := New(s, nil, "")
+	m := New(s, nil, Options{})
 	m.screen = screenMenu
 	return m
 }
@@ -76,7 +80,7 @@ func send(t *testing.T, m *Model, keys ...string) string {
 // TestKeyHelperMatchesFramework guards the test helper itself: if these do not
 // produce the strings the screens match on, every other test here is vacuous.
 func TestKeyHelperMatchesFramework(t *testing.T) {
-	for _, want := range []string{"a", "z", "enter", "esc", "tab", "backspace", "up", "down"} {
+	for _, want := range []string{"a", "z", "enter", "esc", "tab", "backspace", "up", "down", "left", "right"} {
 		if got := key(want).String(); got != want {
 			t.Errorf("key(%q).String() = %q", want, got)
 		}
@@ -89,7 +93,7 @@ func TestStartsOnDefaultPuzzle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(s, nil, "")
+	m := New(s, nil, Options{})
 	if m.screen != screenGame {
 		t.Fatalf("screen = %v, want game", m.screen)
 	}
@@ -105,7 +109,7 @@ func TestUnplayedPuzzleIsNotSaved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(s, nil, "") // opens on a puzzle, unplayed
+	m := New(s, nil, Options{}) // opens on a puzzle, unplayed
 
 	m.quit() // as if the player launched and immediately quit
 
@@ -293,7 +297,7 @@ func TestProgressSurvivesQuitAndReappearsInList(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := New(s, nil, "")
+	m := New(s, nil, Options{})
 	send(t, m, "down", "enter")
 	m.game.g.Answer = "crane"
 	send(t, m, "a", "b", "o", "u", "t", "enter")
@@ -305,7 +309,7 @@ func TestProgressSurvivesQuitAndReappearsInList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m2 := New(reopened, nil, "")
+	m2 := New(reopened, nil, Options{})
 	m2.list.reload(reopened)
 
 	if len(m2.list.items) != 1 || m2.list.items[0].ID != id {

@@ -13,10 +13,11 @@ func TestSettingsRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := s.Settings(); got.Theme != "" {
+	if got := s.Settings(); got != (Settings{}) {
 		t.Errorf("fresh store has settings %+v, want the zero value", got)
 	}
-	if err := s.SaveSettings(Settings{Theme: "nord"}); err != nil {
+	want := Settings{Theme: "nord", Length: 6, RememberLast: true}
+	if err := s.SaveSettings(want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -25,8 +26,26 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reopened.Settings().Theme; got != "nord" {
-		t.Errorf("Theme = %q, want nord", got)
+	if got := reopened.Settings(); got != want {
+		t.Errorf("Settings() = %+v, want %+v", got, want)
+	}
+}
+
+// Every field's zero value has to be a working "nothing chosen": a settings
+// file that predates a field must not read as an invalid choice.
+func TestPartialSettingsKeepZeroValues(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewJSON(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, settingsName), []byte(`{"theme":"nord"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	want := Settings{Theme: "nord"}
+	if got := s.Settings(); got != want {
+		t.Errorf("Settings() = %+v, want %+v", got, want)
 	}
 }
 

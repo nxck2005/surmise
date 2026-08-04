@@ -22,7 +22,8 @@ Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
 ## What you get
 
 - **4, 5 and 6-letter modes.** Length is the difficulty axis; nothing in the
-  code hardcodes five.
+  code hardcodes five. Pick the one you open on in the settings screen, or let
+  it follow whatever you last played.
 - **Resumable puzzles.** Every guess is written to disk, so quit mid-word and
   pick it back up. Each puzzle gets a number: `wortle #42`.
 - **A profile screen** — win rate, average attempts, average solve time,
@@ -51,6 +52,16 @@ Tiles score like Wordle: green for the right letter in the right place, yellow
 for the right letter elsewhere, grey for absent. Duplicate letters behave the
 way you'd expect them to — exact matches are claimed first, then whatever is
 left over gets handed out.
+
+## Settings
+
+The settings screen holds two things: the mode new puzzles start in, and
+whether playing a different mode makes *that* the default. Both are saved as
+you change them.
+
+```sh
+wortle -length 6        # start in a mode for one run, without saving it
+```
 
 ## Themes
 

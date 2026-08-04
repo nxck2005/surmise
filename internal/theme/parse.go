@@ -184,8 +184,9 @@ func (t *Theme) setGlyph(key, value string) error {
 	targets := map[string]*string{
 		"caret": &t.Glyphs.Caret, "empty": &t.Glyphs.Empty,
 		"cursor": &t.Glyphs.Cursor, "cursor_right": &t.Glyphs.CursorRight,
-		"separator": &t.Glyphs.Separator,
-		"enter":     &t.Glyphs.Enter, "delete": &t.Glyphs.Delete,
+		"separator":  &t.Glyphs.Separator,
+		"value_prev": &t.Glyphs.ValuePrev, "value_next": &t.Glyphs.ValueNext,
+		"enter": &t.Glyphs.Enter, "delete": &t.Glyphs.Delete,
 		"bar": &t.Glyphs.Bar, "close": &t.Glyphs.Close,
 		"border": &t.Glyphs.Border,
 	}

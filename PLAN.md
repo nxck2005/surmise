@@ -37,6 +37,8 @@ What exists:
 - **Themes**: the whole look is data. 13 bundled themes, a picker with live
   preview, and user themes as one file each in `<data>/themes/*.toml`. See
   "Theme system" below and `docs/THEMES.md`.
+- **Settings**: the mode the app opens on, and whether playing a mode makes it
+  the default. `-length` overrides for one run. See "Settings" below.
 
 ---
 
@@ -252,6 +254,51 @@ by comparing their `Glyphs`/`Metrics` against the default.
 
 ---
 
+## Settings
+
+`settings.json` started as one field (the theme) written by the theme picker.
+It now also carries the mode the app opens on, which needed somewhere to be
+edited from — hence `settingsScreen`, the second thing on the menu that writes
+preferences rather than puzzles.
+
+### Two settings, not one
+
+`Length` alone would have been ambiguous: is the default the mode you *set*, or
+the mode you last *played*? Both are reasonable and neither is guessable, so
+`RememberLast` makes the question explicit. With it on, choosing a mode from the
+menu writes `Length` back (`applyChoice`), and the settings screen becomes a
+readout of what you last played; with it off, the screen is the only thing that
+moves the default. Off is the zero value, so a fresh install does the
+predictable thing and nothing changes under a player who never opens the screen.
+
+`Settings` is documented as safe to lose, and that now has to hold per field:
+`Length == 0` means "nothing chosen" and resolves to `defaultLength`, so a
+settings file written before the field existed is not an invalid mode. All
+reads and writes go through `Model.settingsOf`/`saveSettings`, which
+read-modify-write — two independent settings in one file must not clobber each
+other, which is exactly the bug a `SaveSettings(Settings{Length: n})` would
+have been.
+
+### Why no commit step
+
+The theme picker previews, so it needs enter to keep and esc to revert. Nothing
+here is previewed — the mode you pick does not change what is on screen — so a
+commit step would only be a way to lose a change. Every keypress saves, and esc
+is just "back". `TestSettingsHaveNoCancel` pins that down, since the picker next
+door sets the opposite expectation.
+
+Resolution order matches the theme's — `-length` → `$WORTLE_LENGTH` →
+`settings.json` → `defaultLength` — and an unsupported length is reported on the
+error line rather than being fatal, the same as an unknown theme name. Both
+overrides are for one run: they never write. The two now arrive as `ui.Options`
+rather than positional arguments, so the next one is additive.
+
+The step arrows are themeable glyphs (`value_prev` / `value_next`) rather than
+literals at the call site, for the same reason every other glyph is. The value
+and the `›` deliberately share one `action`, so the wide, easy target and the
+arrow do the same thing — which is why the geometry test looks up the *last*
+zone for that action to find the arrow itself.
+
 ## Mouse support (`hit.go`)
 
 The rule is **parity**: anything the keyboard can do, a click can do. That is a
@@ -364,9 +411,8 @@ peek/commit split, or you'll get phantom 0/6 entries or number gaps.
 Nothing below is committed to; it's the shape of where this goes.
 
 ### Near-term polish (small, safe)
-- Optional `--length` / config for the default mode instead of the hardcoded 5
-  (`defaultLength` in `app.go`). `store.Settings` is now the place for it —
-  add a field beside `Theme`.
+- ~~`--length` / config for the default mode instead of the hardcoded 5~~ —
+  done, as `Settings.Length` and the settings screen (see above).
 - A confirm/delete action in the puzzle list (puzzles are currently only added).
 - Hard/expert mode (revealed hints must be reused), per real Wordle.
 - ~~Colour-blind palette toggle~~ — done, as the `high contrast` theme.
