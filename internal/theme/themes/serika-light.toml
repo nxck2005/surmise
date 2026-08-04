@@ -1,5 +1,4 @@
 name = "serika light"
-author = "monkeytype"
 
 # The light counterpart. Note the text-on-tile overrides: on a pale ground the
 # letters inside a filled tile want to stay dark rather than follow `bg`.
