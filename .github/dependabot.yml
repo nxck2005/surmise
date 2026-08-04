@@ -1,0 +1,9 @@
+version: 2
+
+updates:
+  # Actions only. The Go dependencies are a small, deliberately chosen set
+  # pinned to Charm v2; automated bumps there would be noise, not signal.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
