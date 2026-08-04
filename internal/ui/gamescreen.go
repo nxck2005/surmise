@@ -63,13 +63,21 @@ func (m *gameScreen) enter() { m.sessionStart = time.Now() }
 // leave banks the current session's time and saves. Called on every exit path
 // so a puzzle abandoned with ctrl+c still records its time. An unplayed puzzle
 // (no guesses, never persisted) is simply discarded.
+//
+// A finished puzzle banks nothing: its time was banked by the guess that ended
+// it, and the seconds after that are spent reviewing, not solving. Counting them
+// would inflate the recorded solve — and, because AddElapsed bumps UpdatedAt,
+// would also reorder the completion sequence the streaks are read from. This
+// mirrors elapsed(), which stops the clock on the same condition.
 func (m *gameScreen) leave() error {
 	if !m.persisted {
 		m.sessionStart = time.Time{}
 		return nil
 	}
 	if !m.sessionStart.IsZero() {
-		m.g.AddElapsed(time.Since(m.sessionStart))
+		if !m.g.Status.Done() {
+			m.g.AddElapsed(time.Since(m.sessionStart))
+		}
 		m.sessionStart = time.Time{}
 	}
 	return m.store.Save(m.g)
