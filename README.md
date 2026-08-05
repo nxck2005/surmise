@@ -100,23 +100,7 @@ nord and a lot more. write your own themes as well.
 ╰──────────────────────────────────────────╯
 ```
 
-one puzzle a day in each mode, the same board for everyone who plays it. the day
-turns over at **midnight utc**, not your local midnight, so the date is always
-on screen — and every player sees the same `#code`, with no server involved.
-
-it resumes and reviews like any other puzzle. there is only one a day, though,
-so <kbd>tab</kbd> won't deal you another, and deleting a finished one means that
-day is spent for good.
-
-**can you work out tomorrow's word?** yes, if you want to. the word is derived
-from the date by the binary on your machine, which means everything it needs to
-do that is on your machine too — read the source, or run `strings` on the binary,
-and you can print the next year. that's not a bug that can be fixed offline: a
-word every install can agree on without a server is a word every install can
-compute ahead of time. the derivation is behind a seam
-(`internal/daily`'s `Source`) so that a future release can fetch each day's seed
-from somewhere it genuinely doesn't exist yet, which is the only version of this
-that's actually hard to predict. until then, the honour system.
+one puzzle a day in each mode, the same board for everyone who plays it.
 
 ## your puzzles
 
