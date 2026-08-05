@@ -11,6 +11,12 @@
 // Answer lists (words chosen as solutions) are the intersection of ENABLE1 with
 // a frequency-ranked list of common English, so solutions stay guessable while
 // the accept list stays permissive.
+//
+// Both lists are then filtered through internal/words/data/blocked.txt, a
+// hand-maintained list of slurs. ENABLE is a Scrabble dictionary and keeps a
+// number of them, so this file is the one part of the pipeline that is edited
+// by hand; it is length-agnostic, so it keeps covering any word length added
+// later.
 package main
 
 import (
@@ -31,6 +37,10 @@ const (
 	enableURL = "https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt"
 	commonURL = "https://raw.githubusercontent.com/first20hours/google-10000-english/master/google-10000-english-usa-no-swears.txt"
 	outDir    = "internal/words/data"
+
+	// blockedFile lives in outDir but, unlike the lists beside it, is an input:
+	// it is written by hand and read on every run.
+	blockedFile = "blocked.txt"
 )
 
 // lengths mirrors words.Lengths; the game modes are 4, 6 and 6 letters.
@@ -40,6 +50,14 @@ var alphaOnly = regexp.MustCompile(`^[a-z]+$`)
 
 func main() {
 	log.SetFlags(0)
+
+	// Read the blocklist first: a missing or unreadable file must stop the run
+	// rather than quietly regenerate the lists without it.
+	blocked, err := readBlocked()
+	if err != nil {
+		log.Fatalf("read blocklist: %v", err)
+	}
+	log.Printf("blocked: %d words", len(blocked))
 
 	enable, err := fetchWords(enableURL)
 	if err != nil {
@@ -58,7 +76,8 @@ func main() {
 	}
 
 	for _, n := range lengths {
-		guesses := filterLen(enable, n)
+		// Filtering the guess list is enough: answers are a subset of it.
+		guesses := filterLen(enable, n, blocked)
 
 		// Answers must also be valid guesses, so intersect with the guess list
 		// rather than filtering the common list independently.
@@ -106,9 +125,29 @@ func fetchWords(url string) (map[string]struct{}, error) {
 	return words, sc.Err()
 }
 
-func filterLen(set map[string]struct{}, n int) []string {
+// readBlocked returns the hand-maintained set of words that must never reach a
+// list, at any length.
+func readBlocked() (map[string]struct{}, error) {
+	b, err := os.ReadFile(filepath.Join(outDir, blockedFile))
+	if err != nil {
+		return nil, err
+	}
+	words := make(map[string]struct{})
+	for _, w := range strings.Fields(string(b)) {
+		words[strings.ToLower(w)] = struct{}{}
+	}
+	if len(words) == 0 {
+		return nil, fmt.Errorf("%s is empty", blockedFile)
+	}
+	return words, nil
+}
+
+func filterLen(set map[string]struct{}, n int, blocked map[string]struct{}) []string {
 	out := make([]string, 0, 4096)
 	for w := range set {
+		if _, bad := blocked[w]; bad {
+			continue
+		}
 		if len(w) == n {
 			out = append(out, w)
 		}
@@ -139,7 +178,8 @@ func writeList(name string, words []string) {
 func writeSources() {
 	const doc = `# Word list sources
 
-Regenerate with ` + "`go run ./tools/genwords`" + `. Do not edit these files by hand.
+Regenerate with ` + "`go run ./tools/genwords`" + `. Do not edit the word lists by
+hand — ` + "`blocked.txt`" + ` below is the one file here that is hand-maintained.
 
 ## guesses{4,5,6}.txt — accepted input
 
@@ -161,6 +201,17 @@ common English, so solutions are words people actually know.
 - Derived from the Google Web Trillion Word Corpus.
 
 Every answer is by construction also a valid guess; ` + "`words`" + ` has a test asserting this.
+
+## blocked.txt — words kept out of both
+
+A hand-maintained list of slurs, edited by hand and read (never written) by
+genwords, which drops every entry from the guess lists and therefore from the
+answer lists too. ENABLE is a Scrabble dictionary and keeps a number of slurs,
+so the source lists alone are not enough.
+
+The list is deliberately length-agnostic and includes inflections and spellings
+that no current mode can reach, so it keeps working if a word length is added.
+` + "`words`" + ` has a test asserting no shipped list contains a blocked word.
 `
 	if err := os.WriteFile(filepath.Join(outDir, "SOURCES.md"), []byte(doc), 0o644); err != nil {
 		log.Fatal(err)

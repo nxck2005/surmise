@@ -1438,7 +1438,6 @@ boggle
 bogies
 bogles
 boheas
-bohunk
 boiled
 boiler
 boites
@@ -1733,7 +1732,6 @@ bucked
 bucker
 bucket
 buckle
-buckra
 budded
 budder
 buddle
@@ -2351,8 +2349,6 @@ chinas
 chinch
 chined
 chines
-chinks
-chinky
 chinos
 chints
 chintz
@@ -2761,7 +2757,6 @@ cookey
 cookie
 cooled
 cooler
-coolie
 coolly
 coolth
 coombe
@@ -3207,7 +3202,6 @@ daggas
 dagger
 daggle
 dagoba
-dagoes
 dahlia
 dahoon
 daiker
@@ -3261,8 +3255,6 @@ daring
 darked
 darken
 darker
-darkey
-darkie
 darkle
 darkly
 darned
@@ -4472,9 +4464,7 @@ faeces
 faenas
 faerie
 fagged
-faggot
 fagins
-fagots
 failed
 faille
 fainer
@@ -5412,7 +5402,6 @@ gimlet
 gimmal
 gimmes
 gimmie
-gimped
 gingal
 ginger
 gingko
@@ -5820,8 +5809,6 @@ guyots
 guzzle
 gweduc
 gybing
-gypped
-gypper
 gypsum
 gyrase
 gyrate
@@ -6226,8 +6213,6 @@ honied
 honing
 honked
 honker
-honkey
-honkie
 honors
 honour
 hooded
@@ -6756,7 +6741,6 @@ jetsom
 jetted
 jetton
 jewels
-jewing
 jezail
 jibbed
 jibber
@@ -6891,8 +6875,6 @@ kabaya
 kabiki
 kabobs
 kabuki
-kaffir
-kafirs
 kaftan
 kahuna
 kaiaks
@@ -7124,7 +7106,6 @@ krafts
 kraits
 kraken
 krater
-krauts
 kreeps
 krills
 krises
@@ -7439,8 +7420,6 @@ lewder
 lewdly
 lexeme
 lexica
-lezzes
-lezzie
 liable
 liaise
 lianas
@@ -8173,7 +8152,6 @@ midday
 midden
 middle
 midges
-midget
 midgut
 midleg
 midrib
@@ -8352,7 +8330,6 @@ mondos
 moneys
 monger
 mongoe
-mongol
 mongos
 mongst
 monied
@@ -8718,7 +8695,6 @@ nielli
 niello
 nieves
 niffer
-nigger
 niggle
 nighed
 nigher
@@ -10874,7 +10850,6 @@ retail
 retain
 retake
 retape
-retard
 reteam
 retear
 retell
@@ -11340,7 +11315,6 @@ salvos
 samara
 sambar
 sambas
-sambos
 sambur
 samech
 samekh
@@ -11808,7 +11782,6 @@ shears
 sheath
 sheave
 sheens
-sheeny
 sheers
 sheets
 sheeve
@@ -12480,7 +12453,6 @@ spiced
 spicer
 spices
 spicey
-spicks
 spider
 spiels
 spiers
@@ -12593,7 +12565,6 @@ square
 squash
 squats
 squawk
-squaws
 squeak
 squeal
 squegs
@@ -14828,7 +14799,6 @@ whited
 whiten
 whiter
 whites
-whitey
 wholes
 wholly
 whomps
