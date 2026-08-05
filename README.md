@@ -2,14 +2,14 @@
 
 # wortle
 
-**Wordle for the terminal.** A fast, themeable TUI in Go.
+**the word game for the terminal.** fast, themeable, remembers where you left off.
 
-[![CI](https://github.com/nxck2005/wortle/actions/workflows/ci.yml/badge.svg)](https://github.com/nxck2005/wortle/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/nxck2005/wortle.svg)](https://pkg.go.dev/github.com/nxck2005/wortle)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nxck2005/wortle)](https://goreportcard.com/report/github.com/nxck2005/wortle)
-![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)
-[![Built with Bubble Tea](https://img.shields.io/badge/built%20with-Bubble%20Tea-ff69b4)](https://charm.land)
-![Themes](https://img.shields.io/badge/themes-13-e2b714)
+[![ci](https://github.com/nxck2005/wortle/actions/workflows/ci.yml/badge.svg)](https://github.com/nxck2005/wortle/actions/workflows/ci.yml)
+[![go reference](https://pkg.go.dev/badge/github.com/nxck2005/wortle.svg)](https://pkg.go.dev/github.com/nxck2005/wortle)
+[![go report card](https://goreportcard.com/badge/github.com/nxck2005/wortle)](https://goreportcard.com/report/github.com/nxck2005/wortle)
+![go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)
+[![built with bubble tea](https://img.shields.io/badge/built%20with-bubble%20tea-ff69b4)](https://charm.land)
+![themes](https://img.shields.io/badge/themes-13-e2b714)
 
 </div>
 
@@ -17,28 +17,62 @@
 go install github.com/nxck2005/wortle@latest
 ```
 
-Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
+then run `wortle`. it opens straight onto a puzzle — no menu, no splash, no
+account.
 
-## What you get
+```
+╭─ wortle ───────────────────────────────────────────────────────── × ╮
+│                                                                     │
+│                 wortle #352083   5 letters   –   2/6                │
+│                                                                     │
+│                  S       L       A       T       E                  │
+│                                                                     │
+│                  C       H       A       I       R                  │
+│                                                                     │
+│                  C       R       A       _       ·                  │
+│                                                                     │
+│                  ·       ·       ·       ·       ·                  │
+│                                                                     │
+│                  ·       ·       ·       ·       ·                  │
+│                                                                     │
+│                  ·       ·       ·       ·       ·                  │
+│                                                                     │
+│       Q     W     E     R     T     Y     U     I     O     P       │
+│                                                                     │
+│          A     S     D     F     G     H     J     K     L          │
+│                                                                     │
+│          ⏎     Z     X     C     V     B     N     M     ⌫         │
+│                                                                     │
+│                            4 guesses left                           │
+│                                                                     │
+│      A    correct spot ·    A    wrong spot ·    A    not in word   │
+│                                                                     │
+│     type a word · enter submit · tab+enter new puzzle · esc menu    │
+│                                                                     │
+╰─────────────────────────────────────────────────────────────────────╯
+```
 
-- **4, 5 and 6-letter modes.** Length is the difficulty axis; nothing in the
-  code hardcodes five. Pick the one you open on in the settings screen, or let
-  it follow whatever you last played.
-- **Resumable puzzles.** Every guess is written to disk, so quit mid-word and
-  pick it back up. Each puzzle gets a number: `wortle #42`.
-- **A profile screen** — win rate, average attempts, average solve time,
-  current and best streak, guess distribution.
-- **A colour legend on the board**, so a theme that does not use green and
-  yellow is still readable at a glance. It steps aside on small terminals.
-- **13 bundled themes** and a live-preview picker. Themes are plain text files;
-  writing one is editing a handful of key/value lines.
-- **Full mouse support.** Anything the keys can do, a click can do too — the
-  on-screen keyboard types, list rows and menu entries are clickable, and the
-  help line at the bottom doubles as a button bar.
+## why you'd want it
 
-## Playing
+**more options for word sizes.** play 4, 5 or 6 letters! shorter is
+tighter, longer gives you a guess more room. pick which one you open on, or let
+it just follow whatever you played last.
 
-| Key | Action |
+**quit whenever.** every guess is saved the moment you make it. come back whenever! clock doesn't tick while you're away.
+
+**it keeps score.** win rate, average attempts, average solve time, current and
+best streak, guess distribution, all broken down by mode.
+
+**wide assortment of themes, live preview.**  serika, catppuccin, dracula, gruvbox,
+nord and a lot more. write your own themes as well.
+
+**built to be mouse first.** all of it.
+
+**no network required.** plays offline forever.
+
+## playing
+
+| key | action |
 | --- | --- |
 | letters | type a guess |
 | <kbd>enter</kbd> | submit |
@@ -49,72 +83,109 @@ Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
 
-Tiles score like Wordle: green for the right letter in the right place, yellow
-for the right letter elsewhere, grey for absent. Duplicate letters behave the
-way you'd expect them to — exact matches are claimed first, then whatever is
-left over gets handed out.
+## your puzzles
 
-## Settings
-
-The settings screen holds two things: the mode new puzzles start in, and
-whether playing a different mode makes *that* the default. Both are saved as
-you change them.
-
-```sh
-wortle -length 6        # start in a mode for one run, without saving it
+```
+╭─ puzzles ──────────────────────────────────── × ╮
+│                                                 │
+│                     puzzles                     │
+│                                                 │
+│      › #715287 5 letters  in play 2/6    –      │
+│       #577098 5 letters  solved 2/6     40s     │
+│       #360144 5 letters  solved 2/6     47s     │
+│       #465966 5 letters  solved 2/6     54s     │
+│       #864121 5 letters  solved 2/6     1:01    │
+│       #462410 5 letters  solved 2/6     1:08    │
+│                                                 │
+│   ↑/↓ move · enter open · d delete · esc menu   │
+│                                                 │
+╰─────────────────────────────────────────────────╯
 ```
 
-## Themes
+everything you've played, newest first. <kbd>enter</kbd> resumes, <kbd>d</kbd>
+twice deletes. deleting a puzzle really does destroy it — the answer and your
+guesses are gone — but your streak still knows a game happened there, so
+erasing a loss won't quietly hand you a longer best streak.
+
+## your profile
+
+```
+╭─ profile ───────────────────────────────────────────────────── × ╮
+│                                                                  │
+│   played              won                 win rate               │
+│   5                   5                   100%                   │
+│                                                                  │
+│   avg attempts        avg time            streak                 │
+│   2                   54s                 5 (max 5)              │
+│                                                                  │
+│   guess distribution                                             │
+│    2 ████████████████████████ 5                                  │
+│                                                                  │
+│   by mode                                                        │
+│   5 letters  5 played      100%        avg 2 in 54s              │
+│                                                                  │
+╰──────────────────────────────────────────────────────────────────╯
+```
+
+averages cover wins only, so a bad day doesn't get to inflate your solve time.
+
+## themes
 
 ```sh
 wortle -themes          # list what's installed, and where the directory is
 wortle -theme dracula   # play with a theme without changing your saved choice
 ```
 
-Bundled: `serika-dark` (the default), `serika-light`, `catppuccin-mocha`,
+bundled: `serika-dark` (the default), `serika-light`, `catppuccin-mocha`,
 `dracula`, `everforest-dark`, `gruvbox-dark`, `high-contrast`, `matrix`,
 `nord`, `rose-pine`, `solarized-dark`, `terminal`, `tokyo-night`.
 
-Your own go in `~/.config/wortle/themes`. A whole theme can be four lines:
+yours go in `~/.config/wortle/themes`. a whole theme can be two lines:
 
 ```toml
 name = "just the accent"
 accent = "#ff0088"
 ```
 
-Everything you leave out keeps its built-in value, and a bad line is a warning
-naming the line — never a crash. Glyphs and spacing are themeable too, and
-click targets are measured rather than hardcoded, so they follow along.
-Full reference in [docs/THEMES.md](docs/THEMES.md).
+anything you leave out keeps its built-in value. glyphs and spacing are themeable too. full
+reference in [docs/THEMES.md](docs/THEMES.md).
 
-## Where things live
+## settings
 
-Saved puzzles and settings go in your user config directory
-(`~/.config/wortle` on Linux). `-data <dir>` points everything somewhere else,
-which is handy for a scratch profile.
+the settings screen holds two things: the mode new puzzles start in, and
+whether playing a different mode makes *that* the new default. both save as you
+change them.
 
-## Development
+```sh
+wortle -length 6        # start in a mode for one run, without saving it
+wortle -data ./scratch  # keep saves and settings somewhere else
+```
+
+saves and settings otherwise live in your user config directory
+(`~/.config/wortle` on linux).
+
+## development
 
 ```sh
 go run .                    # play from a clone
-go build ./...
 go test ./...
 go test -race ./internal/...
 go run ./tools/genwords     # regenerate the embedded word lists
 ```
 
-`internal/game`, `store`, `words` and `stats` are the UI-agnostic core, fully
-unit-tested; `internal/ui` is the Bubble Tea layer on top. The split is
-deliberate — the same core is meant to be drivable by a server later. Word
-lists are compiled into the binary with `go:embed`, so there is nothing to
-download at runtime.
+`internal/game`, `store`, `words` and `stats` are the ui-agnostic core;
+`internal/ui` is the bubble tea layer on top. the split is deliberate — the same
+core is meant to be drivable by a server later. the ui has tests too: they drive
+the root model with synthetic key and mouse events and assert on the rendered
+frame, so no tty is involved.
 
-The UI has tests too: they drive the root model with synthetic key and mouse
-events and assert on the rendered frame, so no TTY is involved.
-
-See [internal/words/data/SOURCES.md](internal/words/data/SOURCES.md) for
-word-list provenance.
+word-list provenance in
+[internal/words/data/SOURCES.md](internal/words/data/SOURCES.md).
 
 ---
 
-Inspired by [monkeytype](https://monkeytype.com).
+<div align="center">
+
+inspired by [monkeytype](https://monkeytype.com) · mit licensed
+
+</div>
