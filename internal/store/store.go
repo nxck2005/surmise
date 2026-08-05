@@ -24,6 +24,9 @@ type Summary struct {
 	Attempts  int
 	Elapsed   time.Duration
 	UpdatedAt time.Time
+	// Daily is the date this puzzle is the daily for, or empty. Carried here so
+	// the browse list can label one without loading the whole game.
+	Daily string
 }
 
 // Store reads and writes puzzles.
@@ -49,5 +52,6 @@ func summarize(g *game.Game) Summary {
 		Attempts:  g.Attempts(),
 		Elapsed:   g.Elapsed(),
 		UpdatedAt: g.UpdatedAt,
+		Daily:     g.Daily,
 	}
 }
