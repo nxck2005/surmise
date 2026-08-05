@@ -7,8 +7,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nxck2005/wortle/internal/build"
 	"github.com/nxck2005/wortle/internal/game"
 	"github.com/nxck2005/wortle/internal/store"
+	"github.com/nxck2005/wortle/internal/theme"
+	"github.com/nxck2005/wortle/internal/words"
 )
 
 // key builds the message the framework would deliver for a keystroke.
@@ -160,9 +163,67 @@ func TestPuzzleSavedOnFirstGuess(t *testing.T) {
 func TestMenuRendersModes(t *testing.T) {
 	m := newModel(t)
 	view := m.View().Content
-	for _, want := range []string{"wortle", "4 letters", "5 letters", "6 letters", "puzzles", "profile"} {
+	for _, want := range []string{"wortle", "4 letters", "5 letters", "6 letters", "puzzles", "profile", "about"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("menu missing %q\n%s", want, view)
+		}
+	}
+}
+
+// The about screen is where a player finds out what they are running, so the
+// build stamp and the credits must actually reach the frame.
+func TestAboutScreenShowsBuildInfo(t *testing.T) {
+	m := newModel(t)
+	m.menu.point(menuIndex(t, m, choiceAbout, 0))
+	view := send(t, m, "enter")
+
+	if m.screen != screenAbout {
+		t.Fatalf("screen = %v, want about", m.screen)
+	}
+	want := []string{
+		"about",
+		build.Get().Version,
+		repoURL,
+		license,
+		words.Credits[0].Source,
+	}
+	for _, w := range want {
+		if !strings.Contains(view, w) {
+			t.Errorf("about screen missing %q\n%s", w, view)
+		}
+	}
+
+	send(t, m, "esc")
+	if m.screen != screenMenu {
+		t.Errorf("screen = %v after esc, want menu", m.screen)
+	}
+}
+
+// The data directory is display data handed in through Options; without it the
+// screen must simply omit the paths rather than show an empty one.
+func TestAboutScreenShowsDataDir(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.NewJSON(dir)
+	if err != nil {
+		t.Fatalf("NewJSON: %v", err)
+	}
+	m := New(s, nil, Options{DataDir: dir})
+	m.screen = screenMenu
+	m.menu.point(menuIndex(t, m, choiceAbout, 0))
+	view := send(t, m, "enter")
+
+	if !strings.Contains(view, dir) {
+		t.Errorf("about screen missing data dir %q\n%s", dir, view)
+	}
+	if !strings.Contains(view, theme.Dir(dir)) {
+		t.Errorf("about screen missing themes dir %q\n%s", theme.Dir(dir), view)
+	}
+
+	plain := newModel(t)
+	plain.about.reload("")
+	for _, r := range plain.about.rows {
+		if r.value == "" {
+			t.Errorf("empty value for row %q with no data dir", r.label)
 		}
 	}
 }
@@ -578,6 +639,94 @@ func TestDeleteKeyDoesNothingOnTheBoard(t *testing.T) {
 
 	if list, _ := m.store.List(); len(list) != 1 {
 		t.Errorf("d on the board deleted a puzzle: %v", list)
+	}
+}
+
+// The clock runs from the first letter, the way a typing test does: opening a
+// board and staring at it costs nothing.
+func TestClockStartsOnFirstLetter(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+
+	if !m.game.sessionStart.IsZero() {
+		t.Error("clock running before anything was typed")
+	}
+	if d := m.game.elapsed(); d != 0 {
+		t.Errorf("elapsed = %v on an untouched board, want 0", d)
+	}
+
+	// Neither does deleting nothing, nor a rejected submit.
+	send(t, m, "backspace", "enter")
+	if !m.game.sessionStart.IsZero() {
+		t.Error("clock started without a letter being typed")
+	}
+
+	send(t, m, "c")
+	if m.game.sessionStart.IsZero() {
+		t.Fatal("clock not running after the first letter")
+	}
+
+	// And it keeps the session it started; a later letter must not restart it.
+	started := m.game.sessionStart
+	send(t, m, "r")
+	if !m.game.sessionStart.Equal(started) {
+		t.Error("the second letter restarted the clock")
+	}
+}
+
+// Time typed before the winning guess is still banked — the later start must
+// not cost the player the seconds they actually spent.
+func TestSolveTimeIsBankedFromTheFirstLetter(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+
+	send(t, m, "c")
+	m.game.sessionStart = m.game.sessionStart.Add(-2 * time.Minute)
+	send(t, m, "r", "a", "n", "e", "enter")
+
+	g, err := m.store.Load(m.game.g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Elapsed() < 2*time.Minute {
+		t.Errorf("elapsed = %v, want at least the 2m spent typing", g.Elapsed())
+	}
+}
+
+// Resuming a puzzle and leaving without typing must add nothing: the clock is
+// armed on the way in, not started.
+func TestResumingWithoutTypingAddsNoTime(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "s", "t", "o", "n", "e", "enter")
+	id := m.game.g.ID
+	send(t, m, "esc")
+
+	before, err := m.store.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m.list.reload(m.store)
+	m.screen = screenList
+	send(t, m, "enter")
+	if m.game.g.ID != id {
+		t.Fatalf("opened %q, want %q", m.game.g.ID, id)
+	}
+	if !m.game.sessionStart.IsZero() {
+		t.Error("resuming started the clock before anything was typed")
+	}
+	send(t, m, "esc")
+
+	after, err := m.store.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.ElapsedMS != before.ElapsedMS {
+		t.Errorf("elapsed = %dms after idling, want %dms unchanged",
+			after.ElapsedMS, before.ElapsedMS)
 	}
 }
 

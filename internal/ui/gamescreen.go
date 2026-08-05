@@ -36,9 +36,12 @@ type gameScreen struct {
 	// with a 0/6 entry.
 	persisted bool
 
-	// sessionStart is when the player last entered this board. Elapsed time is
-	// banked into the game on the way out so idle time between sessions is not
-	// counted.
+	// sessionStart is when the player last started typing on this board, not
+	// when they opened it: the clock runs from the first keystroke, the way a
+	// typing test does, so staring at a fresh board costs nothing. Zero means no
+	// session is in progress — either nothing has been typed yet, or the time
+	// has been banked into the game, which happens on the way out and on the
+	// guess that ends the puzzle so idle time is never counted.
 	sessionStart time.Time
 
 	// width and height are the terminal's, pushed down by the root. The board is
@@ -53,12 +56,26 @@ func (m *gameScreen) resize(w, h int) { m.width, m.height = w, h }
 
 // newGameScreen wraps a puzzle. saved reports whether it is already on disk:
 // true for a puzzle loaded from the list, false for a freshly created one.
+//
+// The clock is not started here — startClock does that on the first letter.
 func newGameScreen(s store.Store, g *game.Game, saved bool) *gameScreen {
-	return &gameScreen{store: s, g: g, persisted: saved, sessionStart: time.Now()}
+	return &gameScreen{store: s, g: g, persisted: saved}
 }
 
-// enter restarts the session clock, for when the player returns to a puzzle.
-func (m *gameScreen) enter() { m.sessionStart = time.Now() }
+// enter arms the session clock for a board the player has just opened or
+// returned to: it does not run until the next letter is typed.
+func (m *gameScreen) enter() { m.sessionStart = time.Time{} }
+
+// startClock begins a session on the first letter typed into it. Every later
+// letter finds a session already running and leaves it alone, so the clock
+// measures from the first keystroke to the last guess, not from the moment the
+// board appeared. Time is banked and the clock zeroed by leave and by the guess
+// that finishes the puzzle; typing again after that starts a fresh session.
+func (m *gameScreen) startClock() {
+	if m.sessionStart.IsZero() {
+		m.sessionStart = time.Now()
+	}
+}
 
 // leave banks the current session's time and saves. Called on every exit path
 // so a puzzle abandoned with ctrl+c still records its time. An unplayed puzzle
@@ -154,6 +171,10 @@ func (m *gameScreen) typeLetter(c byte) {
 		return
 	}
 	if !m.g.Status.Done() && len(m.typing) < m.g.Length {
+		// The clock starts here, and only here, so both a keystroke and a click
+		// on the on-screen keyboard start it — a letter is the first thing
+		// either can produce.
+		m.startClock()
 		m.typing += string(c)
 	}
 }
@@ -194,8 +215,11 @@ func (m *gameScreen) submit() tea.Cmd {
 	m.typing = ""
 
 	// Bank time immediately on the winning or losing guess, so the recorded
-	// duration is the time actually spent solving.
-	if m.g.Status.Done() {
+	// duration is the time actually spent solving. The clock can legitimately
+	// not be running — a guess typed entirely before this screen banked its
+	// last session, say — and a zero sessionStart would otherwise bank every
+	// second since the epoch.
+	if m.g.Status.Done() && !m.sessionStart.IsZero() {
 		m.g.AddElapsed(time.Since(m.sessionStart))
 		m.sessionStart = time.Time{}
 	}
@@ -231,7 +255,7 @@ func (m *gameScreen) startNew() tea.Cmd {
 	g, err := newPuzzle(m.store, m.g.Length)
 	if err != nil {
 		m.notify("could not start puzzle: %v", err)
-		m.sessionStart = time.Now() // stay on the old board
+		m.enter() // stay on the old board; leave() banked its time
 		return nil
 	}
 

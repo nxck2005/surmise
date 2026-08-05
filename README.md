@@ -184,6 +184,22 @@ wortle -data ./scratch  # keep saves and settings somewhere else
 saves and settings otherwise live in your user config directory
 (`~/.config/wortle` on linux).
 
+## about
+
+the **about** row in the menu shows the version, the commit it was built from,
+where your files live and where the words came from. same thing without opening
+the app:
+
+```sh
+wortle -version         # wortle 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
+```
+
+an unstamped build calls itself `dev`; a release stamps the number in:
+
+```sh
+go build -ldflags "-X github.com/nxck2005/wortle/internal/build.version=0.1.0"
+```
+
 ## development
 
 ```sh

@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nxck2005/wortle/internal/build"
 	"github.com/nxck2005/wortle/internal/daily"
 	"github.com/nxck2005/wortle/internal/store"
 	"github.com/nxck2005/wortle/internal/theme"
@@ -29,7 +30,17 @@ func main() {
 	// -day plays another date's daily. Handy for looking at a board without
 	// waiting for it, and, like the rest of this family, it never writes.
 	day := flag.String("day", os.Getenv("WORTLE_DAY"), "date whose daily to play, YYYY-MM-DD (default: today, UTC)")
+	// -version answers "which build is this" without opening the app, where the
+	// same information is on the about screen.
+	showVersion := flag.Bool("version", false, "print version information and exit")
 	flag.Parse()
+
+	// Unlike -themes, this needs no store and no theme directory, so it does not
+	// go through run: printing a version must never create anything on disk.
+	if *showVersion {
+		fmt.Println(build.Get())
+		return
+	}
 
 	if err := run(*dataDir, *themeName, *day, *length, *listThemes); err != nil {
 		fmt.Fprintln(os.Stderr, "wortle:", err)
@@ -78,7 +89,13 @@ func run(dataDir, themeName, day string, length int, listThemes bool) error {
 	// The daily's seeds come from here, which is the one place a future remote
 	// source would be chosen; ui.Options carries it in so nothing below has to
 	// know which one it got.
-	opts := ui.Options{Theme: themeName, Length: length, Day: day, DailySeeds: daily.Local()}
+	opts := ui.Options{
+		Theme:      themeName,
+		Length:     length,
+		Day:        day,
+		DailySeeds: daily.Local(),
+		DataDir:    dataDir,
+	}
 	_, err = tea.NewProgram(ui.New(s, lib, opts)).Run()
 	return err
 }

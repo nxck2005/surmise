@@ -32,6 +32,7 @@ const (
 	screenThemes
 	screenSettings
 	screenDaily
+	screenAbout
 )
 
 // tickInterval drives the on-screen clock and expires transient messages.
@@ -73,6 +74,10 @@ type Model struct {
 	day      daily.Day
 	dailySrc daily.Source
 
+	// dataDir is where the files live, for the about screen to show. Nothing
+	// reads or writes through it; that is the store's job.
+	dataDir string
+
 	screen   screen
 	menu     menuScreen
 	game     *gameScreen
@@ -81,6 +86,7 @@ type Model struct {
 	themes   themeScreen
 	settings settingsScreen
 	daily    dailyScreen
+	about    aboutScreen
 
 	// hits is where the last frame drew its clickable regions; hover is what the
 	// pointer was last over, which the next frame highlights. Both are written
@@ -112,6 +118,11 @@ type Options struct {
 	// DailySeeds overrides where daily seeds come from. Nil means daily.Local,
 	// which is the only source there is today.
 	DailySeeds daily.Source
+	// DataDir is where saves, settings and themes live. It is display data —
+	// the about screen shows it, and the UI's own file access still goes
+	// through the store — so empty simply means "not known", which is what the
+	// headless tests pass.
+	DataDir string
 }
 
 // settingsStore is the part of a store that remembers preferences. It is a
@@ -133,7 +144,13 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	if lib == nil {
 		lib = theme.Bundled()
 	}
-	m := &Model{store: s, themeLib: lib, menu: newMenuScreen(), dailySrc: opts.DailySeeds}
+	m := &Model{
+		store:    s,
+		themeLib: lib,
+		menu:     newMenuScreen(),
+		dailySrc: opts.DailySeeds,
+		dataDir:  opts.DataDir,
+	}
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
 	}
@@ -492,7 +509,9 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateThemes(msg)
 	case screenSettings:
 		return m.updateSettings(msg)
-	case screenProfile:
+	// Both are read-only screens with no cursor, so their whole key handling is
+	// "get me out of here".
+	case screenProfile, screenAbout:
 		if key := msg.String(); key == "esc" || key == "q" {
 			m.screen = screenMenu
 		}
@@ -545,6 +564,10 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 	case choiceSettings:
 		m.settings.reload(m.settingsOf())
 		m.screen = screenSettings
+
+	case choiceAbout:
+		m.about.reload(m.dataDir)
+		m.screen = screenAbout
 
 	case choiceQuit:
 		return m.quit()
@@ -818,6 +841,8 @@ func (m *Model) screenTitle() string {
 		return "themes"
 	case screenSettings:
 		return "settings"
+	case screenAbout:
+		return "about"
 	default:
 		return "wortle"
 	}
@@ -837,6 +862,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.themes.view(h), m.themes.help(h)
 	case screenSettings:
 		return m.settings.view(h), m.settings.help(h)
+	case screenAbout:
+		return m.about.view(h), m.about.help(h)
 	default:
 		return m.menu.view(h), m.menu.help(h)
 	}
@@ -853,6 +880,7 @@ const (
 	choiceProfile
 	choiceThemes
 	choiceSettings
+	choiceAbout
 	choiceQuit
 )
 
@@ -869,7 +897,7 @@ type menuScreen struct {
 
 func newMenuScreen() menuScreen {
 	// Word lengths lead the menu; they are the game's difficulty modes.
-	choices := make([]choice, 0, len(words.Lengths)+5)
+	choices := make([]choice, 0, len(words.Lengths)+7)
 	for _, n := range words.Lengths {
 		choices = append(choices, choice{
 			kind:   choiceNewGame,
@@ -885,6 +913,7 @@ func newMenuScreen() menuScreen {
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},
 		choice{kind: choiceSettings, label: "settings"},
+		choice{kind: choiceAbout, label: "about"},
 		choice{kind: choiceQuit, label: "quit"},
 	)
 	return menuScreen{choices: choices}

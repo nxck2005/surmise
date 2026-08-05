@@ -127,6 +127,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"profile", func() { m.profile.reload(m.store); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
+		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()
@@ -446,6 +447,33 @@ func TestProfileReachableAndDismissableByMouse(t *testing.T) {
 	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceProfile, 0)})
 	if m.screen != screenProfile {
 		t.Fatalf("screen = %v, want profile", m.screen)
+	}
+	click(t, m, action{kind: actBack})
+	if m.screen != screenMenu {
+		t.Errorf("screen = %v after clicking menu, want menu", m.screen)
+	}
+}
+
+// The clock starts on the first letter whichever way it was typed, since both
+// paths go through typeLetter.
+func TestKeycapClickStartsTheClock(t *testing.T) {
+	m := gameModel(t)
+	draw(t, m)
+	if !m.game.sessionStart.IsZero() {
+		t.Fatal("clock running before anything was typed")
+	}
+
+	clickWord(t, m, "c")
+	if m.game.sessionStart.IsZero() {
+		t.Error("clicking a keycap did not start the clock")
+	}
+}
+
+func TestAboutReachableAndDismissableByMouse(t *testing.T) {
+	m := newModel(t)
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceAbout, 0)})
+	if m.screen != screenAbout {
+		t.Fatalf("screen = %v, want about", m.screen)
 	}
 	click(t, m, action{kind: actBack})
 	if m.screen != screenMenu {
