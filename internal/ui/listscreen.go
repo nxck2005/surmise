@@ -182,7 +182,14 @@ func (m *listScreen) deletePrompt(h *hitMap) string {
 	}
 	confirm := action{kind: actDeletePuzzle, index: m.cursor}
 	cancel := action{kind: actCancelDelete}
-	return st.muted.Render(fmt.Sprintf("delete #%s? ", game.Code(s.ID))) +
+	// A daily is the one delete with a consequence past the record itself: its
+	// id is derived, so the day cannot be played again once its tombstone is
+	// there. Say so while there is still a chance to answer no.
+	question := fmt.Sprintf("delete #%s? ", game.Code(s.ID))
+	if s.Daily != "" {
+		question = fmt.Sprintf("delete the %s daily? it cannot be played again ", s.Daily)
+	}
+	return st.muted.Render(question) +
 		h.mark(confirm, st.accent.Render("d")) +
 		st.muted.Render(" to delete · ") +
 		h.mark(cancel, st.accent.Render("esc")) +
@@ -198,7 +205,11 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 	// Columns are padded before styling, since padding a styled string by byte
 	// width counts invisible escape codes as characters.
 	// Codes are fixed-width, so this column needs no padding to stay aligned.
-	left := fmt.Sprintf("#%s %-10s ", game.Code(s.ID), fmt.Sprintf("%d letters", s.Length))
+	what := fmt.Sprintf("%d letters", s.Length)
+	if s.Daily != "" {
+		what = fmt.Sprintf("daily %s", s.Daily)
+	}
+	left := fmt.Sprintf("#%s %-16s ", game.Code(s.ID), what)
 	status := fmt.Sprintf("%-14s", statusText)
 	right := " " + formatDuration(s.Elapsed)
 

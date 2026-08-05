@@ -77,11 +77,46 @@ nord and a lot more. write your own themes as well.
 | letters | type a guess |
 | <kbd>enter</kbd> | submit |
 | <kbd>backspace</kbd> | delete a letter |
-| <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle |
+| <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle (not on the daily — there's one a day) |
 | <kbd>esc</kbd> | back to the menu |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
+
+## the daily
+
+```
+╭─ daily ─────────────────────────────── × ╮
+│                                          │
+│                  daily                   │
+│      2026-08-06 · resets in 7h 21m       │
+│                                          │
+│    › #072140 4 letters  not started      │
+│      #390265 5 letters  solved 1/6       │
+│      #448851 6 letters  not started      │
+│                                          │
+│     ↑/↓ mode · enter play · esc back     │
+│                                          │
+╰──────────────────────────────────────────╯
+```
+
+one puzzle a day in each mode, the same board for everyone who plays it. the day
+turns over at **midnight utc**, not your local midnight, so the date is always
+on screen — and every player sees the same `#code`, with no server involved.
+
+it resumes and reviews like any other puzzle. there is only one a day, though,
+so <kbd>tab</kbd> won't deal you another, and deleting a finished one means that
+day is spent for good.
+
+**can you work out tomorrow's word?** yes, if you want to. the word is derived
+from the date by the binary on your machine, which means everything it needs to
+do that is on your machine too — read the source, or run `strings` on the binary,
+and you can print the next year. that's not a bug that can be fixed offline: a
+word every install can agree on without a server is a word every install can
+compute ahead of time. the derivation is behind a seam
+(`internal/daily`'s `Source`) so that a future release can fetch each day's seed
+from somewhere it genuinely doesn't exist yet, which is the only version of this
+that's actually hard to predict. until then, the honour system.
 
 ## your puzzles
 
@@ -158,6 +193,7 @@ change them.
 
 ```sh
 wortle -length 6        # start in a mode for one run, without saving it
+wortle -day 2026-08-06  # play another date's daily, without waiting for it
 wortle -data ./scratch  # keep saves and settings somewhere else
 ```
 

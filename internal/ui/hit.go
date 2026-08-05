@@ -41,6 +41,7 @@ const (
 	actNone        actionKind = iota
 	actMenuChoice             // index: menu row
 	actListRow                // index: puzzle list row
+	actDailyRow               // index: daily screen row, one per mode
 	actThemeRow               // index: theme picker row
 	actSettingNext            // index: settings row, next value
 	actSettingPrev            // index: settings row, previous value
