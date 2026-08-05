@@ -19,7 +19,6 @@ var ErrNotFound = errors.New("store: puzzle not found")
 // loading and decoding every saved game just to render a menu.
 type Summary struct {
 	ID        string
-	Number    int
 	Length    int
 	Status    game.Status
 	Attempts  int
@@ -33,23 +32,18 @@ type Store interface {
 	Save(g *game.Game) error
 	// Load returns a puzzle by id, or ErrNotFound.
 	Load(id string) (*game.Game, error)
+	// Delete removes a puzzle by id, or returns ErrNotFound.
+	Delete(id string) error
 	// List returns summaries of all puzzles, most recently updated first.
 	List() ([]Summary, error)
 	// All returns every puzzle in full. Stats need the guess distribution,
 	// which Summary deliberately omits.
 	All() ([]*game.Game, error)
-	// NextNumber reserves and returns the next display number.
-	NextNumber() (int, error)
-	// PeekNumber returns what NextNumber would return, without reserving it.
-	// Puzzles show a prospective "#N" before they are saved; the number is
-	// only committed once the puzzle is worth keeping.
-	PeekNumber() (int, error)
 }
 
 func summarize(g *game.Game) Summary {
 	return Summary{
 		ID:        g.ID,
-		Number:    g.Number,
 		Length:    g.Length,
 		Status:    g.Status,
 		Attempts:  g.Attempts(),

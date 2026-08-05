@@ -65,9 +65,16 @@ deliberate — the same game/store can later be driven by a server.
 - **`internal/store`** — `Store` is an **interface**; `JSON` is the only
   implementation today. This interface is the seam for a future remote backend.
   One file per puzzle under the user config dir, written atomically
-  (temp file + rename). The game is saved after every guess. `NextNumber`
-  commits the puzzle counter; `PeekNumber` reads it without committing (see the
-  puzzle lifecycle below).
+  (temp file + rename). The game is saved after every guess. Deleting a
+  **finished** puzzle overwrites its file with a **tombstone** (`game.Tombstone`:
+  id, length, status, updatedAt, `deleted:true` — the answer and guesses are
+  destroyed) so streaks still see the break; an unfinished one is unlinked.
+  `Load` reports a tombstone as `ErrNotFound` and `List` omits it; **`All`
+  returns them**, because stats need them. There is
+  deliberately **no index and no counter**: a puzzle's displayed code comes from
+  its own id, so the store allocates nothing that `Delete` could leave a hole in.
+  An old install may still have a `meta.json` holding the retired counter; it is
+  never read.
 
 - **`internal/words`** — vocabulary compiled in via `go:embed`. Two lists per
   length: `answers` (solution pool) and the larger `guesses` (accept list);
@@ -75,7 +82,10 @@ deliberate — the same game/store can later be driven by a server.
   `tools/genwords`; provenance in `data/SOURCES.md`.
 
 - **`internal/stats`** — recomputes the profile from all saved games each time
-  (cheap at this scale, never drifts). Averages cover wins only.
+  (cheap at this scale, never drifts). Averages cover wins only. Deleted records
+  are skipped by every counter and used **only** by the streak walk, where a
+  deleted loss still breaks a run and a deleted win neither extends nor breaks
+  one — that is what stops deleting a loss from raising `MaxStreak`.
 
 - **`internal/theme`** — the styleable surface **as data**: palette, glyphs,
   metrics and per-element overrides, with a hand-rolled reader for the flat
@@ -151,8 +161,13 @@ the markers landed, stripping them before the string reaches Bubble Tea. Hence
 
 - A click resolves to an `action`, and `Model.dispatch` routes it into the same
   intent methods the key handlers use (`typeLetter`, `submit`, `applyChoice`,
-  `openSelected`, `back`…). **Never let the two paths diverge**: add the
-  behaviour as a method, then call it from both.
+  `openSelected`, `deleteSelected`, `back`…). **Never let the two paths
+  diverge**: add the behaviour as a method, then call it from both.
+- **Destructive actions confirm on both paths.** A click skips the board's
+  tab-then-enter confirm (`actNewPuzzle`) because starting a puzzle is undone by
+  starting another. Deleting is not undoable, so `actDeletePuzzle` arms the same
+  prompt a key does and the prompt's own target — elsewhere on screen — carries
+  it out.
 - `action` is comparable and doubles as the hover key; hover highlighting is one
   cue in one place (`st.hover` in `theme.go`, themeable as `[style.hover]`).
 - Marking must never move anything, which
@@ -182,14 +197,38 @@ or the key and the board it explains can disagree.
 
 More detail and rationale in `PLAN.md`.
 
+## Puzzle identity
+
+A puzzle is identified by a **UUIDv4** (`game.newID`, hand-rolled — no
+dependency). What the player sees is `game.Code(id)`: **six digits derived by
+hashing the id**, e.g. `#042317`. The code is a **label, never a key** — six
+digits is a space of a million, so `Code` is not injective; everything looks a
+puzzle up by `ID`. `Code` accepts any id string, so saves written before UUIDs
+existed still render (no migration).
+
+Deriving the code from the id rather than from a counter is what makes deletion
+safe: nothing is allocated, so removing a puzzle disturbs no other puzzle. It is
+also the groundwork for daily puzzles — a puzzle whose id is derived
+deterministically from a date shows every player the same code, with nothing to
+coordinate.
+
+`newPuzzle` re-rolls the id a few times if the code is already in the local list,
+then gives up and accepts a duplicate (cosmetic, never fatal). **Only the random
+path re-rolls**: a seeded/daily constructor must keep the id its seed determines.
+
 ## Puzzle lifecycle
 
-A new puzzle is **transient in memory until its first guess**: `newPuzzle` peeks
-a prospective `#N` (`PeekNumber`) and does not save; `gameScreen.persisted` is
-false until the first guess, which commits the number (`NextNumber`) and saves.
-So launch-and-quit saves nothing, saved puzzles are numbered contiguously, and
-0/6 entries never reach the list. Respect `persisted` and the peek/commit split
-in any new create/exit path.
+A new puzzle is **transient in memory until its first guess**: `newPuzzle` does
+not save, and `gameScreen.persisted` is false until the first guess, which sets
+it and saves. So launch-and-quit saves nothing and 0/6 entries never reach the
+list. Respect `persisted` in any new create/exit path. Its code, unlike the old
+`#N`, is final from creation — there is nothing prospective about it.
+
+At the other end, deleting a finished puzzle **leaves a tombstone rather than
+nothing** (see the store bullet above). The profile still recomputes from what is
+on disk; the tombstone is what keeps deleting a loss from merging the win runs
+either side of it. Any new path that removes a puzzle must go through
+`store.Delete`, never `os.Remove`.
 
 ## Testing note
 

@@ -87,17 +87,22 @@ internal/ui     Bubble Tea layer       ← the only package that knows about a t
   were wrong on the first pass from eyeballing).
 - **Nothing hardcodes length 5.** `MaxAttempts = length + 1` (5/6/7). Keep new
   code length-agnostic.
-- IDs are 8 random bytes from `crypto/rand` (hex) — no uuid dependency.
+- IDs are **UUIDv4**, built inline from `crypto/rand` — still no uuid
+  dependency, for the same reason the theme reader is hand-rolled.
 
 ### store — the server seam
 - `Store` is an **interface**; `JSON` is the only implementation. A remote
   backend for the leaderboard slots in here without the UI changing.
-- One JSON file per puzzle under `os.UserConfigDir()/wortle/puzzles/`, plus
-  `meta.json` for the number counter. **Atomic writes** (temp file + `os.Rename`
-  in the same dir) so a crash mid-write can't corrupt a save.
+- One JSON file per puzzle under `os.UserConfigDir()/wortle/puzzles/`.
+  **Atomic writes** (temp file + `os.Rename` in the same dir) so a crash
+  mid-write can't corrupt a save. `Delete` needs no such dance — unlink is
+  already atomic.
+- **No index and no counter.** A puzzle's code is derived from its own id (see
+  "Puzzle identity"), so the store allocates nothing, and deleting a puzzle
+  cannot leave a hole in anything. Old installs may still carry a `meta.json`
+  from the retired counter; it is never read.
 - `All()` **skips unreadable files** rather than failing — one corrupt save must
-  not lock the player out of their history. A corrupt `meta.json` rebuilds the
-  counter from the puzzles on disk.
+  not lock the player out of their history.
 - Saved after **every guess**: a `kill -9` should cost nothing.
 
 ### words — embedded vocabulary
@@ -118,6 +123,11 @@ internal/ui     Bubble Tea layer       ← the only package that knows about a t
   the numbers meaningless. The `Summary` struct is **additive by design**;
   IDEA.md expects more metrics.
 - Streaks ignore in-progress puzzles (having a game open doesn't break a streak).
+- Streaks **do** see tombstones — the records `store.Delete` leaves behind for a
+  deleted finished puzzle. A deleted loss still breaks a run; a deleted win
+  neither extends nor breaks one (it is no longer counted in `Won`, so it must
+  not lengthen a run either). Deleted records are excluded from every other
+  figure. See "Deleting a loss must not raise the max streak" below.
 
 ### ui — the Bubble Tea layer
 - One root `Model` (`app.go`) owns a `screen` enum and routes keys. Screens are
@@ -357,24 +367,122 @@ atom, and moving it around the layout keeps working.
 
 ---
 
+## Puzzle identity
+
+Puzzles used to be numbered `#1, #2, #3…` from a counter in `meta.json`. That
+number was a **committed, sequential resource**, and the whole peek/commit
+lifecycle existed only to keep the sequence gap-free. Planning "delete a puzzle"
+ran straight into it: every way of reconciling a delete with a sequence is bad —
+leave gaps (breaking the invariant the lifecycle protects), renumber (a puzzle's
+identity changes under it), or reuse (two puzzles share a number over time).
+
+So identity moved upstream of the problem. Each puzzle has a **UUIDv4**, and what
+the player sees is `game.Code(id)`: **six digits derived by hashing the id**,
+`#042317`. Nothing is allocated, so nothing can be left with a hole in it.
+
+- **The code is a label, never a key.** Six digits is a space of a million, so
+  by the birthday bound a history of ~1,000 puzzles is more likely than not to
+  contain a duplicate. That is fine *because nothing looks a puzzle up by it* —
+  `pathFor`, `Load`, `Delete` and the list rows all key on `ID`. Keep it that
+  way. If a leaderboard ever makes codes cross-player references, the code stops
+  being sufficient on its own and the id has to travel with it.
+- To stop the duplicate reading as a glitch, `newPuzzle` **re-rolls** the id a
+  few times if the code is already in the local list, then gives up and accepts
+  it. Only the random path re-rolls — a seeded puzzle must keep the id its seed
+  determines, even if it collides.
+- `Code` takes any id string, including the 16-hex ids written before UUIDs, so
+  **old saves need no migration**. Their stale `"number"` field is ignored on
+  decode, and their `meta.json` is ignored on open.
+- Hashing rather than slicing matters for what comes next: a **daily** puzzle
+  seeded deterministically from its date yields the same code for every player,
+  with no server and nothing to coordinate. A sliced date-derived id would
+  expose its structure; a hashed one is well-distributed and opaque.
+
+The cost, stated plainly: `#7` told you this was your seventh puzzle and
+`#042317` does not. The list is ordered by recency and carries elapsed time, so
+the ordinal was doing little work, but it is a real loss.
+
 ## Puzzle lifecycle (non-obvious, easy to break)
 
 A fresh puzzle is **transient in memory until its first guess**:
 
-- `newPuzzle` uses `store.PeekNumber()` (a non-committing peek) for a
-  *prospective* `#N` shown in the header. It does **not** save.
+- `newPuzzle` does **not** save. Its code is final from the moment it exists —
+  there is nothing prospective about it any more.
 - `gameScreen.persisted` starts false for a new puzzle, true for one loaded from
   the list. `leave()` **skips saving** when not persisted, so launching the app
-  and quitting without playing leaves nothing behind and consumes no number.
-- The **first guess** calls `store.NextNumber()` to commit the number, sets
-  `persisted = true`, and saves. This keeps saved puzzles numbered contiguously
-  (1, 2, 3…) with no gaps from abandoned puzzles, and keeps 0/6 entries out of
-  the list.
+  and quitting without playing leaves nothing behind.
+- The **first guess** sets `persisted = true` and saves, which is what keeps 0/6
+  entries out of the list.
 - Elapsed time is banked per *session* (`AddElapsed` on leave / on the
   winning-or-losing guess), so idle time between sessions isn't counted.
 
-If you add a new way to create or exit a puzzle, respect `persisted` and the
-peek/commit split, or you'll get phantom 0/6 entries or number gaps.
+If you add a new way to create or exit a puzzle, respect `persisted`, or you'll
+get phantom 0/6 entries.
+
+## Deleting a puzzle
+
+`d` on the puzzle list arms an inline confirmation naming the puzzle; a second
+`d` (or `y`/`enter`) carries it out, and anything else cancels without also
+being acted on. It is the same arm-then-confirm shape as the board's
+`confirmNew`, which was the only confirm precedent in the app.
+
+- **A click does not skip the confirmation**, which is a deliberate divergence
+  from `actNewPuzzle` (where the comment reads "a click is already deliberate").
+  Starting a puzzle is undone by starting another; this is not, and a row in a
+  list is an easy thing to mis-click. The first click arms, and the prompt's own
+  target — elsewhere on screen — carries it out.
+- The prompt **must not outlive the row it was armed on**: `move`, `point` onto
+  a different row, `reload`, and leaving the screen all clear it.
+- `refresh` (not `reload`) is what runs after a delete, because `reload` resets
+  the cursor to the top and the selection should stay where the player left it,
+  clamped to what is still there.
+- **Stats recompute from `All()`** every time the profile is opened. That first
+  shipped with a bug — deleting a loss merged the win runs either side of it and
+  `MaxStreak` went *up*. Fixed by tombstones; see the next section.
+
+---
+
+## Deleting a loss must not raise the max streak
+
+Streaks are runs of wins over finished puzzles ordered by `UpdatedAt`, recomputed
+from disk. Unlinking a deleted puzzle therefore destroyed the only evidence that
+it had ever broken a run: `W W L W W W` reads as max 3, and deleting the loss
+made the next recompute see `W W W W W` — **max 3 became 5**. This was originally
+written down as surprising-but-correct. It is not correct; a number that goes up
+when you delete a defeat is a bug.
+
+The fix keeps "recompute, never store" and instead gives the record something
+honest to recompute from.
+
+- **Deleting a finished puzzle writes a tombstone over it** rather than
+  unlinking: `game.Tombstone` strips everything but `ID`, `Length`, `Status`,
+  `UpdatedAt` and `Deleted: true`. The play record (answer, guesses, marks,
+  timings) is genuinely destroyed — a delete that quietly kept your board would
+  be a worse surprise than the one being fixed.
+- **An unfinished puzzle is still unlinked outright.** Streaks never look at
+  in-progress puzzles, so a tombstone for one would record nothing.
+- **Only the streak walk sees tombstones.** `Compute` skips them before every
+  counter, so `Played`/`Won`/`Lost`, the distribution, the averages and the
+  per-mode table behave exactly as if the file were gone.
+- **The rule is exact, not pessimistic.** A timestamp-only tombstone would have
+  to assume the worst and sever any run it fell inside; because the status
+  survives, `streaks` can say: a live win extends the run, any loss (deleted or
+  not) resets it, and a **deleted win neither extends nor breaks** it. That last
+  clause is what keeps `MaxStreak ≤ Won` — a win you deleted is not on your
+  profile, so it must not lengthen a run either. Deleting a win from five in a
+  row gives 4, down by exactly the game you removed.
+- **`Deleted` is `omitempty`**, so no ordinary save changes shape and older files
+  decode to `false`. No migration.
+- **Reader split**: `Load` reports a tombstone as `ErrNotFound` (nothing may
+  resume one) and `List` filters them out (so they reach neither the browse
+  screen nor `takenCodes`); `All` returns them, because stats are the one caller
+  that needs them. `Store` gained no method and `Compute` no parameter.
+- Still **no index and no counter**: a tombstone lives in the deleted puzzle's
+  own file, so deleting one continues to disturb nothing else.
+
+A deleted puzzle's six-digit code becomes available to a future puzzle again,
+since `takenCodes` reads `List`. Codes are cosmetic labels and collisions are
+already tolerated, so this is not worth a special case.
 
 ---
 
@@ -413,7 +521,8 @@ Nothing below is committed to; it's the shape of where this goes.
 ### Near-term polish (small, safe)
 - ~~`--length` / config for the default mode instead of the hardcoded 5~~ —
   done, as `Settings.Length` and the settings screen (see above).
-- A confirm/delete action in the puzzle list (puzzles are currently only added).
+- ~~A confirm/delete action in the puzzle list~~ — done, and it took the puzzle
+  counter with it (see "Puzzle identity").
 - Hard/expert mode (revealed hints must be reused), per real Wordle.
 - ~~Colour-blind palette toggle~~ — done, as the `high contrast` theme.
 - Theme extras worth having once people write them: a `[style.*]` key for the
@@ -430,10 +539,15 @@ Nothing below is committed to; it's the shape of where this goes.
   ID could live in `meta.json` and tag uploaded puzzles.
 - **Daily / seeded puzzles** (deterministic answer from a date seed) so players
   can compare the same board — a natural precursor to a leaderboard. Would need
-  answer selection in `words` to accept a seed.
+  answer selection in `words` to accept a seed. **Half the groundwork is
+  already in**: derive the id from the date too, and `game.Code` hands every
+  player the same puzzle code with nothing to coordinate. The one rule to keep
+  is that the seeded constructor must *not* re-roll its id on a code collision,
+  the way the random one does.
 
 ### Watch-outs when extending
 - Don't hardcode length 5 anywhere.
+- Don't look a puzzle up by its code — it is a label, and not unique.
 - Don't move state the server would need out of the exported `Game`.
 - Don't cache stats until scale demands it (recompute-from-truth is a feature).
 - Don't let the UI reach past the `Store` interface to touch files directly.
