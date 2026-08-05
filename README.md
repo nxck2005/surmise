@@ -112,9 +112,8 @@ download at runtime.
 The UI has tests too: they drive the root model with synthetic key and mouse
 events and assert on the rendered frame, so no TTY is involved.
 
-See [PLAN.md](PLAN.md) for the design decisions and roadmap, and
-[internal/words/data/SOURCES.md](internal/words/data/SOURCES.md) for word-list
-provenance.
+See [internal/words/data/SOURCES.md](internal/words/data/SOURCES.md) for
+word-list provenance.
 
 ---
 

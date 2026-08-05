@@ -13,8 +13,8 @@ import (
 	"github.com/nxck2005/wortle/internal/game"
 )
 
-// Summary is the whole-profile view. Fields are additive by design; IDEA.md
-// expects the metric set to grow.
+// Summary is the whole-profile view. Fields are additive by design; the metric
+// set is expected to grow.
 type Summary struct {
 	Played  int
 	Won     int
