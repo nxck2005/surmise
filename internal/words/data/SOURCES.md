@@ -1,6 +1,7 @@
 # Word list sources
 
-Regenerate with `go run ./tools/genwords`. Do not edit these files by hand.
+Regenerate with `go run ./tools/genwords`. Do not edit the word lists by
+hand — `blocked.txt` below is the one file here that is hand-maintained.
 
 ## guesses{4,5,6}.txt — accepted input
 
@@ -22,3 +23,14 @@ common English, so solutions are words people actually know.
 - Derived from the Google Web Trillion Word Corpus.
 
 Every answer is by construction also a valid guess; `words` has a test asserting this.
+
+## blocked.txt — words kept out of both
+
+A hand-maintained list of slurs, edited by hand and read (never written) by
+genwords, which drops every entry from the guess lists and therefore from the
+answer lists too. ENABLE is a Scrabble dictionary and keeps a number of slurs,
+so the source lists alone are not enough.
+
+The list is deliberately length-agnostic and includes inflections and spellings
+that no current mode can reach, so it keeps working if a word length is added.
+`words` has a test asserting no shipped list contains a blocked word.

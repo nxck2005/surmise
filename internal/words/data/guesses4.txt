@@ -7,7 +7,6 @@ abed
 abet
 able
 ably
-abos
 abri
 abut
 abye
@@ -596,7 +595,6 @@ cony
 coof
 cook
 cool
-coon
 coop
 coos
 coot
@@ -678,7 +676,6 @@ dado
 dads
 daff
 daft
-dago
 dags
 dahl
 dahs
@@ -902,7 +899,6 @@ dyad
 dyed
 dyer
 dyes
-dyke
 dyne
 each
 earl
@@ -1011,7 +1007,6 @@ fact
 fade
 fado
 fads
-fags
 fail
 fain
 fair
@@ -1277,7 +1272,6 @@ gigs
 gild
 gill
 gilt
-gimp
 gink
 gins
 gips
@@ -1327,7 +1321,6 @@ gone
 gong
 good
 goof
-gook
 goon
 goop
 goos
@@ -1382,7 +1375,6 @@ guvs
 guys
 gybe
 gyms
-gyps
 gyre
 gyri
 gyro
@@ -1447,7 +1439,6 @@ heal
 heap
 hear
 heat
-hebe
 heck
 heed
 heel
@@ -1519,7 +1510,6 @@ hols
 holt
 holy
 home
-homo
 homy
 hone
 hong
@@ -1670,7 +1660,6 @@ jest
 jete
 jets
 jeux
-jews
 jiao
 jibb
 jibe
@@ -1782,7 +1771,6 @@ kids
 kief
 kier
 kifs
-kike
 kill
 kiln
 kilo
@@ -2139,7 +2127,6 @@ mhos
 mibs
 mica
 mice
-mick
 midi
 mids
 mien
@@ -2382,7 +2369,6 @@ odes
 odic
 odor
 odyl
-ofay
 offs
 ogam
 ogee
@@ -2642,7 +2628,6 @@ pong
 pons
 pony
 pood
-poof
 pooh
 pool
 poon
@@ -3188,11 +3173,9 @@ spar
 spas
 spat
 spay
-spaz
 spec
 sped
 spew
-spic
 spik
 spin
 spit
@@ -3764,7 +3747,6 @@ wits
 wive
 woad
 woes
-wogs
 woke
 woks
 wold
@@ -3777,7 +3759,6 @@ wood
 woof
 wool
 woos
-wops
 word
 wore
 work
@@ -3835,7 +3816,6 @@ yeti
 yett
 yeuk
 yews
-yids
 yill
 yins
 yipe
