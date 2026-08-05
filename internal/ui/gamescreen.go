@@ -200,17 +200,10 @@ func (m *gameScreen) submit() tea.Cmd {
 		m.sessionStart = time.Time{}
 	}
 
-	// The first guess is what makes a puzzle worth keeping: reserve its number
-	// now, so abandoned-before-playing puzzles never consume one.
-	if !m.persisted {
-		n, err := m.store.NextNumber()
-		if err != nil {
-			m.notify("could not save: %v", err)
-			return nil
-		}
-		m.g.Number = n
-		m.persisted = true
-	}
+	// The first guess is what makes a puzzle worth keeping. Nothing has to be
+	// reserved — the puzzle's code comes from its own id — so this only marks
+	// the puzzle as worth writing from here on.
+	m.persisted = true
 
 	// Save after every guess: a kill -9 should cost nothing.
 	if err := m.store.Save(m.g); err != nil {
@@ -240,22 +233,62 @@ func (m *gameScreen) startNew() tea.Cmd {
 	return nil
 }
 
-// newPuzzle creates a fresh puzzle in memory. It is not saved and its number is
-// only prospective (see PeekNumber) until the first guess persists it. Shared
-// with the menu, which also starts games.
+// newPuzzle creates a fresh puzzle in memory. It is not saved until the first
+// guess, but its code is final from the start, since the code is derived from
+// the id. Shared with the menu, which also starts games.
+//
+// Codes are six digits, so a long history will eventually produce two puzzles
+// wearing the same one. That is harmless — the id is what anything looks a
+// puzzle up by — but it reads as a glitch, so a fresh puzzle re-rolls its id a
+// few times to avoid clashing with one already saved. Only this random path
+// re-rolls: a seeded puzzle (a daily) must keep the id its seed determines,
+// even if it happens to collide.
 func newPuzzle(s store.Store, length int) (*game.Game, error) {
-	number, err := s.PeekNumber()
+	return newPuzzleWith(s, length, game.New)
+}
+
+// newPuzzleWith is newPuzzle with the draw injected, since random ids cannot be
+// made to collide on demand.
+func newPuzzleWith(s store.Store, length int, draw func(int) (*game.Game, error)) (*game.Game, error) {
+	const attempts = 8
+
+	taken, err := takenCodes(s)
 	if err != nil {
 		return nil, err
 	}
-	return game.New(length, number)
+	var g *game.Game
+	for range attempts {
+		if g, err = draw(length); err != nil {
+			return nil, err
+		}
+		if !taken[game.Code(g.ID)] {
+			break
+		}
+	}
+	// Falling out of the loop keeps the last draw. A duplicate code is only
+	// cosmetic, so an unlucky run still gets a puzzle rather than an error.
+	return g, nil
+}
+
+// takenCodes is the set of codes already on disk. A read failure is reported,
+// since it means the list the player is about to see is unreliable too.
+func takenCodes(s store.Store) (map[string]bool, error) {
+	items, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	taken := make(map[string]bool, len(items))
+	for _, it := range items {
+		taken[game.Code(it.ID)] = true
+	}
+	return taken, nil
 }
 
 func (m *gameScreen) view(h *hitMap) string {
 	g := m.g
 
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
-		st.title.Render(fmt.Sprintf("wortle #%d", g.Number)),
+		st.title.Render(fmt.Sprintf("wortle #%s", game.Code(g.ID))),
 		st.muted.Render(fmt.Sprintf("   %d letters   %s   %d/%d",
 			g.Length, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
 	)

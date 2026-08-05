@@ -2,7 +2,10 @@ package game
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"testing"
+	"time"
 
 	"github.com/nxck2005/wortle/internal/words"
 )
@@ -11,7 +14,7 @@ import (
 // random draw.
 func newFixed(t *testing.T, answer string) *Game {
 	t.Helper()
-	g, err := New(len(answer), 1)
+	g, err := New(len(answer))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -21,7 +24,7 @@ func newFixed(t *testing.T, answer string) *Game {
 
 func TestNewUsesSupportedLengths(t *testing.T) {
 	for _, n := range words.Lengths {
-		g, err := New(n, 7)
+		g, err := New(n)
 		if err != nil {
 			t.Fatalf("New(%d): %v", n, err)
 		}
@@ -31,7 +34,7 @@ func TestNewUsesSupportedLengths(t *testing.T) {
 		if g.MaxAttempts != n+1 {
 			t.Errorf("New(%d): MaxAttempts = %d, want %d", n, g.MaxAttempts, n+1)
 		}
-		if g.Status != InProgress || g.Number != 7 || g.ID == "" {
+		if g.Status != InProgress || g.ID == "" {
 			t.Errorf("New(%d): unexpected initial state %+v", n, g)
 		}
 		if err := g.Validate(); err != nil {
@@ -43,7 +46,7 @@ func TestNewUsesSupportedLengths(t *testing.T) {
 func TestNewIDsAreUnique(t *testing.T) {
 	seen := make(map[string]bool)
 	for range 100 {
-		g, err := New(5, 1)
+		g, err := New(5)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,6 +55,63 @@ func TestNewIDsAreUnique(t *testing.T) {
 		}
 		seen[g.ID] = true
 	}
+}
+
+func TestNewIDsAreUUIDv4(t *testing.T) {
+	// 8-4-4-4-12 hex, with the version nibble 4 and the variant nibble in 8..b.
+	shape := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	for range 50 {
+		g, err := New(5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !shape.MatchString(g.ID) {
+			t.Fatalf("id %q is not a v4 UUID", g.ID)
+		}
+	}
+}
+
+func TestCodeIsSixDigitsAndDeterministic(t *testing.T) {
+	digits := regexp.MustCompile(`^[0-9]{6}$`)
+	ids := []string{
+		"",                                     // degenerate, must still format
+		"7f3a1c0b9d2e4f56",                     // a pre-UUID id, as older saves hold
+		"3f2a1b4c-5d6e-4f70-8123-456789abcdef", // a UUID
+	}
+	for range 200 {
+		g, err := New(5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, g.ID)
+	}
+
+	for _, id := range ids {
+		code := Code(id)
+		if !digits.MatchString(code) {
+			t.Errorf("Code(%q) = %q, want six digits", id, code)
+		}
+		if again := Code(id); again != code {
+			t.Errorf("Code(%q) is not deterministic: %q then %q", id, code, again)
+		}
+	}
+}
+
+// A code is six digits including the leading zeros, or the column it is drawn
+// in stops lining up.
+func TestCodeKeepsLeadingZeros(t *testing.T) {
+	// Hunt for an id hashing below 100000, which is where the padding is the
+	// only thing holding the width at six. One in ten ids qualifies.
+	for i := range 1000 {
+		id := fmt.Sprintf("id-%d", i)
+		if code := Code(id); code[0] == '0' {
+			if len(code) != 6 {
+				t.Fatalf("Code(%q) = %q, want six digits", id, code)
+			}
+			return
+		}
+	}
+	t.Fatal("no id hashed below 100000 in 1000 tries, which is implausible")
 }
 
 func TestGuessWinning(t *testing.T) {
@@ -158,6 +218,52 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 				t.Error("Validate accepted corrupt game")
 			}
 		})
+	}
+}
+
+func TestTombstoneKeepsOnlyTheSequence(t *testing.T) {
+	g := newFixed(t, "crane")
+	for _, w := range []string{"about", "crane"} {
+		if err := g.Guess(w); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g.AddElapsed(time.Second)
+
+	tomb := g.Tombstone()
+	if !tomb.Deleted {
+		t.Error("Tombstone is not marked deleted")
+	}
+	if tomb.ID != g.ID || tomb.Length != g.Length || tomb.Status != g.Status {
+		t.Errorf("Tombstone = %+v, want id/length/status of %+v", tomb, g)
+	}
+	if !tomb.UpdatedAt.Equal(g.UpdatedAt) {
+		t.Errorf("UpdatedAt = %v, want %v", tomb.UpdatedAt, g.UpdatedAt)
+	}
+	if tomb.Answer != "" || len(tomb.Guesses) != 0 || len(tomb.Marks) != 0 || tomb.ElapsedMS != 0 {
+		t.Errorf("Tombstone kept the play record: %+v", tomb)
+	}
+	// The original must be untouched — Tombstone returns a copy.
+	if g.Answer != "crane" || len(g.Guesses) != 2 {
+		t.Errorf("Tombstone mutated its receiver: %+v", g)
+	}
+	// A stripped record still has to survive the store's round trip.
+	if err := tomb.Validate(); err != nil {
+		t.Errorf("Validate(tombstone) = %v, want nil", err)
+	}
+}
+
+func TestValidateRejectsCorruptTombstone(t *testing.T) {
+	g := newFixed(t, "crane")
+	tomb := g.Tombstone()
+	tomb.Length = 9
+	if err := tomb.Validate(); err == nil {
+		t.Error("Validate accepted a tombstone with an unsupported length")
+	}
+	tomb = g.Tombstone()
+	tomb.ID = ""
+	if err := tomb.Validate(); err == nil {
+		t.Error("Validate accepted a tombstone with no id")
 	}
 }
 

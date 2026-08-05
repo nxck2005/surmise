@@ -94,6 +94,87 @@ func TestStreaks(t *testing.T) {
 	}
 }
 
+// The regression this whole tombstone mechanism exists for: deleting a loss
+// used to merge the win runs either side of it, so the longest streak went up
+// when a loss was removed. The tombstone keeps the break in place.
+func TestDeletedLossStillBreaksStreak(t *testing.T) {
+	base := time.Now()
+	at := func(i int) time.Time { return base.Add(time.Duration(i) * time.Minute) }
+
+	// win win LOSS win win win
+	statuses := []game.Status{game.Won, game.Won, game.Lost, game.Won, game.Won, game.Won}
+	var games []*game.Game
+	for i, st := range statuses {
+		games = append(games, mk(5, st, 3, time.Second, at(i)))
+	}
+	loss := games[2]
+
+	if s := Compute(games); s.MaxStreak != 3 {
+		t.Fatalf("MaxStreak with the loss = %d, want 3", s.MaxStreak)
+	}
+
+	// Dropping the loss outright is the old, wrong behaviour. Pinning it here
+	// keeps the test honest about what the tombstone is buying.
+	without := append(append([]*game.Game{}, games[:2]...), games[3:]...)
+	if s := Compute(without); s.MaxStreak != 5 {
+		t.Fatalf("MaxStreak with the loss gone = %d, want 5 (the old bug)", s.MaxStreak)
+	}
+
+	games[2] = loss.Tombstone()
+	s := Compute(games)
+	if s.MaxStreak != 3 {
+		t.Errorf("MaxStreak after deleting the loss = %d, want 3", s.MaxStreak)
+	}
+	if s.CurrentStreak != 3 {
+		t.Errorf("CurrentStreak = %d, want 3", s.CurrentStreak)
+	}
+	// The deleted puzzle is gone from every count.
+	if s.Played != 5 || s.Won != 5 || s.Lost != 0 || s.WinRate != 1 {
+		t.Errorf("counts = %d played/%d won/%d lost/%v rate, want 5/5/0/1",
+			s.Played, s.Won, s.Lost, s.WinRate)
+	}
+}
+
+// A deleted win must not lengthen a run it is no longer counted in, or the
+// longest streak could exceed the number of wins on the profile.
+func TestDeletedWinNeitherExtendsNorBreaks(t *testing.T) {
+	base := time.Now()
+	at := func(i int) time.Time { return base.Add(time.Duration(i) * time.Minute) }
+
+	var games []*game.Game
+	for i := range 5 {
+		games = append(games, mk(5, game.Won, 3, time.Second, at(i)))
+	}
+	games[2] = games[2].Tombstone()
+
+	s := Compute(games)
+	if s.Won != 4 {
+		t.Fatalf("Won = %d, want 4", s.Won)
+	}
+	if s.MaxStreak != 4 || s.CurrentStreak != 4 {
+		t.Errorf("streaks = %d/%d, want 4/4 (runs join, deleted win uncounted)",
+			s.CurrentStreak, s.MaxStreak)
+	}
+}
+
+// Unfinished puzzles are invisible to streaks, so a tombstone for one (which
+// the store does not write) would still change nothing.
+func TestDeletedInProgressChangesNothing(t *testing.T) {
+	base := time.Now()
+	games := []*game.Game{
+		mk(5, game.Won, 3, time.Second, base),
+		mk(5, game.InProgress, 1, time.Second, base.Add(time.Minute)).Tombstone(),
+		mk(5, game.Won, 4, time.Second, base.Add(2*time.Minute)),
+	}
+	s := Compute(games)
+	if s.CurrentStreak != 2 || s.MaxStreak != 2 {
+		t.Errorf("streaks = %d/%d, want 2/2", s.CurrentStreak, s.MaxStreak)
+	}
+	if s.InPlay != 0 {
+		t.Errorf("InPlay = %d, want 0 (a tombstone is not in play)", s.InPlay)
+	}
+}
+
 // An open puzzle must not break a winning streak.
 func TestInProgressDoesNotBreakStreak(t *testing.T) {
 	base := time.Now()
