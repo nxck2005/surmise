@@ -1,6 +1,18 @@
 package words
 
-import "testing"
+import (
+	_ "embed"
+	"strings"
+	"testing"
+)
+
+// blocked is the same hand-maintained list genwords filters with. It is
+// embedded here rather than in words.go because nothing at runtime needs it:
+// the shipped lists are already clean, and this test is what keeps them that
+// way after a regeneration.
+//
+//go:embed data/blocked.txt
+var blockedList string
 
 // TestListsLoad guards against a broken go:embed or a bad genwords run: the
 // lists must be present, correctly sized, and self-consistent.
@@ -33,6 +45,41 @@ func TestEveryAnswerIsGuessable(t *testing.T) {
 			}
 			if _, ok := l.guesses[a]; !ok {
 				t.Errorf("length %d: answer %q is not a valid guess", n, a)
+			}
+		}
+	}
+}
+
+// TestNoBlockedWords checks that no slur is shippable, as an answer or as an
+// accepted guess. A regeneration that skipped the blocklist fails here.
+func TestNoBlockedWords(t *testing.T) {
+	words := strings.Fields(blockedList)
+	if len(words) == 0 {
+		t.Fatal("data/blocked.txt is empty")
+	}
+
+	for _, n := range Lengths {
+		l, err := get(n)
+		if err != nil {
+			t.Fatalf("length %d: %v", n, err)
+		}
+		for _, w := range words {
+			if len(w) != n {
+				continue
+			}
+			if _, ok := l.guesses[w]; ok {
+				t.Errorf("length %d: blocked word is an accepted guess", n)
+			}
+		}
+		// Answers are a subset of guesses, so the check above covers them; walk
+		// them anyway so a broken subset invariant cannot hide a slur.
+		blockedSet := make(map[string]struct{}, len(words))
+		for _, w := range words {
+			blockedSet[w] = struct{}{}
+		}
+		for _, a := range l.answers {
+			if _, bad := blockedSet[a]; bad {
+				t.Errorf("length %d: blocked word is a puzzle answer", n)
 			}
 		}
 	}
