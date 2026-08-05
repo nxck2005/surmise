@@ -62,6 +62,12 @@ func Compute(games []*game.Game) Summary {
 	)
 
 	for _, g := range games {
+		// A deleted puzzle is gone from every figure here; it survives only in
+		// the streak walk below, and only as a break in the sequence.
+		if g.Deleted {
+			continue
+		}
+
 		acc, ok := perLength[g.Length]
 		if !ok {
 			acc = &accumulator{}
@@ -123,6 +129,18 @@ type accumulator struct {
 // streaks walks finished puzzles in completion order. Unfinished puzzles are
 // ignored rather than treated as breaks, so having a game open does not reset
 // a streak.
+//
+// Deleted puzzles stay in the walk, which is the whole point of keeping a
+// tombstone (game.Tombstone): a deleted loss still broke the streak, and
+// dropping it would merge the runs either side and make the longest streak go
+// *up* when a loss is deleted. Because the tombstone remembers the status, the
+// rule can be exact rather than pessimistic:
+//
+//   - a win still on disk extends the run;
+//   - a deleted win neither extends nor breaks it — it is no longer one of the
+//     wins on the profile, so it must not lengthen a run either, which keeps
+//     MaxStreak from ever exceeding Won;
+//   - any loss, deleted or not, resets the run.
 func streaks(games []*game.Game) (current, longest int) {
 	finished := make([]*game.Game, 0, len(games))
 	for _, g := range games {
@@ -136,13 +154,16 @@ func streaks(games []*game.Game) (current, longest int) {
 
 	run := 0
 	for _, g := range finished {
-		if g.Status == game.Won {
+		switch {
+		case g.Status != game.Won:
+			run = 0
+		case g.Deleted:
+			// leave the run as it stands
+		default:
 			run++
 			if run > longest {
 				longest = run
 			}
-		} else {
-			run = 0
 		}
 	}
 	return run, longest

@@ -46,6 +46,7 @@ Then run `wortle`. It opens straight onto a puzzle — no menu to click through.
 | <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle |
 | <kbd>esc</kbd> | back to the menu |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
+| <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
 
 Tiles score like Wordle: green for the right letter in the right place, yellow

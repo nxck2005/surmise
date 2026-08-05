@@ -120,6 +120,10 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"game with restart prompt", func() { m.screen, m.game.confirmNew = screenGame, true }},
 		{"menu", func() { m.screen, m.game.confirmNew = screenMenu, false }},
 		{"list", func() { m.list.reload(m.store); m.screen = screenList }},
+		{"list with delete prompt", func() {
+			m.list.reload(m.store)
+			m.screen, m.list.confirmDelete = screenList, true
+		}},
 		{"profile", func() { m.profile.reload(m.store); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
@@ -322,9 +326,6 @@ func TestHelpBarButtons(t *testing.T) {
 	if m.game.g.ID == first {
 		t.Error("clicking new puzzle did not start one")
 	}
-	if m.game.g.Number <= 0 {
-		t.Errorf("new puzzle has number %d", m.game.g.Number)
-	}
 
 	// The fresh puzzle is unplayed, so leaving must not save it: the peek/commit
 	// split has to survive the click path too.
@@ -385,6 +386,58 @@ func TestMenuAndListClicks(t *testing.T) {
 	}
 	if m.game.g.ID != id {
 		t.Errorf("opened %q, want %q", m.game.g.ID, id)
+	}
+}
+
+// Deleting has to be reachable with a mouse alone, like every other keybind.
+// Unlike the restart prompt, a click does not skip the confirmation: the first
+// click arms it, and the prompt's own target carries it out.
+func TestDeletingByClickingOnly(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 2)
+	m.list.reload(m.store)
+	m.screen = screenList
+	draw(t, m)
+
+	doomed := m.list.items[0].ID
+	click(t, m, action{kind: actDeletePuzzle, index: 0})
+	if list, _ := m.store.List(); len(list) != 2 {
+		t.Fatalf("one click deleted a puzzle without confirming: %v", list)
+	}
+	if !m.list.confirmDelete {
+		t.Fatal("clicking delete did not arm the prompt")
+	}
+
+	// The confirm target is the prompt, which is somewhere else on screen.
+	click(t, m, action{kind: actDeletePuzzle, index: 0})
+
+	list, _ := m.store.List()
+	if len(list) != 1 {
+		t.Fatalf("List has %d entries after confirming, want 1", len(list))
+	}
+	if list[0].ID == doomed {
+		t.Errorf("deleted the wrong puzzle: %q survived", doomed)
+	}
+	if m.list.confirmDelete {
+		t.Error("prompt still armed after the delete went through")
+	}
+}
+
+func TestClickingCancelKeepsThePuzzle(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 1)
+	m.list.reload(m.store)
+	m.screen = screenList
+	draw(t, m)
+
+	click(t, m, action{kind: actDeletePuzzle, index: 0})
+	click(t, m, action{kind: actCancelDelete})
+
+	if list, _ := m.store.List(); len(list) != 1 {
+		t.Errorf("cancelling deleted anyway: %v", list)
+	}
+	if m.list.confirmDelete {
+		t.Error("prompt still armed after cancelling")
 	}
 }
 
@@ -454,11 +507,6 @@ func TestWheelScrollsTheList(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		n, err := s.NextNumber()
-		if err != nil {
-			t.Fatal(err)
-		}
-		g.Number = n
 		if err := s.Save(g); err != nil {
 			t.Fatal(err)
 		}

@@ -52,6 +52,8 @@ const (
 	actCancelNew              // dismiss the armed new-puzzle prompt
 	actBack                   // esc
 	actQuit
+	actDeletePuzzle // index: puzzle list row to delete; arms, then confirms
+	actCancelDelete // dismiss the armed delete prompt
 )
 
 // action identifies one clickable thing. It is comparable so it doubles as the

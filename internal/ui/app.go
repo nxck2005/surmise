@@ -250,7 +250,9 @@ func (m *Model) handleMotion(x, y int) {
 	switch a.kind {
 	case actMenuChoice:
 		m.menu.point(a.index)
-	case actListRow:
+	case actListRow, actDeletePuzzle:
+		// The delete button carries the row it refers to, so hovering it keeps
+		// the selection and the prompt talking about the same puzzle.
 		m.list.point(a.index)
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
@@ -283,6 +285,32 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		m.list.point(a.index)
 		return m.openSelected()
+
+	case actDeletePuzzle:
+		if m.screen != screenList {
+			return nil
+		}
+		m.list.point(a.index)
+		// Unlike actNewPuzzle, a click does not skip the confirmation. Starting
+		// a puzzle is undoable by starting another; this is not, and a row in a
+		// list is an easy thing to mis-click. The first click arms the prompt,
+		// and the prompt's own target — a different place on screen — is what
+		// carries it out.
+		if !m.list.confirmDelete {
+			if _, ok := m.list.selected(); ok {
+				m.list.confirmDelete = true
+			}
+			return nil
+		}
+		m.list.confirmDelete = false
+		return m.deleteSelected()
+
+	case actCancelDelete:
+		if m.screen != screenList {
+			return nil
+		}
+		m.list.confirmDelete = false
+		return nil
 
 	case actThemeRow:
 		if m.screen != screenThemes {
@@ -339,6 +367,9 @@ func (m *Model) back() tea.Cmd {
 		// Leaving the picker without choosing puts back the saved theme, so a
 		// preview is never accidentally permanent.
 		m.restoreTheme()
+	case m.screen == screenList:
+		// An armed prompt must not be waiting when the list is next opened.
+		m.list.confirmDelete = false
 	}
 	m.screen = screenMenu
 	return nil
@@ -449,12 +480,15 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 }
 
 func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	open, back := m.list.update(msg)
+	open, del, back := m.list.update(msg)
 	switch {
 	case back:
+		m.list.confirmDelete = false
 		m.screen = screenMenu
 	case open:
 		return m, m.openSelected()
+	case del:
+		return m, m.deleteSelected()
 	}
 	return m, nil
 }
@@ -511,6 +545,29 @@ func (m *Model) openSelected() tea.Cmd {
 		return nil
 	}
 	m.openGame(g, true)
+	return nil
+}
+
+// deleteSelected removes the highlighted puzzle and re-reads the list. It is
+// the one destructive thing in the app, so both the key path and the click path
+// arm a confirmation before reaching here.
+//
+// Nothing else has to be reconciled: a puzzle's code comes from its own id, so
+// no other puzzle is disturbed, and the profile recomputes from what is left
+// the next time it is opened. What is left of a *finished* puzzle is its
+// tombstone (store.Delete, game.Tombstone) — the streak walk still sees that a
+// win or a loss happened at that moment, so deleting a loss cannot merge the
+// win runs either side of it and raise the longest streak.
+func (m *Model) deleteSelected() tea.Cmd {
+	summary, ok := m.list.selected()
+	if !ok {
+		return nil
+	}
+	if err := m.store.Delete(summary.ID); err != nil {
+		m.err = err
+		return nil
+	}
+	m.list.refresh(m.store)
 	return nil
 }
 
