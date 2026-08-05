@@ -364,7 +364,7 @@ func TestMenuAndListClicks(t *testing.T) {
 	m := newModel(t)
 
 	// Start a 6-letter game by clicking its menu row.
-	click(t, m, action{kind: actMenuChoice, index: 2})
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceNewGame, 6)})
 	if m.screen != screenGame || m.game.g.Length != 6 {
 		t.Fatalf("screen = %v, length = %d; want a 6-letter game", m.screen, m.game.g.Length)
 	}
@@ -376,7 +376,7 @@ func TestMenuAndListClicks(t *testing.T) {
 	click(t, m, action{kind: actBack})
 
 	// Open the puzzle list, then the puzzle, both with one click each.
-	click(t, m, action{kind: actMenuChoice, index: 3})
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceList, 0)})
 	if m.screen != screenList {
 		t.Fatalf("screen = %v, want list", m.screen)
 	}
@@ -443,7 +443,7 @@ func TestClickingCancelKeepsThePuzzle(t *testing.T) {
 
 func TestProfileReachableAndDismissableByMouse(t *testing.T) {
 	m := newModel(t)
-	click(t, m, action{kind: actMenuChoice, index: 4})
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceProfile, 0)})
 	if m.screen != screenProfile {
 		t.Fatalf("screen = %v, want profile", m.screen)
 	}

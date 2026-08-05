@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nxck2005/wortle/internal/daily"
 	"github.com/nxck2005/wortle/internal/store"
 	"github.com/nxck2005/wortle/internal/theme"
 	"github.com/nxck2005/wortle/internal/ui"
@@ -25,9 +26,12 @@ func main() {
 	// the game has no words for is reported by the UI on its error line rather
 	// than refused here, so a typo costs a note, not a launch.
 	length := flag.Int("length", envLength(), "word length to start with: 4, 5 or 6 (default: last used)")
+	// -day plays another date's daily. Handy for looking at a board without
+	// waiting for it, and, like the rest of this family, it never writes.
+	day := flag.String("day", os.Getenv("WORTLE_DAY"), "date whose daily to play, YYYY-MM-DD (default: today, UTC)")
 	flag.Parse()
 
-	if err := run(*dataDir, *themeName, *length, *listThemes); err != nil {
+	if err := run(*dataDir, *themeName, *day, *length, *listThemes); err != nil {
 		fmt.Fprintln(os.Stderr, "wortle:", err)
 		os.Exit(1)
 	}
@@ -44,7 +48,7 @@ func envLength() int {
 	return n
 }
 
-func run(dataDir, themeName string, length int, listThemes bool) error {
+func run(dataDir, themeName, day string, length int, listThemes bool) error {
 	if dataDir == "" {
 		var err error
 		if dataDir, err = store.DefaultDir(); err != nil {
@@ -71,7 +75,11 @@ func run(dataDir, themeName string, length int, listThemes bool) error {
 		return err
 	}
 
-	_, err = tea.NewProgram(ui.New(s, lib, ui.Options{Theme: themeName, Length: length})).Run()
+	// The daily's seeds come from here, which is the one place a future remote
+	// source would be chosen; ui.Options carries it in so nothing below has to
+	// know which one it got.
+	opts := ui.Options{Theme: themeName, Length: length, Day: day, DailySeeds: daily.Local()}
+	_, err = tea.NewProgram(ui.New(s, lib, opts)).Run()
 	return err
 }
 

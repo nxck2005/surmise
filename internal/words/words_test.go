@@ -102,6 +102,45 @@ func TestRandomReturnsPlayableWord(t *testing.T) {
 	}
 }
 
+func TestAnswerAtIsStableAndPlayable(t *testing.T) {
+	for _, n := range Lengths {
+		count, err := AnswerCount(n)
+		if err != nil {
+			t.Fatalf("length %d: %v", n, err)
+		}
+		if count == 0 {
+			t.Fatalf("length %d: empty answer pool", n)
+		}
+
+		// Every index must name a playable word, and name the same one twice:
+		// the daily depends on an index meaning the same thing everywhere.
+		for _, i := range []int{0, count / 2, count - 1} {
+			w, err := AnswerAt(n, i)
+			if err != nil {
+				t.Fatalf("AnswerAt(%d, %d): %v", n, i, err)
+			}
+			if len(w) != n || !IsValidGuess(n, w) {
+				t.Fatalf("AnswerAt(%d, %d) = %q, not a playable answer", n, i, w)
+			}
+			if again, _ := AnswerAt(n, i); again != w {
+				t.Fatalf("AnswerAt(%d, %d) = %q then %q, not stable", n, i, w, again)
+			}
+		}
+	}
+}
+
+func TestAnswerAtRejectsOutOfRange(t *testing.T) {
+	count, err := AnswerCount(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range []int{-1, count, count + 1} {
+		if _, err := AnswerAt(5, i); err == nil {
+			t.Errorf("AnswerAt(5, %d) succeeded, want error", i)
+		}
+	}
+}
+
 func TestIsValidGuessNormalizes(t *testing.T) {
 	if !IsValidGuess(5, "  ABOUT ") {
 		t.Error(`IsValidGuess(5, "  ABOUT ") = false, want true`)

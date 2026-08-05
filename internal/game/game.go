@@ -53,6 +53,12 @@ type Game struct {
 	// tomorrow does not report a 20-hour solve.
 	ElapsedMS int64 `json:"elapsedMs"`
 
+	// Daily is the UTC date this puzzle is the daily for, "2006-01-02", and is
+	// empty for an ordinary puzzle. Like Deleted it is omitempty, so a casual
+	// puzzle's file is unchanged and a save written before dailies existed
+	// decodes to "".
+	Daily string `json:"daily,omitempty"`
+
 	// Deleted marks a tombstone: the player removed this puzzle, and all that
 	// survives is the fact that a finished puzzle sat here (see Tombstone).
 	// omitempty keeps it out of every ordinary save, so a real puzzle's file is
@@ -94,17 +100,36 @@ func New(length int) (*Game, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewFrom(id, answer, length)
+}
 
+// NewFrom starts a puzzle from an id and an answer the caller has already
+// decided on, for deterministic sources — today, the daily, whose id and answer
+// are both derived from its date.
+//
+// It validates rather than draws: everything New would have chosen is supplied,
+// so the only thing left to do is refuse an id, answer or length that could not
+// have come from a real puzzle.
+func NewFrom(id, answer string, length int) (*Game, error) {
 	now := time.Now().UTC()
-	return &Game{
+	g := &Game{
 		ID:          id,
 		Length:      length,
-		Answer:      answer,
+		Answer:      words.Normalize(answer),
 		MaxAttempts: attemptsFor(length),
 		Status:      InProgress,
 		StartedAt:   now,
 		UpdatedAt:   now,
-	}, nil
+	}
+	if err := g.Validate(); err != nil {
+		return nil, err
+	}
+	// Validate is about internal consistency and knows nothing of the word
+	// lists; an answer nobody could ever type would make the puzzle unwinnable.
+	if !words.IsValidGuess(length, g.Answer) {
+		return nil, fmt.Errorf("game: answer %q is not a valid word", answer)
+	}
+	return g, nil
 }
 
 // newID returns a random UUID (version 4), formatted canonically. It is
@@ -116,10 +141,22 @@ func newID() (string, error) {
 	if _, err := rand.Read(b[:]); err != nil {
 		return "", fmt.Errorf("game: generate id: %w", err)
 	}
-	b[6] = b[6]&0x0f | 0x40 // version 4
+	return FormatID(b, 4), nil
+}
+
+// FormatID renders sixteen bytes as a canonical UUID string of the given
+// version. It is exported because a derived id — a daily's, computed from its
+// date — is built elsewhere but must look like every other id on disk, and the
+// byte layout is worth having in exactly one place.
+//
+// The version nibble is the caller's to set (newID sets 4 for random ids;
+// derived ids use 8, the "custom" version, which is what a hashed id honestly
+// is); this only stamps the variant and formats.
+func FormatID(b [16]byte, version byte) string {
+	b[6] = b[6]&0x0f | version<<4
 	b[8] = b[8]&0x3f | 0x80 // variant 10
 	h := hex.EncodeToString(b[:])
-	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:], nil
+	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
 // codeSpace is how many distinct codes exist: six decimal digits.

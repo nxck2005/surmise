@@ -213,7 +213,17 @@ func (m *gameScreen) submit() tea.Cmd {
 }
 
 // startNew replaces the board with a fresh puzzle of the same length.
+//
+// It refuses on a daily. Everywhere else "start another" is the obvious thing
+// tab means, but there is only one daily a day: replacing it with a random
+// puzzle would look like a reroll of a board that is supposed to be shared, and
+// silently leave the day unplayed.
 func (m *gameScreen) startNew() tea.Cmd {
+	if m.g.Daily != "" {
+		m.notify("the daily is one puzzle a day — pick a mode from the menu for another")
+		return nil
+	}
+
 	if err := m.leave(); err != nil {
 		m.notify("could not save: %v", err)
 	}
@@ -287,10 +297,16 @@ func takenCodes(s store.Store) (map[string]bool, error) {
 func (m *gameScreen) view(h *hitMap) string {
 	g := m.g
 
+	// A daily says which day it is, since the board turns over at UTC midnight
+	// and so is not always the date on the player's wall clock.
+	what := fmt.Sprintf("%d letters", g.Length)
+	if g.Daily != "" {
+		what = fmt.Sprintf("daily %s · %s", g.Daily, what)
+	}
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
 		st.title.Render(fmt.Sprintf("wortle #%s", game.Code(g.ID))),
-		st.muted.Render(fmt.Sprintf("   %d letters   %s   %d/%d",
-			g.Length, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
+		st.muted.Render(fmt.Sprintf("   %s   %s   %d/%d",
+			what, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
 	)
 
 	sections := []string{

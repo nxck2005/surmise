@@ -1,6 +1,8 @@
 package game
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -68,6 +70,81 @@ func TestNewIDsAreUUIDv4(t *testing.T) {
 		if !shape.MatchString(g.ID) {
 			t.Fatalf("id %q is not a v4 UUID", g.ID)
 		}
+	}
+}
+
+func TestNewFromKeepsTheIdentityItIsGiven(t *testing.T) {
+	const id = "13f0405e-2c98-8e40-ba2c-dce569a50a05"
+	g, err := NewFrom(id, "  ABOUT ", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.ID != id {
+		t.Errorf("ID = %q, want %q", g.ID, id)
+	}
+	// The answer is normalized, the way a guess is, so a hand-written source
+	// cannot produce a puzzle that can never be matched.
+	if g.Answer != "about" {
+		t.Errorf("Answer = %q, want %q", g.Answer, "about")
+	}
+	if g.MaxAttempts != 6 || g.Status != InProgress {
+		t.Errorf("unexpected initial state %+v", g)
+	}
+	if g.StartedAt.IsZero() || g.UpdatedAt.IsZero() {
+		t.Error("timestamps were not set")
+	}
+	// game knows nothing about dates: whoever derived the puzzle labels it.
+	if g.Daily != "" {
+		t.Errorf("Daily = %q, want empty", g.Daily)
+	}
+	if err := g.Validate(); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+}
+
+func TestNewFromRejectsUnplayableInput(t *testing.T) {
+	cases := []struct {
+		name       string
+		id, answer string
+		length     int
+	}{
+		{"no id", "", "about", 5},
+		{"unsupported length", "id", "abouts", 7},
+		{"answer does not match length", "id", "about", 4},
+		{"answer is not a word", "id", "zzzzz", 5},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if _, err := NewFrom(c.id, c.answer, c.length); err == nil {
+				t.Error("succeeded, want error")
+			}
+		})
+	}
+}
+
+// Daily rides on the Deleted precedent: it must be absent from an ordinary
+// save, so no existing file changes shape and older saves decode to "".
+func TestDailyIsOmittedFromAnOrdinarySave(t *testing.T) {
+	g := newFixed(t, "about")
+	b, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(b, []byte(`"daily"`)) {
+		t.Errorf("ordinary save carries a daily key: %s", b)
+	}
+
+	g.Daily = "2026-08-06"
+	b, err = json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Game
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Daily != "2026-08-06" {
+		t.Errorf("Daily = %q after a round trip, want 2026-08-06", back.Daily)
 	}
 }
 

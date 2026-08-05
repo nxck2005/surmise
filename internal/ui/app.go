@@ -7,12 +7,15 @@
 package ui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/wortle/internal/daily"
 	"github.com/nxck2005/wortle/internal/game"
 	"github.com/nxck2005/wortle/internal/store"
 	"github.com/nxck2005/wortle/internal/theme"
@@ -28,10 +31,22 @@ const (
 	screenProfile
 	screenThemes
 	screenSettings
+	screenDaily
 )
 
 // tickInterval drives the on-screen clock and expires transient messages.
 const tickInterval = time.Second
+
+// dailyTimeout bounds building a daily. The local source cannot block, so this
+// is entirely for the remote one that replaces it: a daily that cannot be
+// fetched must fail and say so, not hang the menu.
+const dailyTimeout = 10 * time.Second
+
+// dailyMsg carries a built daily back from the command that made it.
+type dailyMsg struct {
+	g   *game.Game
+	err error
+}
 
 type tickMsg time.Time
 
@@ -52,6 +67,12 @@ type Model struct {
 	// default, not necessarily what the open board is playing.
 	length int
 
+	// day is the date the daily plays, resolved once at startup; dailySrc is
+	// where its seed comes from. The source is a field rather than a package
+	// default so a test — and, later, a remote build — can swap it.
+	day      daily.Day
+	dailySrc daily.Source
+
 	screen   screen
 	menu     menuScreen
 	game     *gameScreen
@@ -59,6 +80,7 @@ type Model struct {
 	profile  profileScreen
 	themes   themeScreen
 	settings settingsScreen
+	daily    dailyScreen
 
 	// hits is where the last frame drew its clickable regions; hover is what the
 	// pointer was last over, which the next frame highlights. Both are written
@@ -84,6 +106,12 @@ type Options struct {
 	Theme string
 	// Length forces the starting word length, likewise without saving it.
 	Length int
+	// Day forces the date the daily plays, "2006-01-02". For looking at another
+	// day's board without waiting for it; like the others it is never saved.
+	Day string
+	// DailySeeds overrides where daily seeds come from. Nil means daily.Local,
+	// which is the only source there is today.
+	DailySeeds daily.Source
 }
 
 // settingsStore is the part of a store that remembers preferences. It is a
@@ -105,9 +133,13 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	if lib == nil {
 		lib = theme.Bundled()
 	}
-	m := &Model{store: s, themeLib: lib, menu: newMenuScreen()}
+	m := &Model{store: s, themeLib: lib, menu: newMenuScreen(), dailySrc: opts.DailySeeds}
+	if m.dailySrc == nil {
+		m.dailySrc = daily.Local()
+	}
 	m.applyStartupTheme(opts.Theme)
 	m.applyStartupLength(opts.Length)
+	m.applyStartupDay(opts.Day)
 
 	g, err := newPuzzle(s, m.length)
 	if err != nil {
@@ -167,6 +199,23 @@ func (m *Model) applyStartupLength(override int) {
 	}
 }
 
+// applyStartupDay resolves which date the daily plays. Unlike the theme and the
+// mode there is nothing saved to fall back to — a date is not a preference — so
+// it is the override or today. A date that will not parse is reported and
+// ignored, the same as an unknown theme or an unsupported length.
+func (m *Model) applyStartupDay(override string) {
+	m.day = daily.Today()
+	if override == "" {
+		return
+	}
+	d, err := daily.ParseDay(override)
+	if err != nil {
+		m.err = err
+		return
+	}
+	m.day = d
+}
+
 // settingsOf reads the saved preferences, or their defaults from a store that
 // does not keep any.
 func (m *Model) settingsOf() store.Settings {
@@ -203,6 +252,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Redraw so the clock advances and expired messages disappear.
 		return m, tick()
+
+	case dailyMsg:
+		if msg.err != nil {
+			m.err = msg.err // stay where we are; nothing has been created
+			return m, nil
+		}
+		// Transient until the first guess, like every other new puzzle: opening
+		// the daily and walking away saves nothing.
+		m.openGame(msg.g, false)
+		return m, nil
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -254,6 +313,8 @@ func (m *Model) handleMotion(x, y int) {
 		// The delete button carries the row it refers to, so hovering it keeps
 		// the selection and the prompt talking about the same puzzle.
 		m.list.point(a.index)
+	case actDailyRow:
+		m.daily.point(a.index)
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
 		m.themes.point(a.index)
@@ -285,6 +346,13 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		m.list.point(a.index)
 		return m.openSelected()
+
+	case actDailyRow:
+		if m.screen != screenDaily {
+			return nil
+		}
+		m.daily.point(a.index)
+		return m.openSelectedDaily()
 
 	case actDeletePuzzle:
 		if m.screen != screenList {
@@ -418,6 +486,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case screenList:
 		return m.updateList(msg)
+	case screenDaily:
+		return m.updateDaily(msg)
 	case screenThemes:
 		return m.updateThemes(msg)
 	case screenSettings:
@@ -457,6 +527,9 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		}
 		m.openGame(g, false)
 
+	case choiceDaily:
+		m.openDailyScreen()
+
 	case choiceList:
 		m.list.reload(m.store)
 		m.screen = screenList
@@ -477,6 +550,92 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		return m.quit()
 	}
 	return nil
+}
+
+func (m *Model) updateDaily(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	open, back := m.daily.update(msg)
+	switch {
+	case back:
+		m.screen = screenMenu
+	case open:
+		return m, m.openSelectedDaily()
+	}
+	return m, nil
+}
+
+// openDailyScreen shows the day's puzzles, re-reading what has been played of
+// them. The date is resolved once at startup, so a session left open across UTC
+// midnight keeps offering the day it started on until it is restarted — the
+// alternative is the board changing under a player mid-puzzle.
+func (m *Model) openDailyScreen() {
+	m.daily.reload(m.store, m.day)
+	m.screen = screenDaily
+}
+
+// openSelectedDaily plays — or reviews — the highlighted mode's daily.
+func (m *Model) openSelectedDaily() tea.Cmd {
+	row, ok := m.daily.selected()
+	if !ok {
+		return nil
+	}
+	return m.openDaily(row.length)
+}
+
+// openDaily opens a day's puzzle for one mode.
+//
+// The order matters. What is already on disk is consulted first, so resuming or
+// reviewing a daily never needs a seed at all — which is what will keep those
+// working offline once seeds come from a network. Only a day with nothing saved
+// asks the source, and because that may one day block, it does so as a command
+// rather than inline.
+func (m *Model) openDaily(length int) tea.Cmd {
+	id := daily.ID(m.day, length)
+
+	switch g, err := m.store.Load(id); {
+	case err == nil:
+		m.openGame(g, true)
+		return nil
+	case !errors.Is(err, store.ErrNotFound):
+		m.err = err
+		return nil
+	}
+
+	// Load reports a tombstone as ErrNotFound, so a deleted daily looks unplayed
+	// here. Rebuilding it would save over that tombstone at the first guess and
+	// destroy the record of how the day went, so it is refused instead.
+	if spent, err := dailySpent(m.store, id); err != nil {
+		m.err = err
+		return nil
+	} else if spent {
+		m.err = errDailySpent
+		return nil
+	}
+
+	// Nothing may close over m: commands run on another goroutine.
+	src, day := m.dailySrc, m.day
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), dailyTimeout)
+		defer cancel()
+
+		g, err := daily.New(ctx, src, day, length)
+		return dailyMsg{g: g, err: err}
+	}
+}
+
+// dailySpent reports whether a daily was played and then deleted. It asks the
+// store rather than the daily screen's rows, so the guard holds on any path
+// that reaches a puzzle, not only the one that has just rendered the list.
+func dailySpent(s store.Store, id string) (bool, error) {
+	saved, err := s.All()
+	if err != nil {
+		return false, err
+	}
+	for _, g := range saved {
+		if g.ID == id {
+			return g.Deleted, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -651,6 +810,8 @@ func (m *Model) screenTitle() string {
 	switch m.screen {
 	case screenList:
 		return "puzzles"
+	case screenDaily:
+		return "daily"
 	case screenProfile:
 		return "profile"
 	case screenThemes:
@@ -668,6 +829,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.game.view(h), m.game.help(h)
 	case screenList:
 		return m.list.view(h), m.list.help(h)
+	case screenDaily:
+		return m.daily.view(h), m.daily.help(h)
 	case screenProfile:
 		return m.profile.view(h), m.profile.help(h)
 	case screenThemes:
@@ -685,6 +848,7 @@ type choiceKind int
 
 const (
 	choiceNewGame choiceKind = iota
+	choiceDaily
 	choiceList
 	choiceProfile
 	choiceThemes
@@ -714,6 +878,9 @@ func newMenuScreen() menuScreen {
 		})
 	}
 	choices = append(choices,
+		// The daily sits under the modes rather than among them: it is not a
+		// fourth difficulty, it is those same modes on a shared board.
+		choice{kind: choiceDaily, label: "daily"},
 		choice{kind: choiceList, label: "puzzles"},
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},

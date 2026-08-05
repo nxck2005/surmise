@@ -54,6 +54,20 @@ func newModel(t *testing.T) *Model {
 	return m
 }
 
+// menuIndex finds a menu row by what it does, so a test never has to know how
+// many rows sit above it. Inserting an entry has broken hard-coded indices
+// before; this is the one place that knows the order.
+func menuIndex(t *testing.T, m *Model, kind choiceKind, length int) int {
+	t.Helper()
+	for i, c := range m.menu.choices {
+		if c.kind == kind && (kind != choiceNewGame || c.length == length) {
+			return i
+		}
+	}
+	t.Fatalf("no menu entry of kind %v (length %d)", kind, length)
+	return -1
+}
+
 // freezeClock stops the elapsed timer in the game header, which otherwise
 // advances between renders and makes any two frames unequal a second apart.
 // elapsed() already treats a zero sessionStart as "no session in progress", so

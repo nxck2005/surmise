@@ -99,6 +99,34 @@ func Random(n int) (string, error) {
 	return l.answers[rand.IntN(len(l.answers))], nil
 }
 
+// AnswerCount is the size of the answer pool for a length. With AnswerAt it is
+// what lets a caller choose an answer from a seed rather than at random, which
+// is how the daily puzzle draws.
+func AnswerCount(n int) (int, error) {
+	l, err := get(n)
+	if err != nil {
+		return 0, err
+	}
+	return len(l.answers), nil
+}
+
+// AnswerAt returns the i'th answer of the given length. The lists are sorted and
+// shipped in the binary, so the same index gives every player the same word.
+//
+// Reducing a seed to an index is the caller's job, so that the whole derivation
+// of a daily answer stays in one place; an index out of range is a bug there
+// rather than something to wrap around silently.
+func AnswerAt(n, i int) (string, error) {
+	l, err := get(n)
+	if err != nil {
+		return "", err
+	}
+	if i < 0 || i >= len(l.answers) {
+		return "", fmt.Errorf("words: answer index %d out of range for length %d", i, n)
+	}
+	return l.answers[i], nil
+}
+
 // IsValidGuess reports whether word is accepted as a guess. Input is
 // normalized, so callers may pass any casing or surrounding space.
 func IsValidGuess(n int, word string) bool {
