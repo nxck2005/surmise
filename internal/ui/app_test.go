@@ -120,13 +120,9 @@ func TestUnplayedPuzzleIsNotSaved(t *testing.T) {
 	if len(list) != 0 {
 		t.Errorf("List() = %v, want empty for an unplayed puzzle", list)
 	}
-	// The number was only peeked, so the first real puzzle still gets #1.
-	if n, _ := s.PeekNumber(); n != 1 {
-		t.Errorf("PeekNumber() = %d, want 1 (no number consumed)", n)
-	}
 }
 
-// The first guess is what saves a puzzle and gives it #1.
+// The first guess is what saves a puzzle.
 func TestPuzzleSavedOnFirstGuess(t *testing.T) {
 	m := newModel(t)
 	send(t, m, "down", "enter")
@@ -142,8 +138,8 @@ func TestPuzzleSavedOnFirstGuess(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("List() has %d entries after first guess, want 1", len(list))
 	}
-	if list[0].Number != 1 {
-		t.Errorf("saved puzzle number = %d, want 1", list[0].Number)
+	if list[0].ID != m.game.g.ID {
+		t.Errorf("saved puzzle id = %q, want %q", list[0].ID, m.game.g.ID)
 	}
 }
 
@@ -270,9 +266,6 @@ func TestTabThenEnterStartsNewPuzzle(t *testing.T) {
 	if m.game.g.ID == first {
 		t.Error("tab+enter did not start a new puzzle")
 	}
-	if m.game.g.Number <= 0 {
-		t.Errorf("new puzzle has number %d", m.game.g.Number)
-	}
 }
 
 func TestEscFromTabPromptCancels(t *testing.T) {
@@ -347,6 +340,230 @@ func TestOpeningPuzzleFromList(t *testing.T) {
 	}
 	if m.game.g.ID != id {
 		t.Errorf("opened %q, want %q", m.game.g.ID, id)
+	}
+}
+
+// playSome saves n solved puzzles and returns their ids, so a test has a list
+// to work on. It goes through the store rather than the menu, so it does not
+// depend on where the menu cursor happens to be resting.
+func playSome(t *testing.T, m *Model, n int) []string {
+	t.Helper()
+	ids := make([]string, 0, n)
+	for range n {
+		g, err := newPuzzle(m.store, 5)
+		if err != nil {
+			t.Fatalf("newPuzzle: %v", err)
+		}
+		g.Answer = "crane"
+		if err := g.Guess("crane"); err != nil {
+			t.Fatalf("Guess: %v", err)
+		}
+		if err := m.store.Save(g); err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		ids = append(ids, g.ID)
+	}
+	return ids
+}
+
+func openList(t *testing.T, m *Model) {
+	t.Helper()
+	m.list.reload(m.store)
+	m.screen = screenList
+}
+
+// Codes are six digits, so two puzzles can hash to the same one. It is only
+// cosmetic — the id is what anything looks a puzzle up by — but a fresh puzzle
+// re-rolls rather than show a code already in the list.
+func TestNewPuzzleRerollsACollidingCode(t *testing.T) {
+	m := newModel(t)
+	existing := playSome(t, m, 1)[0]
+
+	// The first draw repeats the saved puzzle's code; the second is its own.
+	draws := 0
+	draw := func(length int) (*game.Game, error) {
+		draws++
+		g, err := game.New(length)
+		if err != nil {
+			return nil, err
+		}
+		if draws == 1 {
+			g.ID = existing // same id, so necessarily the same code
+		}
+		return g, nil
+	}
+
+	g, err := newPuzzleWith(m.store, 5, draw)
+	if err != nil {
+		t.Fatalf("newPuzzleWith: %v", err)
+	}
+	if draws != 2 {
+		t.Errorf("drew %d times, want 2 (one collision, one re-roll)", draws)
+	}
+	if game.Code(g.ID) == game.Code(existing) {
+		t.Errorf("kept the colliding code %q", game.Code(g.ID))
+	}
+}
+
+// An unlucky run must still hand back a puzzle: a duplicate code is cosmetic,
+// and refusing to start a game over it would be far worse.
+func TestNewPuzzleGivesUpRerollingRatherThanFail(t *testing.T) {
+	m := newModel(t)
+	existing := playSome(t, m, 1)[0]
+
+	draw := func(length int) (*game.Game, error) {
+		g, err := game.New(length)
+		if err != nil {
+			return nil, err
+		}
+		g.ID = existing // every draw collides
+		return g, nil
+	}
+
+	g, err := newPuzzleWith(m.store, 5, draw)
+	if err != nil {
+		t.Fatalf("newPuzzleWith: %v", err)
+	}
+	if g == nil {
+		t.Fatal("no puzzle returned")
+	}
+}
+
+// Deleting takes two keys, not one: the first arms a prompt naming the puzzle.
+func TestDeleteFromListNeedsConfirming(t *testing.T) {
+	m := newModel(t)
+	ids := playSome(t, m, 2)
+	openList(t, m)
+
+	view := send(t, m, "d")
+	if !strings.Contains(view, "delete #") {
+		t.Fatalf("d did not arm a delete prompt\n%s", view)
+	}
+	if list, _ := m.store.List(); len(list) != 2 {
+		t.Fatalf("arming the prompt already deleted something: %v", list)
+	}
+
+	doomed := m.list.items[m.list.cursor].ID
+	send(t, m, "d")
+
+	list, _ := m.store.List()
+	if len(list) != 1 {
+		t.Fatalf("List has %d entries after delete, want 1", len(list))
+	}
+	if list[0].ID == doomed {
+		t.Errorf("deleted the wrong puzzle: %q survived", doomed)
+	}
+	if _, err := m.store.Load(doomed); err == nil {
+		t.Error("deleted puzzle still loads")
+	}
+	// The other one is untouched.
+	survivor := ids[0]
+	if doomed == survivor {
+		survivor = ids[1]
+	}
+	if _, err := m.store.Load(survivor); err != nil {
+		t.Errorf("delete took the other puzzle too: %v", err)
+	}
+}
+
+func TestDeletePromptCancels(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 1)
+	openList(t, m)
+
+	send(t, m, "d")
+	view := send(t, m, "esc")
+
+	if list, _ := m.store.List(); len(list) != 1 {
+		t.Errorf("esc at the prompt deleted anyway: %v", list)
+	}
+	if strings.Contains(view, "delete #") {
+		t.Errorf("prompt still armed after esc\n%s", view)
+	}
+	// esc answered the prompt; it must not also have left the screen.
+	if m.screen != screenList {
+		t.Errorf("screen = %v, want to stay on the list", m.screen)
+	}
+}
+
+// The prompt asks about one puzzle, so moving the cursor has to disarm it
+// rather than let the answer land on a different row.
+func TestMovingDisarmsTheDeletePrompt(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 2)
+	openList(t, m)
+
+	send(t, m, "d")
+	view := send(t, m, "down")
+	if strings.Contains(view, "delete #") {
+		t.Errorf("prompt survived a cursor move\n%s", view)
+	}
+	if list, _ := m.store.List(); len(list) != 2 {
+		t.Errorf("moving off the prompt deleted something: %v", list)
+	}
+}
+
+// Deleting must not fling the selection back to the top of the list.
+func TestDeleteKeepsCursorPosition(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 4)
+	openList(t, m)
+
+	send(t, m, "down", "down") // third row
+	third := m.list.items[2].ID
+	send(t, m, "d", "d")
+
+	if m.list.cursor != 2 {
+		t.Errorf("cursor = %d after delete, want 2", m.list.cursor)
+	}
+	if len(m.list.items) != 3 {
+		t.Fatalf("list has %d rows after delete, want 3", len(m.list.items))
+	}
+	if m.list.items[2].ID == third {
+		t.Error("the deleted puzzle is still in the list")
+	}
+}
+
+// Deleting the last row leaves the cursor on the new last row, not past the end.
+func TestDeleteClampsCursorAtTheEnd(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 2)
+	openList(t, m)
+
+	send(t, m, "down", "d", "d") // the last of two rows
+
+	if m.list.cursor != 0 || len(m.list.items) != 1 {
+		t.Errorf("cursor = %d over %d rows, want 0 over 1", m.list.cursor, len(m.list.items))
+	}
+	if _, ok := m.list.selected(); !ok {
+		t.Error("cursor is off the end of the list")
+	}
+}
+
+func TestDeleteOnEmptyListDoesNothing(t *testing.T) {
+	m := newModel(t)
+	openList(t, m)
+
+	view := send(t, m, "d", "d")
+
+	if strings.Contains(view, "delete #") {
+		t.Errorf("armed a prompt with nothing to delete\n%s", view)
+	}
+	if m.err != nil {
+		t.Errorf("err = %v, want none", m.err)
+	}
+}
+
+// Deleting is a list-screen action only: the board must not answer to it.
+func TestDeleteKeyDoesNothingOnTheBoard(t *testing.T) {
+	m := newModel(t)
+	playSome(t, m, 1)
+	send(t, m, "down", "enter")
+
+	send(t, m, "d", "d")
+
+	if list, _ := m.store.List(); len(list) != 1 {
+		t.Errorf("d on the board deleted a puzzle: %v", list)
 	}
 }
 
