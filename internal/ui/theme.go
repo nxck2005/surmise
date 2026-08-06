@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 
@@ -317,6 +318,28 @@ func titled(title, body string) string {
 		"",
 		block(body),
 	)
+}
+
+// scrollCounter is the "3–14 of 27" line under a scrolling list, with its two
+// ends as click targets.
+//
+// The counter is where the jump targets belong because it is the one thing on
+// screen that is already about position in the list — and because home and end
+// had no clickable equivalent at all before it carried them, which is the only
+// hard parity gap the mouse sweep turned up. Both ends go through the screen's
+// jumpTop/jumpBottom, the same methods the keys call.
+func scrollCounter(h *hitMap, first, last, total int) string {
+	end := func(a action, glyph string) string {
+		style := st.muted
+		if h.hovered(a) {
+			style = st.hover(style)
+		}
+		return h.mark(a, style.Render(glyph))
+	}
+	return "  " +
+		end(action{kind: actJumpTop}, st.glyph.JumpFirst) +
+		st.muted.Render(fmt.Sprintf(" %d–%d of %d ", first, last, total)) +
+		end(action{kind: actJumpBottom}, st.glyph.JumpLast)
 }
 
 // bodyBudget is how many lines a titled screen's body may take before the panel

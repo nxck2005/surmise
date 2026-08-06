@@ -142,10 +142,17 @@ func (m *themeScreen) view(h *hitMap) string {
 		list.WriteString("\n")
 	}
 
+	rows := strings.TrimRight(list.String(), "\n")
+	// The picker used to give no sign that the list continued past the window,
+	// which is the information half of home/end having no click target.
+	if len(m.entries) > m.rows() {
+		rows = block(rows) + "\n\n" + scrollCounter(h, m.offset+1, end, len(m.entries))
+	}
+
 	sections := []string{
 		st.title.Render("themes"),
 		"",
-		strings.TrimRight(list.String(), "\n"),
+		rows,
 		"",
 		renderThemePreview(),
 	}

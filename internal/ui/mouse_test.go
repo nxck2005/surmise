@@ -794,3 +794,95 @@ func TestKeypressDoesNotUndoAWheelScroll(t *testing.T) {
 			m.list.offset)
 	}
 }
+
+// home and end were the one hard parity gap: keys with nothing on screen to
+// click. The counter under a scrolling list carries them now.
+func TestJumpTargetsMatchHomeAndEnd(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{})
+	m.screen = screenList
+	draw(t, m)
+	for range m.list.rows() + 5 {
+		g, err := newPuzzle(s, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.list.reload(s)
+	last := len(m.list.items) - 1
+
+	// The keys, for the behaviour the clicks have to match.
+	send(t, m, "end")
+	if m.list.cursor != last {
+		t.Fatalf("end put the cursor at %d, want %d", m.list.cursor, last)
+	}
+	send(t, m, "home")
+	if m.list.cursor != 0 {
+		t.Fatalf("home put the cursor at %d, want 0", m.list.cursor)
+	}
+
+	click(t, m, action{kind: actJumpBottom})
+	if m.list.cursor != last {
+		t.Errorf("clicking the jump-to-end target put the cursor at %d, want %d",
+			m.list.cursor, last)
+	}
+	click(t, m, action{kind: actJumpTop})
+	if m.list.cursor != 0 {
+		t.Errorf("clicking the jump-to-start target put the cursor at %d, want 0",
+			m.list.cursor)
+	}
+
+	// And they cover the glyphs they claim to.
+	frame := draw(t, m)
+	r, ok := m.hits.find(action{kind: actJumpTop})
+	if !ok {
+		t.Fatal("no jump-to-start target")
+	}
+	if got := at(t, frame, r); got != st.glyph.JumpFirst {
+		t.Errorf("the jump-to-start rect covers %q, want %q", got, st.glyph.JumpFirst)
+	}
+}
+
+// A list short enough to fit has no counter, so it has no jump targets either —
+// there is nowhere to jump to.
+func TestNoJumpTargetsWithoutScrolling(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	send(t, m, "esc")
+	m.list.reload(m.store)
+	m.screen = screenList
+	draw(t, m)
+
+	if _, ok := m.hits.find(action{kind: actJumpTop}); ok {
+		t.Error("a one-row list offers a jump-to-start target")
+	}
+}
+
+// The settings help bar advertises ← and →, so both have to be buttons.
+func TestSettingsHelpBarStepsBothWays(t *testing.T) {
+	m := newModel(t)
+	m.settings.reload(m.settingsOf())
+	m.screen = screenSettings
+	draw(t, m)
+
+	before := m.settings.length
+	click(t, m, action{kind: actSettingNext, index: rowLength})
+	if m.settings.length == before {
+		t.Fatalf("stepping forward left the mode at %d", before)
+	}
+	// The help bar's back button is the last zone carrying the action, since the
+	// row's own ‹ glyph is marked first.
+	r := lastZone(t, m, action{kind: actSettingPrev, index: rowLength})
+	m.Update(tea.MouseClickMsg{X: r.x + r.w/2, Y: r.y + r.h/2, Button: tea.MouseLeft})
+	if got := m.settings.length; got != before {
+		t.Errorf("mode = %d after stepping back, want %d", got, before)
+	}
+}

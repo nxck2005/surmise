@@ -55,6 +55,8 @@ const (
 	actQuit
 	actDeletePuzzle // index: puzzle list row to delete; arms, then confirms
 	actCancelDelete // dismiss the armed delete prompt
+	actJumpTop      // home: first row of a scrolling list
+	actJumpBottom   // end: last row of a scrolling list
 )
 
 // action identifies one clickable thing. It is comparable so it doubles as the

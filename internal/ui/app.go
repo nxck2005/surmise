@@ -409,6 +409,28 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		m.list.confirmDelete = false
 		return nil
 
+	case actJumpTop, actJumpBottom:
+		// The ends of a scrolling list, on whichever list is showing. Both go
+		// through the same methods home and end do.
+		top := a.kind == actJumpTop
+		switch m.screen {
+		case screenList:
+			if top {
+				m.list.jumpTop()
+			} else {
+				m.list.jumpBottom()
+			}
+		case screenThemes:
+			if top {
+				m.themes.jumpTop()
+			} else {
+				m.themes.jumpBottom()
+			}
+			// Moving the cursor previews, exactly as arrowing onto a row does.
+			m.themes.preview()
+		}
+		return nil
+
 	case actThemeRow:
 		if m.screen != screenThemes {
 			return nil

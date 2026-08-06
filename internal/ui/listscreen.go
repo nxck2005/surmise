@@ -208,8 +208,7 @@ func (m *listScreen) view(h *hitMap) string {
 	}
 
 	if len(m.items) > m.rows() {
-		lines = append(lines, "", st.muted.Render(fmt.Sprintf("  %d–%d of %d",
-			m.offset+1, end, len(m.items))))
+		lines = append(lines, "", scrollCounter(h, m.offset+1, end, len(m.items)))
 	}
 	if prompt := m.deletePrompt(h); prompt != "" {
 		lines = append(lines, "", prompt)
