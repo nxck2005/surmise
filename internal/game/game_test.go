@@ -328,6 +328,30 @@ func TestTombstoneKeepsOnlyTheSequence(t *testing.T) {
 	if err := tomb.Validate(); err != nil {
 		t.Errorf("Validate(tombstone) = %v, want nil", err)
 	}
+	// A casual puzzle has no date to keep.
+	if tomb.Daily != "" {
+		t.Errorf("Daily = %q on a casual tombstone, want empty", tomb.Daily)
+	}
+}
+
+// A deleted daily has to remember which day it was, or the daily streak — which
+// is indexed by date rather than by completion order — cannot tell it from a
+// day never played, and the runs either side of a deleted loss merge.
+func TestTombstoneKeepsTheDailyDate(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.Daily = "2026-08-06"
+	if err := g.Guess("crane"); err != nil {
+		t.Fatal(err)
+	}
+
+	tomb := g.Tombstone()
+	if tomb.Daily != "2026-08-06" {
+		t.Errorf("Daily = %q, want 2026-08-06", tomb.Daily)
+	}
+	// The date is all it keeps: the day is on the record, not how it went.
+	if tomb.Answer != "" || len(tomb.Guesses) != 0 {
+		t.Errorf("Tombstone kept the play record: %+v", tomb)
+	}
 }
 
 func TestValidateRejectsCorruptTombstone(t *testing.T) {

@@ -53,3 +53,16 @@ func (d Day) startsAt() time.Time {
 
 // ResetsAt is the instant this day's puzzles are replaced by the next day's.
 func (d Day) ResetsAt() time.Time { return d.startsAt().AddDate(0, 0, 1) }
+
+// AddDays is the day n days after d, and n days before it when n is negative.
+//
+// It exists for walking a run of consecutive dates — a daily streak is indexed
+// by calendar day, so it has to be able to ask for the day before this one
+// rather than for the record before this one. Going through time.AddDate keeps
+// month and year ends right, and UTC means there is no hour to lose to a
+// daylight-saving shift.
+func (d Day) AddDays(n int) Day { return DayOf(d.startsAt().AddDate(0, 0, n)) }
+
+// Before reports whether d falls earlier than e. Day is comparable, so equality
+// needs no method; ordering does.
+func (d Day) Before(e Day) bool { return d.startsAt().Before(e.startsAt()) }

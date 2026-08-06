@@ -63,6 +63,53 @@ func TestResetsAtIsNextUTCMidnight(t *testing.T) {
 	}
 }
 
+// AddDays is what walks a daily streak along the calendar, so it has to be
+// right at the ends of months and years — where adding 24 hours is not adding
+// a day — and has to come back to where it started.
+func TestAddDaysCrossesMonthAndYearEnds(t *testing.T) {
+	cases := []struct {
+		from string
+		n    int
+		want string
+	}{
+		{"2026-08-06", 1, "2026-08-07"},
+		{"2026-08-06", -1, "2026-08-05"},
+		{"2026-08-06", 0, "2026-08-06"},
+		{"2026-08-31", 1, "2026-09-01"},
+		{"2026-09-01", -1, "2026-08-31"},
+		{"2026-12-31", 1, "2027-01-01"},
+		{"2027-01-01", -1, "2026-12-31"},
+		{"2028-02-28", 1, "2028-02-29"}, // a leap year
+		{"2026-02-28", 1, "2026-03-01"},
+		{"2026-08-06", 30, "2026-09-05"},
+	}
+	for _, c := range cases {
+		if got := day(t, c.from).AddDays(c.n); got.String() != c.want {
+			t.Errorf("%s.AddDays(%d) = %s, want %s", c.from, c.n, got, c.want)
+		}
+	}
+
+	// Stepping out and back is the identity, which is what a walk relies on.
+	d := day(t, "2026-08-06")
+	if got := d.AddDays(-5).AddDays(5); got != d {
+		t.Errorf("AddDays(-5).AddDays(5) = %s, want %s", got, d)
+	}
+}
+
+func TestBeforeOrdersDays(t *testing.T) {
+	early, late := day(t, "2026-08-06"), day(t, "2026-08-07")
+	if !early.Before(late) {
+		t.Error("6th is not before the 7th")
+	}
+	if late.Before(early) {
+		t.Error("7th is before the 6th")
+	}
+	// Day is comparable, so equal days are neither before nor after.
+	if early.Before(early) {
+		t.Error("a day is before itself")
+	}
+}
+
 // The id is what every player names the same puzzle by and what the store keys
 // its file on, so it is pinned to a literal: if this changes, every daily
 // already on disk is orphaned and two versions of the app disagree about the

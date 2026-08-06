@@ -75,12 +75,20 @@ type Game struct {
 // loss outright would silently merge the runs either side of it and inflate the
 // longest streak. Keeping the status and the timestamp is what lets
 // stats.Compute know a loss happened here without knowing anything else.
+//
+// Daily is kept for the same reason one step further out: the daily streak is
+// indexed by calendar date rather than by completion order, so a deleted day
+// that forgot which day it was would leave a hole indistinguishable from a day
+// never played — and the runs either side of a deleted daily loss would merge
+// exactly as they used to for an ordinary one. It says which day, never how it
+// went beyond the status.
 func (g *Game) Tombstone() *Game {
 	return &Game{
 		ID:        g.ID,
 		Length:    g.Length,
 		Status:    g.Status,
 		UpdatedAt: g.UpdatedAt,
+		Daily:     g.Daily,
 		Deleted:   true,
 	}
 }

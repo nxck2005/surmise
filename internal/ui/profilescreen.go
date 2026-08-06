@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/wortle/internal/daily"
 	"github.com/nxck2005/wortle/internal/stats"
 	"github.com/nxck2005/wortle/internal/store"
 	"github.com/nxck2005/wortle/internal/words"
@@ -22,14 +23,17 @@ type profileScreen struct {
 	err     error
 }
 
-func (m *profileScreen) reload(s store.Store) {
+// reload recomputes the profile. The day comes from the root rather than from
+// the clock so that -day moves the daily streak the same way it moves the
+// board: the screen and the puzzle it describes agree on what today is.
+func (m *profileScreen) reload(s store.Store, today daily.Day) {
 	games, err := s.All()
 	if err != nil {
 		m.err = err
 		return
 	}
 	m.err = nil
-	m.summary = stats.Compute(games)
+	m.summary = stats.ComputeAt(games, today)
 }
 
 func (m *profileScreen) view(h *hitMap) string {
@@ -70,6 +74,11 @@ func (m *profileScreen) view(h *hitMap) string {
 
 	if byMode := m.renderByMode(); byMode != "" {
 		sections = append(sections, "", byMode)
+	}
+	// Absent until a daily has been played, so a player who never opens that
+	// screen sees the profile they always did.
+	if dailies := m.renderDaily(); dailies != "" {
+		sections = append(sections, "", dailies)
 	}
 	return titled("profile", lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
@@ -142,6 +151,31 @@ func (m *profileScreen) renderByMode() string {
 		return ""
 	}
 	return st.muted.Render("by mode") + "\n" + strings.Join(rows, "\n")
+}
+
+// renderDaily is the by-mode table for the daily puzzles, whose streak is the
+// figure the section exists for: it counts consecutive days rather than
+// consecutive wins, so it is not the streak above and must not be read as it.
+// The columns line up with renderByMode's on purpose.
+func (m *profileScreen) renderDaily() string {
+	var rows []string
+	for _, n := range words.Lengths {
+		mode, ok := m.summary.Daily[n]
+		if !ok || mode.Played == 0 {
+			continue
+		}
+		rows = append(rows, fmt.Sprintf("%s  %s  %s  %s",
+			st.text.Render(fmt.Sprintf("%d letters", n)),
+			st.muted.Render(fmt.Sprintf("%-12s", fmt.Sprintf("%d played", mode.Played))),
+			st.muted.Render(fmt.Sprintf("%-10s", formatPercent(mode.WinRate))),
+			st.muted.Render(fmt.Sprintf("streak %d (max %d)",
+				mode.CurrentStreak, mode.MaxStreak)),
+		))
+	}
+	if len(rows) == 0 {
+		return ""
+	}
+	return st.muted.Render("daily") + "\n" + strings.Join(rows, "\n")
 }
 
 func (m *profileScreen) help(h *hitMap) string {

@@ -124,7 +124,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			m.list.reload(m.store)
 			m.screen, m.list.confirmDelete = screenList, true
 		}},
-		{"profile", func() { m.profile.reload(m.store); m.screen = screenProfile }},
+		{"profile", func() { m.profile.reload(m.store, m.day); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
 		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},

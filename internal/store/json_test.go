@@ -229,6 +229,46 @@ func TestDeleteFinishedLeavesTombstone(t *testing.T) {
 	}
 }
 
+// A deleted daily keeps its date, because the daily streak walks the calendar
+// and cannot otherwise tell the day from one never played. A casual puzzle's
+// tombstone is unchanged by that — the key is omitempty (see the test above,
+// which pins the field list).
+func TestDeleteDailyKeepsItsDate(t *testing.T) {
+	s := newStore(t)
+	g := newGame(t, 5)
+	g.Daily = "2026-08-06"
+	g.Status = game.Lost
+	if err := s.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(g.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	games, err := s.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(games) != 1 {
+		t.Fatalf("All returned %d records, want the tombstone", len(games))
+	}
+	if got := games[0]; !got.Deleted || got.Daily != "2026-08-06" {
+		t.Errorf("tombstone = %+v, want deleted with daily 2026-08-06", got)
+	}
+
+	b, err := os.ReadFile(s.pathFor(g.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["daily"] != "2026-08-06" {
+		t.Errorf("tombstone file = %v, want a daily key", raw)
+	}
+}
+
 func TestDeleteTombstoneReturnsNotFound(t *testing.T) {
 	s := newStore(t)
 	g := newGame(t, 5)
