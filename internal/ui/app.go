@@ -790,6 +790,12 @@ func (m *Model) View() tea.View {
 	// Composition finished, so the markers left by mark() now sit at their
 	// final coordinates: record them and strip them back out.
 	v.Content = h.scan(m.frame(h))
+	// A frame taller than the terminal is not shown from the top, so the
+	// coordinates just recorded are not the ones clicks arrive in. See clip.
+	// An unmeasured height counts as unbounded, as it does everywhere else.
+	if m.height > 0 {
+		h.clip(lipgloss.Height(v.Content)-m.height, m.height)
+	}
 	m.hits = h
 	return v
 }

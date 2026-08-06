@@ -575,3 +575,85 @@ func TestNonActingMouseInput(t *testing.T) {
 		t.Errorf("typing = %q; right-click, release and empty space must all do nothing", m.game.typing)
 	}
 }
+
+// drawAt sizes the terminal to a specific height and renders, for the cases
+// where the frame does not fit. The width stays roomy so only the height is
+// under test.
+func drawAt(t *testing.T, m *Model, height int) string {
+	t.Helper()
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: height})
+	return m.View().Content
+}
+
+// A frame taller than the terminal is not shown from the top: Bubble Tea's
+// renderer drops the excess lines off the top of the buffer. Nothing in the
+// pipeline truncates before then — lipgloss.PlaceVertical returns an over-tall
+// block unchanged — so without clip every recorded region is wrong by exactly
+// the overflow, and every click on a short terminal lands somewhere else.
+//
+// This is checked against the glyphs the *terminal* shows, which is the last
+// `height` lines of the frame.
+func TestClickTargetsSurviveAnOverflowingFrame(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+
+	// A height the menu cannot fit in, so the frame overflows.
+	const height = 12
+	frame := drawAt(t, m, height)
+	lines := strings.Split(frame, "\n")
+	if len(lines) <= height {
+		t.Fatalf("frame is %d lines at height %d; it must overflow for this test",
+			len(lines), height)
+	}
+	visible := strings.Join(lines[len(lines)-height:], "\n")
+
+	// The quit row is near the bottom, so it survives the clipping.
+	quit := action{kind: actMenuChoice, index: menuIndex(t, m, choiceQuit, 0)}
+	r, ok := m.hits.find(quit)
+	if !ok {
+		t.Fatal("the quit row has no click target")
+	}
+	if got := at(t, visible, r); !strings.Contains(got, "quit") {
+		t.Errorf("the quit target covers %q on the visible screen, want the quit row", got)
+	}
+
+	// And a click there really does reach it, rather than whatever the
+	// unclipped coordinates pointed at.
+	m.Update(tea.MouseClickMsg{X: r.x + r.w/2, Y: r.y + r.h/2, Button: tea.MouseLeft})
+	if !m.quitting {
+		t.Error("clicking the quit row on a short terminal did not quit")
+	}
+}
+
+// What the terminal cuts off, the hit map must forget: a region scrolled above
+// the first visible row is not somewhere the player can click.
+func TestClippedTargetsAreDropped(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+
+	drawAt(t, m, testHeight)
+	roomy := len(m.hits.zones)
+	if roomy == 0 {
+		t.Fatal("the menu has no targets at full height")
+	}
+
+	// Squeezed, the top of the frame is gone and so are the targets that were
+	// drawn there — the close box in the panel's border, and the first rows.
+	const height = 8
+	drawAt(t, m, height)
+	if len(m.hits.zones) >= roomy {
+		t.Errorf("%d targets at height %d, %d at height %d: nothing was clipped",
+			len(m.hits.zones), height, roomy, testHeight)
+	}
+	// Whatever survives has to be somewhere the player can actually reach.
+	for _, z := range m.hits.zones {
+		if z.rect.y < 0 || z.rect.y >= height {
+			t.Errorf("zone %+v lies outside the %d visible rows", z, height)
+		}
+	}
+	// Nothing may answer for the top-left corner just because it was never
+	// scanned: an unpositioned zone is not a target.
+	if a, ok := m.hits.at(0, 0); ok {
+		t.Errorf("cell (0,0) resolves to %+v; the corner must not be a phantom target", a)
+	}
+}
