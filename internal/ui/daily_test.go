@@ -151,6 +151,62 @@ func TestDailyKeepsItsIDWhenTheCodeCollides(t *testing.T) {
 	}
 }
 
+// Winning a daily gives the profile a section the casual figures do not: a
+// streak counted in days. The profile takes its day from the root, so under
+// -day the streak and the board agree on what today is.
+func TestProfileShowsTheDailyStreak(t *testing.T) {
+	m := dailyModel(t, Options{})
+	playDaily(t, m, 5)
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	if m.game.g.Status != game.Won {
+		t.Fatalf("status = %v, want won", m.game.g.Status)
+	}
+	send(t, m, "esc")
+
+	m.profile.reload(m.store, m.day)
+	m.screen = screenProfile
+	view := m.View().Content
+
+	if !strings.Contains(view, "daily") {
+		t.Errorf("profile has no daily section\n%s", view)
+	}
+	if !strings.Contains(view, "streak 1 (max 1)") {
+		t.Errorf("profile does not show the daily streak\n%s", view)
+	}
+
+	got := m.profile.summary.Daily[5]
+	if got.Played != 1 || got.Won != 1 || got.CurrentStreak != 1 {
+		t.Errorf("Daily[5] = %+v, want 1 played, 1 won, streak 1", got)
+	}
+	if _, ok := m.profile.summary.Daily[4]; ok {
+		t.Error("a mode whose daily was never played should be absent")
+	}
+}
+
+// A player who has never opened the daily screen sees the profile they always
+// did, which is what keeps the section from being noise.
+func TestProfileHasNoDailySectionWithoutADaily(t *testing.T) {
+	m := dailyModel(t, Options{})
+	send(t, m, "down", "enter") // the five-letter mode, an ordinary puzzle
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	if m.game.g.Status != game.Won || m.game.g.Daily != "" {
+		t.Fatalf("wanted a won casual puzzle, got status %v daily %q",
+			m.game.g.Status, m.game.g.Daily)
+	}
+	send(t, m, "esc")
+
+	m.profile.reload(m.store, m.day)
+	m.screen = screenProfile
+	if view := m.View().Content; strings.Contains(view, "streak 1 (max 1)") {
+		t.Errorf("casual play produced a daily row\n%s", view)
+	}
+	if len(m.profile.summary.Daily) != 0 {
+		t.Errorf("Daily = %+v, want empty", m.profile.summary.Daily)
+	}
+}
+
 // Opening the daily and walking away must save nothing, like any other new
 // puzzle: 0/6 entries do not belong in the list.
 func TestDailyIsTransientUntilTheFirstGuess(t *testing.T) {

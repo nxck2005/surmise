@@ -555,7 +555,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.screen = screenList
 
 	case choiceProfile:
-		m.profile.reload(m.store)
+		m.profile.reload(m.store, m.day)
 		m.screen = screenProfile
 
 	case choiceThemes:

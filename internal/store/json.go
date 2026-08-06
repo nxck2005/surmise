@@ -144,7 +144,12 @@ type tombstoneRecord struct {
 	Length    int         `json:"length"`
 	Status    game.Status `json:"status"`
 	UpdatedAt time.Time   `json:"updatedAt"`
-	Deleted   bool        `json:"deleted"`
+	// Daily carries omitempty, unlike its neighbours, so a casual puzzle's
+	// tombstone is written exactly as it always was and only a deleted daily
+	// gains a key. See game.Tombstone for why a deleted day has to remember
+	// which day it was.
+	Daily   string `json:"daily,omitempty"`
+	Deleted bool   `json:"deleted"`
 }
 
 func (s *JSON) saveTombstone(g *game.Game) error {
@@ -156,6 +161,7 @@ func (s *JSON) saveTombstone(g *game.Game) error {
 		Length:    g.Length,
 		Status:    g.Status,
 		UpdatedAt: g.UpdatedAt,
+		Daily:     g.Daily,
 		Deleted:   g.Deleted,
 	}, "", "  ")
 	if err != nil {
