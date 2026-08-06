@@ -258,13 +258,22 @@ func (m *Model) saveSettings(s store.Settings) {
 
 func (m *Model) Init() tea.Cmd { return tick() }
 
+// pushSize hands the terminal's size to the screens that lay out against it.
+// They shed or scroll rather than let the panel outgrow the terminal, which
+// would take the top of the frame — title, close box and all — off the screen.
+func (m *Model) pushSize() {
+	if m.game != nil {
+		m.game.resize(m.width, m.height)
+	}
+	m.profile.resize(m.width, m.height)
+	m.about.resize(m.width, m.height)
+}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		if m.game != nil {
-			m.game.resize(m.width, m.height)
-		}
+		m.pushSize()
 		return m, nil
 
 	case tickMsg:

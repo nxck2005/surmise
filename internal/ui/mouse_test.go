@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/wortle/internal/game"
 	"github.com/nxck2005/wortle/internal/store"
@@ -655,5 +656,51 @@ func TestClippedTargetsAreDropped(t *testing.T) {
 	// scanned: an unpositioned zone is not a target.
 	if a, ok := m.hits.at(0, 0); ok {
 		t.Errorf("cell (0,0) resolves to %+v; the corner must not be a phantom target", a)
+	}
+}
+
+// A screen that outgrows the terminal loses its top rows to the renderer, so
+// the tall screens shed their extras first. The headline figures never go: they
+// are what the profile is for.
+func TestProfileShedsExtrasOnAShortTerminal(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	send(t, m, "esc")
+	m.profile.reload(m.store, m.day)
+	m.screen = screenProfile
+
+	roomy := drawAt(t, m, testHeight)
+	for _, want := range []string{"win rate", "guess distribution", "by mode"} {
+		if !strings.Contains(roomy, want) {
+			t.Fatalf("a roomy terminal should show %q\n%s", want, roomy)
+		}
+	}
+
+	short := drawAt(t, m, 14)
+	if !strings.Contains(short, "win rate") {
+		t.Errorf("the headline figures must survive\n%s", short)
+	}
+	if strings.Contains(short, "by mode") {
+		t.Errorf("the per-mode table should have been shed\n%s", short)
+	}
+	if h := lipgloss.Height(short); h > lipgloss.Height(roomy) {
+		t.Errorf("the short frame is %d lines, taller than the roomy one", h)
+	}
+}
+
+// The about screen gives up its credits before anything a bug report needs.
+func TestAboutShedsCreditsOnAShortTerminal(t *testing.T) {
+	m := newModel(t)
+	m.about.reload("")
+	m.screen = screenAbout
+
+	if roomy := drawAt(t, m, testHeight); !strings.Contains(roomy, "version") {
+		t.Fatalf("the about screen lost its version row\n%s", roomy)
+	}
+	short := drawAt(t, m, 12)
+	if !strings.Contains(short, "version") {
+		t.Errorf("version must survive a short terminal\n%s", short)
 	}
 }

@@ -319,6 +319,30 @@ func titled(title, body string) string {
 	)
 }
 
+// bodyBudget is how many lines a titled screen's body may take before the panel
+// outgrows the terminal.
+//
+// Overflowing is not merely ugly: nothing here truncates, so the renderer drops
+// the excess off the top of the screen (see hitMap.clip), taking the title, the
+// close box and whatever else was up there with it. A screen that can shed or
+// scroll should therefore know its budget.
+//
+// The subtraction is the chrome around the body: the title and the blank under
+// it that titled adds, the help bar and the blank above it, and the panel's
+// padding and border. A height of zero — the size before the first
+// WindowSizeMsg — means unbounded, and is reported as 0 for callers to skip.
+func bodyBudget(height int) int {
+	if height <= 0 {
+		return 0
+	}
+	const (
+		title = 2 // the title and the blank line under it
+		help  = 2 // the help bar and the blank line above it
+		frame = 2 // the panel's top and bottom border
+	)
+	return height - title - help - frame - 2*st.metric.PanelPadY
+}
+
 // renderPanel draws a rounded border around content with a title inlaid in the
 // top edge, btop-style. The border is built by hand rather than via lipgloss's
 // Border() so the title can sit inside the top rule. corner is an optional
