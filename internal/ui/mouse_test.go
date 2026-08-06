@@ -530,8 +530,13 @@ func TestWheelScrollsTheList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// More puzzles than fit, so there is something to scroll.
-	for range visibleRows + 3 {
+	m := New(s, nil, Options{})
+	m.screen = screenList
+	draw(t, m)
+
+	// More puzzles than the window holds at this terminal size, so there is
+	// something to scroll. The window follows the height now, so ask it.
+	for range m.list.rows() + 3 {
 		g, err := newPuzzle(s, 5)
 		if err != nil {
 			t.Fatal(err)
@@ -540,11 +545,12 @@ func TestWheelScrollsTheList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	m := New(s, nil, Options{})
 	m.list.reload(s)
-	m.screen = screenList
 	draw(t, m)
+	if len(m.list.items) <= m.list.rows() {
+		t.Fatalf("%d puzzles fit in a %d-row window; nothing to scroll",
+			len(m.list.items), m.list.rows())
+	}
 
 	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
@@ -702,5 +708,89 @@ func TestAboutShedsCreditsOnAShortTerminal(t *testing.T) {
 	short := drawAt(t, m, 12)
 	if !strings.Contains(short, "version") {
 		t.Errorf("version must survive a short terminal\n%s", short)
+	}
+}
+
+// The window follows the terminal instead of being a fixed twelve rows, so a
+// tall terminal shows more and a short one does not overflow.
+func TestListWindowFollowsTheTerminal(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 30 {
+		g, err := newPuzzle(s, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m := New(s, nil, Options{})
+	m.list.reload(s)
+	m.screen = screenList
+
+	tall := drawAt(t, m, 40)
+	short := drawAt(t, m, 16)
+	if m.list.rows() >= 40 {
+		t.Errorf("a 16-row terminal still asks for %d rows", m.list.rows())
+	}
+	if lipgloss.Height(short) >= lipgloss.Height(tall) {
+		t.Errorf("the short frame (%d lines) is no shorter than the tall one (%d)",
+			lipgloss.Height(short), lipgloss.Height(tall))
+	}
+	// Whatever it draws has to fit the terminal it was told about, or the
+	// renderer eats the top of it.
+	if h := lipgloss.Height(short); h > 16 {
+		t.Errorf("the frame is %d lines on a 16-row terminal", h)
+	}
+}
+
+// A wheel scroll must survive the next keystroke. clampOffset belongs to
+// whatever moved the cursor; running it after every key dragged the window
+// straight back to the selection.
+func TestKeypressDoesNotUndoAWheelScroll(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{})
+	m.screen = screenList
+	draw(t, m)
+	for range m.list.rows() + 5 {
+		g, err := newPuzzle(s, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.list.reload(s)
+	draw(t, m)
+
+	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	if m.list.offset != 2 {
+		t.Fatalf("offset = %d after two wheel-downs, want 2", m.list.offset)
+	}
+
+	// A key that does not move the cursor must leave the window where it is.
+	send(t, m, "x")
+	if m.list.offset != 2 {
+		t.Errorf("offset = %d after an unrelated key, want the scroll kept", m.list.offset)
+	}
+	// One that does move it may of course pull the window back.
+	send(t, m, "down")
+	if m.list.cursor != 1 {
+		t.Errorf("cursor = %d, want the key to have moved it", m.list.cursor)
+	}
+	// clampOffset scrolls just far enough to show the cursor, so the window
+	// stops at it rather than snapping back to the top.
+	if m.list.offset != 1 {
+		t.Errorf("offset = %d; moving the cursor should scroll just enough to show it",
+			m.list.offset)
 	}
 }

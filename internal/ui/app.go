@@ -267,6 +267,8 @@ func (m *Model) pushSize() {
 	}
 	m.profile.resize(m.width, m.height)
 	m.about.resize(m.width, m.height)
+	m.list.resize(m.height)
+	m.themes.resize(m.height)
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
