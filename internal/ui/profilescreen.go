@@ -34,18 +34,19 @@ func (m *profileScreen) reload(s store.Store) {
 
 func (m *profileScreen) view(h *hitMap) string {
 	if m.err != nil {
-		return st.title.Render("profile") + "\n\n" +
-			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err))
+		return titled("profile",
+			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
 	}
 
 	s := m.summary
-	sections := []string{st.title.Render("profile"), ""}
-
 	if s.Played == 0 && s.InPlay == 0 {
-		sections = append(sections, st.muted.Render("no games played yet"))
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+		return titled("profile", st.muted.Render("no games played yet"))
 	}
 
+	// The sections stay left-joined: these are label-over-value columns and a
+	// histogram, which only read if they share a left edge. titled centres the
+	// finished block.
+	var sections []string
 	sections = append(sections,
 		renderStatRow([]stat{
 			{"played", fmt.Sprint(s.Played)},
@@ -70,7 +71,7 @@ func (m *profileScreen) view(h *hitMap) string {
 	if byMode := m.renderByMode(); byMode != "" {
 		sections = append(sections, "", byMode)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return titled("profile", lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
 
 type stat struct{ label, value string }

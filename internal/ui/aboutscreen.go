@@ -89,11 +89,7 @@ func (a *aboutScreen) view(h *hitMap) string {
 		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(r.value)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		st.title.Render("about"),
-		"",
-		strings.Join(lines, "\n"),
-	)
+	return titled("about", strings.Join(lines, "\n"))
 }
 
 func (a *aboutScreen) help(h *hitMap) string {

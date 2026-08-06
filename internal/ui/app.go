@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -799,8 +800,10 @@ func (m *Model) View() tea.View {
 func (m *Model) frame(h *hitMap) string {
 	body, help := m.activeScreen(h)
 	if m.err != nil {
-		body = lipgloss.JoinVertical(lipgloss.Left,
-			body, "", st.err.Render(fmt.Sprintf("error: %v", m.err)))
+		// Centred, and the body squared off first: joined left, an error wider
+		// than the screen it is reporting on dragged that screen to the left.
+		body = lipgloss.JoinVertical(lipgloss.Center,
+			block(body), "", st.err.Render(fmt.Sprintf("error: %v", m.err)))
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center, body, help)
@@ -941,34 +944,52 @@ func (m *menuScreen) point(i int) {
 }
 
 func (m *menuScreen) view(h *hitMap) string {
-	heading := st.title.Render("wortle") + st.muted.Render("  wordle for the terminal")
+	// The tagline sits under the title rather than beside it. On one line it was
+	// the widest thing on the screen, and centring the list against it put the
+	// choices well to the right of the word they belong under.
+	heading := lipgloss.JoinVertical(lipgloss.Center,
+		st.title.Render("wortle"),
+		st.muted.Render("wordle for the terminal"),
+	)
 
-	// Every row is centred to a common width so the list sits under the middle
-	// of the heading. The selected item is flanked symmetrically so its marker
-	// does not throw off the centring.
-	marks := lipgloss.Width(st.glyph.Cursor) + lipgloss.Width(st.glyph.CursorRight)
-	width := 0
+	// Labels are padded to a common width and the selection marker sits in a
+	// gutter, as on every other list in the app. Centring each row on its own
+	// instead — which is what this used to do — cannot split an odd gap evenly,
+	// so rows whose labels differed in parity sat a column apart.
+	labelWidth := 0
 	for _, c := range m.choices {
-		if w := lipgloss.Width(c.label) + marks; w > width {
-			width = w
+		if w := lipgloss.Width(c.label); w > labelWidth {
+			labelWidth = w
 		}
 	}
-	center := lipgloss.NewStyle().Width(width).Align(lipgloss.Center)
+	// Padding goes on before styling: padding an already-styled string counts
+	// its escape codes as characters.
+	pad := func(label string) string {
+		return label + strings.Repeat(" ", labelWidth-lipgloss.Width(label))
+	}
+	blank := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
+	trail := strings.Repeat(" ", lipgloss.Width(st.glyph.CursorRight))
 
 	rows := make([]string, len(m.choices))
 	for i, c := range m.choices {
 		var row string
 		if i == m.cursor {
-			row = center.Render(st.menuPick.Render(st.glyph.Cursor + c.label + st.glyph.CursorRight))
+			row = st.cursor.Render(st.glyph.Cursor) +
+				st.menuPick.Render(pad(c.label)) +
+				st.cursor.Render(st.glyph.CursorRight)
 		} else {
-			row = center.Render(st.muted.Render(c.label))
+			row = blank + st.muted.Render(pad(c.label)) + trail
 		}
-		// The whole centred row is the click target, so it is forgiving to aim
-		// at. Hovering it moves the cursor, which is highlight enough.
+		// Every row is the same width now, so the whole row is the click target
+		// and aiming at it is forgiving. Hovering it moves the cursor, which is
+		// highlight enough.
 		rows[i] = h.mark(action{kind: actMenuChoice, index: i}, row)
 	}
 
-	list := lipgloss.JoinVertical(lipgloss.Center, rows...)
+	// block, not JoinVertical, holds the list together: the rows already share a
+	// left edge, and squaring them off is what makes the outer join slide the
+	// whole list under the heading rather than re-centring each row.
+	list := block(strings.Join(rows, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Center, heading, "", list)
 }
 

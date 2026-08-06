@@ -112,9 +112,6 @@ func (m *dailyScreen) point(row int) {
 }
 
 func (m *dailyScreen) view(h *hitMap) string {
-	var b strings.Builder
-	b.WriteString(st.title.Render("daily"))
-	b.WriteString("\n")
 	// The date is always shown rather than implied: the daily turns over at UTC
 	// midnight, so for much of the world it is not the date on the wall clock.
 	// The countdown is only true of the live day — under -day it would be
@@ -123,20 +120,28 @@ func (m *dailyScreen) view(h *hitMap) string {
 	if m.day == daily.Today() {
 		when += " · resets in " + until(m.day.ResetsAt())
 	}
-	b.WriteString(st.muted.Render(when))
-	b.WriteString("\n\n")
+
+	// The date belongs to the title, tight under it, so this screen composes its
+	// own heading rather than going through titled.
+	heading := lipgloss.JoinVertical(lipgloss.Center,
+		st.title.Render("daily"),
+		st.muted.Render(when),
+	)
 
 	if m.err != nil {
-		b.WriteString(st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
-		return b.String()
+		return lipgloss.JoinVertical(lipgloss.Center, heading, "",
+			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
 	}
 
+	rows := make([]string, len(m.rows))
 	for i, row := range m.rows {
-		b.WriteString(h.mark(action{kind: actDailyRow, index: i},
-			m.renderRow(row, i == m.cursor)))
-		b.WriteString("\n")
+		rows[i] = h.mark(action{kind: actDailyRow, index: i},
+			m.renderRow(row, i == m.cursor))
 	}
-	return b.String()
+	// Squared off first, so the join slides the rows under the heading as one
+	// block instead of centring each on its own.
+	return lipgloss.JoinVertical(lipgloss.Center, heading, "",
+		block(strings.Join(rows, "\n")))
 }
 
 // renderRow lays out one mode, in the same column shape as the puzzle list: the

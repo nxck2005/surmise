@@ -278,18 +278,21 @@ func renderHelp(h *hitMap, items ...helpItem) string {
 	return st.helpBar.Render(strings.Join(segments, st.help.Render(st.glyph.Separator)))
 }
 
-// renderPanel draws a rounded border around content with a title inlaid in the
-// top edge, btop-style. The border is built by hand rather than via lipgloss's
-// Border() so the title can sit inside the top rule. corner is an optional
-// segment inlaid at the right end of that rule — the close box — and may be
-// empty.
-func renderPanel(title, corner, content string) string {
-	inner := lipgloss.NewStyle().
-		Padding(st.metric.PanelPadY, st.metric.PanelPadX).
-		Render(content)
-	lines := strings.Split(inner, "\n")
-
-	// Widest line sets the inner width; pad the rest so the right edge aligns.
+// block squares a multi-line string off, padding every line to the width of the
+// widest.
+//
+// It exists because lipgloss.JoinVertical(Center, …) centres line by line, not
+// block by block: hand it a table and it centres each row on its own, so rows
+// whose widths differ in parity land a column apart and the left edge goes
+// ragged. Squaring the table first makes every line the same width, so the one
+// centring offset applies to all of them and the block moves as a unit with its
+// own alignment intact.
+//
+// Safe on marked content: hitMap's markers are zero-width, so lipgloss.Width
+// ignores them and the padding lands where it would have anyway
+// (TestMarkersDoNotAffectLayout).
+func block(s string) string {
+	lines := strings.Split(s, "\n")
 	width := 0
 	for _, l := range lines {
 		if w := lipgloss.Width(l); w > width {
@@ -301,6 +304,33 @@ func renderPanel(title, corner, content string) string {
 			lines[i] = l + strings.Repeat(" ", pad)
 		}
 	}
+	return strings.Join(lines, "\n")
+}
+
+// titled is the standard shape of a list-style screen: its title centred over
+// its body, with the body moved as a block so its rows keep the shared left edge
+// that makes their columns line up. Screens that lay out around a board
+// (gameScreen, themeScreen) centre their own sections instead.
+func titled(title, body string) string {
+	return lipgloss.JoinVertical(lipgloss.Center,
+		st.title.Render(title),
+		"",
+		block(body),
+	)
+}
+
+// renderPanel draws a rounded border around content with a title inlaid in the
+// top edge, btop-style. The border is built by hand rather than via lipgloss's
+// Border() so the title can sit inside the top rule. corner is an optional
+// segment inlaid at the right end of that rule — the close box — and may be
+// empty.
+func renderPanel(title, corner, content string) string {
+	inner := lipgloss.NewStyle().
+		Padding(st.metric.PanelPadY, st.metric.PanelPadX).
+		Render(content)
+	// Squaring the content off gives the border a straight right edge to follow.
+	lines := strings.Split(block(inner), "\n")
+	width := lipgloss.Width(lines[0])
 
 	b := st.borderRunes()
 
