@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/wortle/internal/game"
 	"github.com/nxck2005/wortle/internal/store"
@@ -529,8 +530,13 @@ func TestWheelScrollsTheList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// More puzzles than fit, so there is something to scroll.
-	for range visibleRows + 3 {
+	m := New(s, nil, Options{})
+	m.screen = screenList
+	draw(t, m)
+
+	// More puzzles than the window holds at this terminal size, so there is
+	// something to scroll. The window follows the height now, so ask it.
+	for range m.list.rows() + 3 {
 		g, err := newPuzzle(s, 5)
 		if err != nil {
 			t.Fatal(err)
@@ -539,11 +545,12 @@ func TestWheelScrollsTheList(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	m := New(s, nil, Options{})
 	m.list.reload(s)
-	m.screen = screenList
 	draw(t, m)
+	if len(m.list.items) <= m.list.rows() {
+		t.Fatalf("%d puzzles fit in a %d-row window; nothing to scroll",
+			len(m.list.items), m.list.rows())
+	}
 
 	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
@@ -574,4 +581,396 @@ func TestNonActingMouseInput(t *testing.T) {
 	if m.game.typing != "" {
 		t.Errorf("typing = %q; right-click, release and empty space must all do nothing", m.game.typing)
 	}
+}
+
+// drawAt sizes the terminal to a specific height and renders, for the cases
+// where the frame does not fit. The width stays roomy so only the height is
+// under test.
+func drawAt(t *testing.T, m *Model, height int) string {
+	t.Helper()
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: height})
+	return m.View().Content
+}
+
+// A frame taller than the terminal is not shown from the top: Bubble Tea's
+// renderer drops the excess lines off the top of the buffer. Nothing in the
+// pipeline truncates before then — lipgloss.PlaceVertical returns an over-tall
+// block unchanged — so without clip every recorded region is wrong by exactly
+// the overflow, and every click on a short terminal lands somewhere else.
+//
+// This is checked against the glyphs the *terminal* shows, which is the last
+// `height` lines of the frame.
+func TestClickTargetsSurviveAnOverflowingFrame(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+
+	// A height the menu cannot fit in, so the frame overflows.
+	const height = 12
+	frame := drawAt(t, m, height)
+	lines := strings.Split(frame, "\n")
+	if len(lines) <= height {
+		t.Fatalf("frame is %d lines at height %d; it must overflow for this test",
+			len(lines), height)
+	}
+	visible := strings.Join(lines[len(lines)-height:], "\n")
+
+	// The quit row is near the bottom, so it survives the clipping.
+	quit := action{kind: actMenuChoice, index: menuIndex(t, m, choiceQuit, 0)}
+	r, ok := m.hits.find(quit)
+	if !ok {
+		t.Fatal("the quit row has no click target")
+	}
+	if got := at(t, visible, r); !strings.Contains(got, "quit") {
+		t.Errorf("the quit target covers %q on the visible screen, want the quit row", got)
+	}
+
+	// And a click there really does reach it, rather than whatever the
+	// unclipped coordinates pointed at.
+	m.Update(tea.MouseClickMsg{X: r.x + r.w/2, Y: r.y + r.h/2, Button: tea.MouseLeft})
+	if !m.quitting {
+		t.Error("clicking the quit row on a short terminal did not quit")
+	}
+}
+
+// What the terminal cuts off, the hit map must forget: a region scrolled above
+// the first visible row is not somewhere the player can click.
+func TestClippedTargetsAreDropped(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+
+	drawAt(t, m, testHeight)
+	roomy := len(m.hits.zones)
+	if roomy == 0 {
+		t.Fatal("the menu has no targets at full height")
+	}
+
+	// Squeezed, the top of the frame is gone and so are the targets that were
+	// drawn there — the close box in the panel's border, and the first rows.
+	const height = 8
+	drawAt(t, m, height)
+	if len(m.hits.zones) >= roomy {
+		t.Errorf("%d targets at height %d, %d at height %d: nothing was clipped",
+			len(m.hits.zones), height, roomy, testHeight)
+	}
+	// Whatever survives has to be somewhere the player can actually reach.
+	for _, z := range m.hits.zones {
+		if z.rect.y < 0 || z.rect.y >= height {
+			t.Errorf("zone %+v lies outside the %d visible rows", z, height)
+		}
+	}
+	// Nothing may answer for the top-left corner just because it was never
+	// scanned: an unpositioned zone is not a target.
+	if a, ok := m.hits.at(0, 0); ok {
+		t.Errorf("cell (0,0) resolves to %+v; the corner must not be a phantom target", a)
+	}
+}
+
+// A screen that outgrows the terminal loses its top rows to the renderer, so
+// the tall screens shed their extras first. The headline figures never go: they
+// are what the profile is for.
+func TestProfileShedsExtrasOnAShortTerminal(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	send(t, m, "esc")
+	m.profile.reload(m.store, m.day)
+	m.screen = screenProfile
+
+	roomy := drawAt(t, m, testHeight)
+	for _, want := range []string{"win rate", "guess distribution", "by mode"} {
+		if !strings.Contains(roomy, want) {
+			t.Fatalf("a roomy terminal should show %q\n%s", want, roomy)
+		}
+	}
+
+	short := drawAt(t, m, 14)
+	if !strings.Contains(short, "win rate") {
+		t.Errorf("the headline figures must survive\n%s", short)
+	}
+	if strings.Contains(short, "by mode") {
+		t.Errorf("the per-mode table should have been shed\n%s", short)
+	}
+	if h := lipgloss.Height(short); h > lipgloss.Height(roomy) {
+		t.Errorf("the short frame is %d lines, taller than the roomy one", h)
+	}
+}
+
+// The about screen gives up its credits before anything a bug report needs.
+func TestAboutShedsCreditsOnAShortTerminal(t *testing.T) {
+	m := newModel(t)
+	m.about.reload("")
+	m.screen = screenAbout
+
+	if roomy := drawAt(t, m, testHeight); !strings.Contains(roomy, "version") {
+		t.Fatalf("the about screen lost its version row\n%s", roomy)
+	}
+	short := drawAt(t, m, 12)
+	if !strings.Contains(short, "version") {
+		t.Errorf("version must survive a short terminal\n%s", short)
+	}
+}
+
+// The window follows the terminal instead of being a fixed twelve rows, so a
+// tall terminal shows more and a short one does not overflow.
+func TestListWindowFollowsTheTerminal(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 30 {
+		g, err := newPuzzle(s, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m := New(s, nil, Options{})
+	m.list.reload(s)
+	m.screen = screenList
+
+	tall := drawAt(t, m, 40)
+	short := drawAt(t, m, 16)
+	if m.list.rows() >= 40 {
+		t.Errorf("a 16-row terminal still asks for %d rows", m.list.rows())
+	}
+	if lipgloss.Height(short) >= lipgloss.Height(tall) {
+		t.Errorf("the short frame (%d lines) is no shorter than the tall one (%d)",
+			lipgloss.Height(short), lipgloss.Height(tall))
+	}
+	// Whatever it draws has to fit the terminal it was told about, or the
+	// renderer eats the top of it.
+	if h := lipgloss.Height(short); h > 16 {
+		t.Errorf("the frame is %d lines on a 16-row terminal", h)
+	}
+}
+
+// A wheel scroll must survive the next keystroke. clampOffset belongs to
+// whatever moved the cursor; running it after every key dragged the window
+// straight back to the selection.
+func TestKeypressDoesNotUndoAWheelScroll(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{})
+	m.screen = screenList
+	draw(t, m)
+	for range m.list.rows() + 5 {
+		g, err := newPuzzle(s, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.list.reload(s)
+	draw(t, m)
+
+	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	if m.list.offset != 2 {
+		t.Fatalf("offset = %d after two wheel-downs, want 2", m.list.offset)
+	}
+
+	// A key that does not move the cursor must leave the window where it is.
+	send(t, m, "x")
+	if m.list.offset != 2 {
+		t.Errorf("offset = %d after an unrelated key, want the scroll kept", m.list.offset)
+	}
+	// One that does move it may of course pull the window back.
+	send(t, m, "down")
+	if m.list.cursor != 1 {
+		t.Errorf("cursor = %d, want the key to have moved it", m.list.cursor)
+	}
+	// clampOffset scrolls just far enough to show the cursor, so the window
+	// stops at it rather than snapping back to the top.
+	if m.list.offset != 1 {
+		t.Errorf("offset = %d; moving the cursor should scroll just enough to show it",
+			m.list.offset)
+	}
+}
+
+// home and end were the one hard parity gap: keys with nothing on screen to
+// click. The counter under a scrolling list carries them now.
+func TestJumpTargetsMatchHomeAndEnd(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{})
+	m.screen = screenList
+	draw(t, m)
+	for range m.list.rows() + 5 {
+		g, err := newPuzzle(s, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.list.reload(s)
+	last := len(m.list.items) - 1
+
+	// The keys, for the behaviour the clicks have to match.
+	send(t, m, "end")
+	if m.list.cursor != last {
+		t.Fatalf("end put the cursor at %d, want %d", m.list.cursor, last)
+	}
+	send(t, m, "home")
+	if m.list.cursor != 0 {
+		t.Fatalf("home put the cursor at %d, want 0", m.list.cursor)
+	}
+
+	click(t, m, action{kind: actJumpBottom})
+	if m.list.cursor != last {
+		t.Errorf("clicking the jump-to-end target put the cursor at %d, want %d",
+			m.list.cursor, last)
+	}
+	click(t, m, action{kind: actJumpTop})
+	if m.list.cursor != 0 {
+		t.Errorf("clicking the jump-to-start target put the cursor at %d, want 0",
+			m.list.cursor)
+	}
+
+	// And they cover the glyphs they claim to.
+	frame := draw(t, m)
+	r, ok := m.hits.find(action{kind: actJumpTop})
+	if !ok {
+		t.Fatal("no jump-to-start target")
+	}
+	if got := at(t, frame, r); got != st.glyph.JumpFirst {
+		t.Errorf("the jump-to-start rect covers %q, want %q", got, st.glyph.JumpFirst)
+	}
+}
+
+// A list short enough to fit has no counter, so it has no jump targets either —
+// there is nowhere to jump to.
+func TestNoJumpTargetsWithoutScrolling(t *testing.T) {
+	m := newModel(t)
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	send(t, m, "esc")
+	m.list.reload(m.store)
+	m.screen = screenList
+	draw(t, m)
+
+	if _, ok := m.hits.find(action{kind: actJumpTop}); ok {
+		t.Error("a one-row list offers a jump-to-start target")
+	}
+}
+
+// The settings help bar advertises ← and →, so both have to be buttons.
+func TestSettingsHelpBarStepsBothWays(t *testing.T) {
+	m := newModel(t)
+	m.settings.reload(m.settingsOf())
+	m.screen = screenSettings
+	draw(t, m)
+
+	before := m.settings.length
+	click(t, m, action{kind: actSettingNext, index: rowLength})
+	if m.settings.length == before {
+		t.Fatalf("stepping forward left the mode at %d", before)
+	}
+	// The help bar's back button is the last zone carrying the action, since the
+	// row's own ‹ glyph is marked first.
+	r := lastZone(t, m, action{kind: actSettingPrev, index: rowLength})
+	m.Update(tea.MouseClickMsg{X: r.x + r.w/2, Y: r.y + r.h/2, Button: tea.MouseLeft})
+	if got := m.settings.length; got != before {
+		t.Errorf("mode = %d after stepping back, want %d", got, before)
+	}
+}
+
+// The help bar repeats what the screen already offers — "enter select" carries
+// the very action the selected row does — and the action doubles as the hover
+// key. Pointing at a row used to light the button up too, which reads as the
+// pointer being in two places at once.
+func TestHoveringARowLeavesTheHelpBarAlone(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+
+	row := action{kind: actMenuChoice, index: 2}
+	helpButton := action{kind: actMenuChoice, index: 2, help: true}
+
+	point(t, m, row)
+	if m.hover != row {
+		t.Fatalf("hover = %+v after pointing at row 2, want the row", m.hover)
+	}
+
+	// The frame the pointer produced: the row is lit, the button is not.
+	draw(t, m)
+	h := m.hits
+	if !h.hovered(row) {
+		t.Error("the row under the pointer is not hovered")
+	}
+	if h.hovered(helpButton) {
+		t.Error("the help bar's button lit up while the pointer was on a row")
+	}
+
+	// And in the bytes, not just the predicate: the help bar has to come out
+	// of a hover exactly as it went in. The idle snapshot has to be taken with
+	// the pointer off everything, or it is not idle.
+	m.Update(tea.MouseMotionMsg{X: 0, Y: 0})
+	idle := helpLine(t, drawn(t, m))
+	point(t, m, row)
+	if got := helpLine(t, drawn(t, m)); got != idle {
+		t.Errorf("the help bar changed while the pointer was on a row\n idle: %q\nhover: %q",
+			idle, got)
+	}
+
+	// Both are still targets, and both still do the same thing.
+	if _, ok := h.find(row); !ok {
+		t.Error("the row lost its click target")
+	}
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceProfile, 0)})
+	if m.screen != screenProfile {
+		t.Error("clicking a menu row stopped working")
+	}
+}
+
+// And the other way round: a pointer on the button lights the button, not the
+// row it happens to name.
+func TestHoveringTheHelpBarLeavesTheRowAlone(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+	draw(t, m)
+
+	// find ignores which copy of an action it returns, and the row is marked
+	// first, so ask for the bar's copy exactly.
+	r := lastZone(t, m, action{kind: actMenuChoice, index: m.menu.cursor, help: true})
+	m.Update(tea.MouseMotionMsg{X: r.x + r.w/2, Y: r.y + r.h/2})
+
+	draw(t, m)
+	if !m.hits.hovered(action{kind: actMenuChoice, index: m.menu.cursor, help: true}) {
+		t.Error("the help-bar button under the pointer is not hovered")
+	}
+	if m.hits.hovered(action{kind: actMenuChoice, index: m.menu.cursor}) {
+		t.Error("the menu row lit up while the pointer was on the help bar")
+	}
+}
+
+// drawn renders and returns the model, so a frame can be taken inline.
+func drawn(t *testing.T, m *Model) *Model {
+	t.Helper()
+	draw(t, m)
+	return m
+}
+
+// helpLine is the bottom hint line of the current frame, styling included.
+func helpLine(t *testing.T, m *Model) string {
+	t.Helper()
+	lines := strings.Split(m.View().Content, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(sgr.ReplaceAllString(lines[i], ""), "select") {
+			return lines[i]
+		}
+	}
+	t.Fatal("no help bar in the frame")
+	return ""
 }

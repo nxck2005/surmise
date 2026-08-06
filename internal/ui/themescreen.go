@@ -19,9 +19,20 @@ type themeScreen struct {
 	cursor  int
 	offset  int
 
+	// height is the terminal's, pushed down by the root; zero means unmeasured.
+	height int
+
 	// saved is the committed choice, restored when the player backs out.
 	saved string
 }
+
+func (m *themeScreen) resize(h int) {
+	m.height = h
+	m.clampOffset()
+}
+
+// rows is the size of the visible window.
+func (m *themeScreen) rows() int { return windowRows(m.height, len(m.entries)) }
 
 func (m *themeScreen) reload(lib *theme.Library, current string) {
 	m.entries = lib.Entries()
@@ -61,17 +72,28 @@ func (m *themeScreen) update(msg tea.KeyPressMsg) (commit, back bool) {
 	case "down", "j":
 		m.move(1)
 	case "home", "g":
-		m.cursor = 0
+		m.jumpTop()
 	case "end", "G":
-		m.cursor = len(m.entries) - 1
+		m.jumpBottom()
 	case "enter", " ":
 		if e, ok := m.selected(); ok && e.Theme != nil {
 			return true, false
 		}
 	}
-	m.clampOffset()
 	m.preview()
 	return false, false
+}
+
+// jumpTop and jumpBottom are the ends of the list, shared by the keys and by
+// the counter's click targets.
+func (m *themeScreen) jumpTop() {
+	m.cursor = 0
+	m.clampOffset()
+}
+
+func (m *themeScreen) jumpBottom() {
+	m.cursor = max(len(m.entries)-1, 0)
+	m.clampOffset()
 }
 
 func (m *themeScreen) move(delta int) {
@@ -79,6 +101,7 @@ func (m *themeScreen) move(delta int) {
 		return
 	}
 	m.cursor = min(max(m.cursor+delta, 0), len(m.entries)-1)
+	m.clampOffset()
 }
 
 // point selects the row under the pointer and previews it, so hovering the list
@@ -92,15 +115,15 @@ func (m *themeScreen) point(row int) {
 }
 
 func (m *themeScreen) scroll(delta int) {
-	m.offset = min(max(m.offset+delta, 0), max(len(m.entries)-visibleRows, 0))
+	m.offset = min(max(m.offset+delta, 0), max(len(m.entries)-m.rows(), 0))
 }
 
 func (m *themeScreen) clampOffset() {
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
-	if m.cursor >= m.offset+visibleRows {
-		m.offset = m.cursor - visibleRows + 1
+	if rows := m.rows(); m.cursor >= m.offset+rows {
+		m.offset = m.cursor - rows + 1
 	}
 	m.offset = max(m.offset, 0)
 }
@@ -112,17 +135,24 @@ func (m *themeScreen) view(h *hitMap) string {
 	}
 
 	var list strings.Builder
-	end := min(m.offset+visibleRows, len(m.entries))
+	end := min(m.offset+m.rows(), len(m.entries))
 	for i := m.offset; i < end; i++ {
 		list.WriteString(h.mark(action{kind: actThemeRow, index: i},
 			m.renderRow(m.entries[i], i == m.cursor)))
 		list.WriteString("\n")
 	}
 
+	rows := strings.TrimRight(list.String(), "\n")
+	// The picker used to give no sign that the list continued past the window,
+	// which is the information half of home/end having no click target.
+	if len(m.entries) > m.rows() {
+		rows = block(rows) + "\n\n" + scrollCounter(h, m.offset+1, end, len(m.entries))
+	}
+
 	sections := []string{
 		st.title.Render("themes"),
 		"",
-		strings.TrimRight(list.String(), "\n"),
+		rows,
 		"",
 		renderThemePreview(),
 	}

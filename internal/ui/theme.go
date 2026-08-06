@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image/color"
 	"strings"
 
@@ -269,11 +270,17 @@ func renderHelp(h *hitMap, items ...helpItem) string {
 			text = item.keys + " " + item.label
 		}
 
+		// The bar's copy of an action is marked as such, so hovering a button
+		// lights that button and nothing else — several of these repeat the
+		// action of the row the cursor is on, and the action is the hover key.
+		act := item.act
+		act.help = true
+
 		style := st.help
-		if h.hovered(item.act) {
+		if h.hovered(act) {
 			style = st.hover(st.helpHover)
 		}
-		segments[i] = h.mark(item.act, style.Render(text))
+		segments[i] = h.mark(act, style.Render(text))
 	}
 	return st.helpBar.Render(strings.Join(segments, st.help.Render(st.glyph.Separator)))
 }
@@ -317,6 +324,52 @@ func titled(title, body string) string {
 		"",
 		block(body),
 	)
+}
+
+// scrollCounter is the "3–14 of 27" line under a scrolling list, with its two
+// ends as click targets.
+//
+// The counter is where the jump targets belong because it is the one thing on
+// screen that is already about position in the list — and because home and end
+// had no clickable equivalent at all before it carried them, which is the only
+// hard parity gap the mouse sweep turned up. Both ends go through the screen's
+// jumpTop/jumpBottom, the same methods the keys call.
+func scrollCounter(h *hitMap, first, last, total int) string {
+	end := func(a action, glyph string) string {
+		style := st.muted
+		if h.hovered(a) {
+			style = st.hover(style)
+		}
+		return h.mark(a, style.Render(glyph))
+	}
+	return "  " +
+		end(action{kind: actJumpTop}, st.glyph.JumpFirst) +
+		st.muted.Render(fmt.Sprintf(" %d–%d of %d ", first, last, total)) +
+		end(action{kind: actJumpBottom}, st.glyph.JumpLast)
+}
+
+// bodyBudget is how many lines a titled screen's body may take before the panel
+// outgrows the terminal.
+//
+// Overflowing is not merely ugly: nothing here truncates, so the renderer drops
+// the excess off the top of the screen (see hitMap.clip), taking the title, the
+// close box and whatever else was up there with it. A screen that can shed or
+// scroll should therefore know its budget.
+//
+// The subtraction is the chrome around the body: the title and the blank under
+// it that titled adds, the help bar and the blank above it, and the panel's
+// padding and border. A height of zero — the size before the first
+// WindowSizeMsg — means unbounded, and is reported as 0 for callers to skip.
+func bodyBudget(height int) int {
+	if height <= 0 {
+		return 0
+	}
+	const (
+		title = 2 // the title and the blank line under it
+		help  = 2 // the help bar and the blank line above it
+		frame = 2 // the panel's top and bottom border
+	)
+	return height - title - help - frame - 2*st.metric.PanelPadY
 }
 
 // renderPanel draws a rounded border around content with a title inlaid in the

@@ -186,6 +186,7 @@ func (t *Theme) setGlyph(key, value string) error {
 		"cursor": &t.Glyphs.Cursor, "cursor_right": &t.Glyphs.CursorRight,
 		"separator":  &t.Glyphs.Separator,
 		"value_prev": &t.Glyphs.ValuePrev, "value_next": &t.Glyphs.ValueNext,
+		"jump_first": &t.Glyphs.JumpFirst, "jump_last": &t.Glyphs.JumpLast,
 		"enter": &t.Glyphs.Enter, "delete": &t.Glyphs.Delete,
 		"bar": &t.Glyphs.Bar, "close": &t.Glyphs.Close,
 		"border": &t.Glyphs.Border,

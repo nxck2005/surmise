@@ -12,9 +12,29 @@ import (
 	"github.com/nxck2005/wortle/internal/store"
 )
 
-// visibleRows caps how many puzzles are drawn at once, so the list scrolls
-// instead of overflowing short terminals.
-const visibleRows = 12
+// defaultRows is how many rows a list shows when it has not been told the
+// terminal's height — before the first WindowSizeMsg, and in the headless
+// tests. It is the old fixed window, kept so those keep rendering as they did.
+const defaultRows = 12
+
+// minRows is the shortest useful window. Below this the list is not worth
+// scrolling and the screen is going to be cramped whatever we do.
+const minRows = 3
+
+// windowRows is how many rows a list of n items may draw, given the terminal's
+// height. The list is the whole body of its screen, so its budget is the
+// screen's, less the counter line and the blank above it once there is
+// something to count.
+func windowRows(height, n int) int {
+	budget := bodyBudget(height)
+	if budget <= 0 {
+		return defaultRows
+	}
+	if n > budget {
+		budget -= 2 // the "3–14 of 27" counter and its spacing
+	}
+	return max(budget, minRows)
+}
 
 // listScreen browses saved puzzles. Unfinished ones can be resumed, finished
 // ones reviewed.
@@ -24,12 +44,24 @@ type listScreen struct {
 	offset int // index of the first visible row
 	err    error
 
+	// height is the terminal's, pushed down by the root so the window can be
+	// as tall as there is room for. Zero means unmeasured.
+	height int
+
 	// confirmDelete arms the delete prompt for the row under the cursor. It is
 	// the same arm-then-confirm shape as the board's confirmNew, and it must
 	// never outlive the row it was armed on, so anything that moves the cursor
 	// or leaves the screen clears it.
 	confirmDelete bool
 }
+
+func (m *listScreen) resize(h int) {
+	m.height = h
+	m.clampOffset()
+}
+
+// rows is the size of the visible window.
+func (m *listScreen) rows() int { return windowRows(m.height, len(m.items)) }
 
 func (m *listScreen) reload(s store.Store) {
 	m.items, m.err = s.List()
@@ -82,9 +114,9 @@ func (m *listScreen) update(msg tea.KeyPressMsg) (open, del, back bool) {
 	case "down", "j":
 		m.move(1)
 	case "home", "g":
-		m.cursor = 0
+		m.jumpTop()
 	case "end", "G":
-		m.cursor = len(m.items) - 1
+		m.jumpBottom()
 	case "enter":
 		if _, ok := m.selected(); ok {
 			return true, false, false
@@ -94,8 +126,19 @@ func (m *listScreen) update(msg tea.KeyPressMsg) (open, del, back bool) {
 			m.confirmDelete = true
 		}
 	}
-	m.clampOffset()
 	return false, false, false
+}
+
+// jumpTop and jumpBottom are the ends of the list. They are methods because the
+// keys and the counter's click targets both go through them.
+func (m *listScreen) jumpTop() {
+	m.cursor = 0
+	m.clampOffset()
+}
+
+func (m *listScreen) jumpBottom() {
+	m.cursor = max(len(m.items)-1, 0)
+	m.clampOffset()
 }
 
 func (m *listScreen) move(delta int) {
@@ -104,13 +147,19 @@ func (m *listScreen) move(delta int) {
 	}
 	m.cursor = min(max(m.cursor+delta, 0), len(m.items)-1)
 	m.confirmDelete = false
+	m.clampOffset()
 }
 
 // scroll pans the visible window without moving the selection, which is what a
 // mouse wheel should do. The selection follows the pointer instead (see the
 // hover handling in app.go), so the two never fight.
+//
+// Nothing clamps afterwards, deliberately: clampOffset belongs to whatever
+// moved the *cursor*. Running it after every key — as this screen used to —
+// dragged the window back the moment the player touched the keyboard, so a
+// wheel scroll could not survive a keystroke.
 func (m *listScreen) scroll(delta int) {
-	m.offset = min(max(m.offset+delta, 0), max(len(m.items)-visibleRows, 0))
+	m.offset = min(max(m.offset+delta, 0), max(len(m.items)-m.rows(), 0))
 }
 
 // point selects the row the pointer is over. Hovering moves the selection, the
@@ -131,8 +180,8 @@ func (m *listScreen) clampOffset() {
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
-	if m.cursor >= m.offset+visibleRows {
-		m.offset = m.cursor - visibleRows + 1
+	if rows := m.rows(); m.cursor >= m.offset+rows {
+		m.offset = m.cursor - rows + 1
 	}
 	m.offset = max(m.offset, 0)
 }
@@ -150,7 +199,7 @@ func (m *listScreen) view(h *hitMap) string {
 	// The counter and the delete prompt join the rows in one block, so they
 	// centre with the list rather than drifting against it.
 	var lines []string
-	end := min(m.offset+visibleRows, len(m.items))
+	end := min(m.offset+m.rows(), len(m.items))
 	for i := m.offset; i < end; i++ {
 		// One click opens a puzzle; esc comes straight back, so there is no
 		// need to make selecting a separate step.
@@ -158,9 +207,8 @@ func (m *listScreen) view(h *hitMap) string {
 			m.renderRow(m.items[i], i == m.cursor)))
 	}
 
-	if len(m.items) > visibleRows {
-		lines = append(lines, "", st.muted.Render(fmt.Sprintf("  %d–%d of %d",
-			m.offset+1, end, len(m.items))))
+	if len(m.items) > m.rows() {
+		lines = append(lines, "", scrollCounter(h, m.offset+1, end, len(m.items)))
 	}
 	if prompt := m.deletePrompt(h); prompt != "" {
 		lines = append(lines, "", prompt)

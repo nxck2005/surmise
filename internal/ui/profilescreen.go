@@ -21,7 +21,14 @@ const distributionWidth = 24
 type profileScreen struct {
 	summary stats.Summary
 	err     error
+
+	// width and height are the terminal's, pushed down by the root so the
+	// screen can shed what it cannot afford to draw. Zero means unmeasured,
+	// which counts as unbounded.
+	width, height int
 }
+
+func (m *profileScreen) resize(w, h int) { m.width, m.height = w, h }
 
 // reload recomputes the profile. The day comes from the root rather than from
 // the clock so that -day moves the daily streak the same way it moves the
@@ -70,17 +77,45 @@ func (m *profileScreen) view(h *hitMap) string {
 			st.muted.Render(fmt.Sprintf("%d puzzle(s) still in play", s.InPlay)))
 	}
 
-	sections = append(sections, "", m.renderDistribution())
-
-	if byMode := m.renderByMode(); byMode != "" {
-		sections = append(sections, "", byMode)
-	}
-	// Absent until a daily has been played, so a player who never opens that
-	// screen sees the profile they always did.
-	if dailies := m.renderDaily(); dailies != "" {
-		sections = append(sections, "", dailies)
+	// The rest are extras, dropped from the bottom up when the terminal cannot
+	// afford them — the same bargain the board's colour legend makes. The
+	// headline rows above never drop: they are what the screen is for.
+	//
+	// The order is the order they are given up in, reversed: the daily table
+	// goes first because the daily screen shows the day's state anyway, then
+	// the per-mode table, and the histogram last of the three.
+	optional := []string{m.renderDistribution(), m.renderByMode(), m.renderDaily()}
+	for _, extra := range m.affordable(sections, optional) {
+		if extra != "" {
+			sections = append(sections, "", extra)
+		}
 	}
 	return titled("profile", lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
+// affordable returns the leading run of extras that fits under the terminal's
+// budget, given what is already committed to. An unmeasured height is
+// unbounded, which is what keeps the headless tests drawing the whole screen.
+func (m *profileScreen) affordable(committed, optional []string) []string {
+	budget := bodyBudget(m.height)
+	if budget <= 0 {
+		return optional
+	}
+	used := 0
+	for _, s := range committed {
+		used += lipgloss.Height(s)
+	}
+	for i, extra := range optional {
+		if extra == "" {
+			continue
+		}
+		// Each extra costs its own height plus the blank line spacing it off.
+		if used+lipgloss.Height(extra)+1 > budget {
+			return optional[:i]
+		}
+		used += lipgloss.Height(extra) + 1
+	}
+	return optional
 }
 
 type stat struct{ label, value string }

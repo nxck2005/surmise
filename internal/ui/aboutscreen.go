@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -22,10 +23,21 @@ const license = "MIT © 2026 Nxck"
 // its only two keys — so it is the lightest screen in the app.
 type aboutScreen struct {
 	rows []aboutRow
+
+	// width and height are the terminal's, pushed down by the root. Zero means
+	// unmeasured, which counts as unbounded.
+	width, height int
 }
 
-// aboutRow is one label/value line.
-type aboutRow struct{ label, value string }
+func (a *aboutScreen) resize(w, h int) { a.width, a.height = w, h }
+
+// aboutRow is one label/value line. optional marks a row the screen may drop
+// when the terminal is too short for all of them — the credits, which are a
+// courtesy rather than something a bug report needs.
+type aboutRow struct {
+	label, value string
+	optional     bool
+}
 
 // reload rebuilds the content. dataDir may be empty, meaning the UI was never
 // told where its files live (a zero Options, as the tests pass).
@@ -40,31 +52,53 @@ func aboutRows(dataDir string) []aboutRow {
 	info := build.Get()
 
 	rows := []aboutRow{
-		{"version", info.Version},
+		{label: "version", value: info.Version},
 	}
 	if c := info.Commit(); c != "" {
-		rows = append(rows, aboutRow{"commit", c})
+		rows = append(rows, aboutRow{label: "commit", value: c})
 	}
 	if info.Time != "" {
-		rows = append(rows, aboutRow{"built", info.Time})
+		rows = append(rows, aboutRow{label: "built", value: info.Time})
 	}
-	rows = append(rows, aboutRow{"go", info.Toolchain()})
+	rows = append(rows, aboutRow{label: "go", value: info.Toolchain()})
 
 	if dataDir != "" {
 		rows = append(rows,
-			aboutRow{"data", dataDir},
-			aboutRow{"themes", theme.Dir(dataDir)},
+			aboutRow{label: "data", value: dataDir},
+			aboutRow{label: "themes", value: theme.Dir(dataDir)},
 		)
 	}
 
 	rows = append(rows,
-		aboutRow{"repo", repoURL},
-		aboutRow{"license", license},
+		aboutRow{label: "repo", value: repoURL},
+		aboutRow{label: "license", value: license},
 	)
 	for _, c := range words.Credits {
-		rows = append(rows, aboutRow{c.What, c.Source})
+		rows = append(rows, aboutRow{label: c.What, value: c.Source, optional: true})
 	}
 	return rows
+}
+
+// affordableRows drops optional rows, last first, until the rest fit the
+// budget. A budget of zero — an unmeasured terminal — keeps everything, which
+// is what the headless tests see. The required rows are never dropped: if they
+// alone do not fit, the screen scrolls instead (see offset).
+func affordableRows(rows []aboutRow, budget int) []aboutRow {
+	if budget <= 0 || len(rows) <= budget {
+		return rows
+	}
+	kept := make([]aboutRow, 0, len(rows))
+	drop := len(rows) - budget
+	// Walk backwards so the last optional rows are the first to go.
+	for i := len(rows) - 1; i >= 0; i-- {
+		if drop > 0 && rows[i].optional {
+			drop--
+			continue
+		}
+		kept = append(kept, rows[i])
+	}
+	slices.Reverse(kept)
+	return kept
 }
 
 func (a *aboutScreen) view(h *hitMap) string {
@@ -74,6 +108,7 @@ func (a *aboutScreen) view(h *hitMap) string {
 	if len(rows) == 0 {
 		rows = aboutRows("")
 	}
+	rows = affordableRows(rows, bodyBudget(a.height))
 
 	width := 0
 	for _, r := range rows {

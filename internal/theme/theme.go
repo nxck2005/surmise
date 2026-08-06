@@ -84,6 +84,8 @@ type Glyphs struct {
 	Separator   string // between hints on the help bar
 	ValuePrev   string // settings row: step to the previous value
 	ValueNext   string // settings row: step to the next value
+	JumpFirst   string // scrolling list: jump to the first row
+	JumpLast    string // scrolling list: jump to the last row
 	Enter       string // submit keycap
 	Delete      string // backspace keycap
 	Bar         string // profile histogram
@@ -156,6 +158,8 @@ func Default() *Theme {
 			Separator:   " · ",
 			ValuePrev:   "‹",
 			ValueNext:   "›",
+			JumpFirst:   "⇱",
+			JumpLast:    "⇲",
 			Enter:       "⏎",
 			Delete:      "⌫",
 			Bar:         "█",

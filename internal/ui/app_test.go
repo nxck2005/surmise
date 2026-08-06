@@ -37,6 +37,10 @@ func key(s string) tea.KeyPressMsg {
 		code = tea.KeyLeft
 	case "right":
 		code = tea.KeyRight
+	case "home":
+		code = tea.KeyHome
+	case "end":
+		code = tea.KeyEnd
 	default:
 		panic("unhandled key " + s)
 	}
@@ -97,7 +101,10 @@ func send(t *testing.T, m *Model, keys ...string) string {
 // TestKeyHelperMatchesFramework guards the test helper itself: if these do not
 // produce the strings the screens match on, every other test here is vacuous.
 func TestKeyHelperMatchesFramework(t *testing.T) {
-	for _, want := range []string{"a", "z", "enter", "esc", "tab", "backspace", "up", "down", "left", "right"} {
+	for _, want := range []string{
+		"a", "z", "enter", "esc", "tab", "backspace",
+		"up", "down", "left", "right", "home", "end",
+	} {
 		if got := key(want).String(); got != want {
 			t.Errorf("key(%q).String() = %q", want, got)
 		}

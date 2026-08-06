@@ -258,13 +258,24 @@ func (m *Model) saveSettings(s store.Settings) {
 
 func (m *Model) Init() tea.Cmd { return tick() }
 
+// pushSize hands the terminal's size to the screens that lay out against it.
+// They shed or scroll rather than let the panel outgrow the terminal, which
+// would take the top of the frame — title, close box and all — off the screen.
+func (m *Model) pushSize() {
+	if m.game != nil {
+		m.game.resize(m.width, m.height)
+	}
+	m.profile.resize(m.width, m.height)
+	m.about.resize(m.width, m.height)
+	m.list.resize(m.height)
+	m.themes.resize(m.height)
+}
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		if m.game != nil {
-			m.game.resize(m.width, m.height)
-		}
+		m.pushSize()
 		return m, nil
 
 	case tickMsg:
@@ -396,6 +407,28 @@ func (m *Model) dispatch(a action) tea.Cmd {
 			return nil
 		}
 		m.list.confirmDelete = false
+		return nil
+
+	case actJumpTop, actJumpBottom:
+		// The ends of a scrolling list, on whichever list is showing. Both go
+		// through the same methods home and end do.
+		top := a.kind == actJumpTop
+		switch m.screen {
+		case screenList:
+			if top {
+				m.list.jumpTop()
+			} else {
+				m.list.jumpBottom()
+			}
+		case screenThemes:
+			if top {
+				m.themes.jumpTop()
+			} else {
+				m.themes.jumpBottom()
+			}
+			// Moving the cursor previews, exactly as arrowing onto a row does.
+			m.themes.preview()
+		}
 		return nil
 
 	case actThemeRow:
@@ -790,6 +823,12 @@ func (m *Model) View() tea.View {
 	// Composition finished, so the markers left by mark() now sit at their
 	// final coordinates: record them and strip them back out.
 	v.Content = h.scan(m.frame(h))
+	// A frame taller than the terminal is not shown from the top, so the
+	// coordinates just recorded are not the ones clicks arrive in. See clip.
+	// An unmeasured height counts as unbounded, as it does everywhere else.
+	if m.height > 0 {
+		h.clip(lipgloss.Height(v.Content)-m.height, m.height)
+	}
 	m.hits = h
 	return v
 }
