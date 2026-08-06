@@ -952,10 +952,11 @@ func (m *menuScreen) view(h *hitMap) string {
 		st.muted.Render("wordle for the terminal"),
 	)
 
-	// Labels are padded to a common width and the selection marker sits in a
-	// gutter, as on every other list in the app. Centring each row on its own
-	// instead — which is what this used to do — cannot split an odd gap evenly,
-	// so rows whose labels differed in parity sat a column apart.
+	// Labels are centred inside a column as wide as the longest, with the
+	// selection markers held in fixed-width gutters either side. The gutters are
+	// what this screen got wrong before: it centred marker-plus-label as one
+	// unit, so selecting a row shifted its label sideways. Kept out of the
+	// centring, the markers appear beside a label that has not moved.
 	labelWidth := 0
 	for _, c := range m.choices {
 		if w := lipgloss.Width(c.label); w > labelWidth {
@@ -963,9 +964,12 @@ func (m *menuScreen) view(h *hitMap) string {
 		}
 	}
 	// Padding goes on before styling: padding an already-styled string counts
-	// its escape codes as characters.
+	// its escape codes as characters. An odd gap cannot be halved, so the odd
+	// column goes right, as lipgloss's own Align(Center) does — consistently, so
+	// the rows lean the same way rather than alternating.
 	pad := func(label string) string {
-		return label + strings.Repeat(" ", labelWidth-lipgloss.Width(label))
+		gap := labelWidth - lipgloss.Width(label)
+		return strings.Repeat(" ", gap/2) + label + strings.Repeat(" ", gap-gap/2)
 	}
 	blank := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
 	trail := strings.Repeat(" ", lipgloss.Width(st.glyph.CursorRight))
@@ -986,8 +990,8 @@ func (m *menuScreen) view(h *hitMap) string {
 		rows[i] = h.mark(action{kind: actMenuChoice, index: i}, row)
 	}
 
-	// block, not JoinVertical, holds the list together: the rows already share a
-	// left edge, and squaring them off is what makes the outer join slide the
+	// block, not JoinVertical, holds the list together: the rows are already the
+	// same width, and squaring them off is what makes the outer join slide the
 	// whole list under the heading rather than re-centring each row.
 	list := block(strings.Join(rows, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Center, heading, "", list)
