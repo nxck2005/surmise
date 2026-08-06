@@ -886,3 +886,91 @@ func TestSettingsHelpBarStepsBothWays(t *testing.T) {
 		t.Errorf("mode = %d after stepping back, want %d", got, before)
 	}
 }
+
+// The help bar repeats what the screen already offers — "enter select" carries
+// the very action the selected row does — and the action doubles as the hover
+// key. Pointing at a row used to light the button up too, which reads as the
+// pointer being in two places at once.
+func TestHoveringARowLeavesTheHelpBarAlone(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+
+	row := action{kind: actMenuChoice, index: 2}
+	helpButton := action{kind: actMenuChoice, index: 2, help: true}
+
+	point(t, m, row)
+	if m.hover != row {
+		t.Fatalf("hover = %+v after pointing at row 2, want the row", m.hover)
+	}
+
+	// The frame the pointer produced: the row is lit, the button is not.
+	draw(t, m)
+	h := m.hits
+	if !h.hovered(row) {
+		t.Error("the row under the pointer is not hovered")
+	}
+	if h.hovered(helpButton) {
+		t.Error("the help bar's button lit up while the pointer was on a row")
+	}
+
+	// And in the bytes, not just the predicate: the help bar has to come out
+	// of a hover exactly as it went in. The idle snapshot has to be taken with
+	// the pointer off everything, or it is not idle.
+	m.Update(tea.MouseMotionMsg{X: 0, Y: 0})
+	idle := helpLine(t, drawn(t, m))
+	point(t, m, row)
+	if got := helpLine(t, drawn(t, m)); got != idle {
+		t.Errorf("the help bar changed while the pointer was on a row\n idle: %q\nhover: %q",
+			idle, got)
+	}
+
+	// Both are still targets, and both still do the same thing.
+	if _, ok := h.find(row); !ok {
+		t.Error("the row lost its click target")
+	}
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceProfile, 0)})
+	if m.screen != screenProfile {
+		t.Error("clicking a menu row stopped working")
+	}
+}
+
+// And the other way round: a pointer on the button lights the button, not the
+// row it happens to name.
+func TestHoveringTheHelpBarLeavesTheRowAlone(t *testing.T) {
+	m := newModel(t)
+	m.screen = screenMenu
+	draw(t, m)
+
+	// find ignores which copy of an action it returns, and the row is marked
+	// first, so ask for the bar's copy exactly.
+	r := lastZone(t, m, action{kind: actMenuChoice, index: m.menu.cursor, help: true})
+	m.Update(tea.MouseMotionMsg{X: r.x + r.w/2, Y: r.y + r.h/2})
+
+	draw(t, m)
+	if !m.hits.hovered(action{kind: actMenuChoice, index: m.menu.cursor, help: true}) {
+		t.Error("the help-bar button under the pointer is not hovered")
+	}
+	if m.hits.hovered(action{kind: actMenuChoice, index: m.menu.cursor}) {
+		t.Error("the menu row lit up while the pointer was on the help bar")
+	}
+}
+
+// drawn renders and returns the model, so a frame can be taken inline.
+func drawn(t *testing.T, m *Model) *Model {
+	t.Helper()
+	draw(t, m)
+	return m
+}
+
+// helpLine is the bottom hint line of the current frame, styling included.
+func helpLine(t *testing.T, m *Model) string {
+	t.Helper()
+	lines := strings.Split(m.View().Content, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(sgr.ReplaceAllString(lines[i], ""), "select") {
+			return lines[i]
+		}
+	}
+	t.Fatal("no help bar in the frame")
+	return ""
+}

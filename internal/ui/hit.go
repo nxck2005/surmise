@@ -65,6 +65,23 @@ type action struct {
 	kind   actionKind
 	index  int
 	letter byte
+
+	// help marks the help bar's copy of an action. The bar's buttons repeat
+	// what the screen already offers — "enter select" carries the very action
+	// the selected row does — and because the action doubles as the hover key,
+	// the two atoms could not be told apart: pointing at a row lit the button
+	// up as well, and vice versa. The flag exists only to separate those two
+	// hover identities. dispatch never reads it, so the button and the row
+	// still do exactly the same thing, and find ignores it so a test can ask
+	// for a target without knowing which copy it will get.
+	help bool
+}
+
+// sameTarget reports whether two actions do the same thing, regardless of which
+// copy of it they are.
+func (a action) sameTarget(b action) bool {
+	a.help, b.help = false, false
+	return a == b
 }
 
 type rect struct{ x, y, w, h int }
@@ -204,7 +221,7 @@ func (h *hitMap) find(a action) (rect, bool) {
 		return rect{}, false
 	}
 	for _, z := range h.zones {
-		if z.act == a {
+		if z.act.sameTarget(a) {
 			return z.rect, true
 		}
 	}

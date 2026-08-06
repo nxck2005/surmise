@@ -270,11 +270,17 @@ func renderHelp(h *hitMap, items ...helpItem) string {
 			text = item.keys + " " + item.label
 		}
 
+		// The bar's copy of an action is marked as such, so hovering a button
+		// lights that button and nothing else — several of these repeat the
+		// action of the row the cursor is on, and the action is the hover key.
+		act := item.act
+		act.help = true
+
 		style := st.help
-		if h.hovered(item.act) {
+		if h.hovered(act) {
 			style = st.hover(st.helpHover)
 		}
-		segments[i] = h.mark(item.act, style.Render(text))
+		segments[i] = h.mark(act, style.Render(text))
 	}
 	return st.helpBar.Render(strings.Join(segments, st.help.Render(st.glyph.Separator)))
 }
