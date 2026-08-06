@@ -138,36 +138,34 @@ func (m *listScreen) clampOffset() {
 }
 
 func (m *listScreen) view(h *hitMap) string {
-	var b strings.Builder
-	b.WriteString(st.title.Render("puzzles"))
-	b.WriteString("\n\n")
-
 	switch {
 	case m.err != nil:
-		b.WriteString(st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
-		return b.String()
+		return titled("puzzles",
+			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
 	case len(m.items) == 0:
-		b.WriteString(st.muted.Render("no puzzles yet — start one from the menu"))
-		return b.String()
+		return titled("puzzles",
+			st.muted.Render("no puzzles yet — start one from the menu"))
 	}
 
+	// The counter and the delete prompt join the rows in one block, so they
+	// centre with the list rather than drifting against it.
+	var lines []string
 	end := min(m.offset+visibleRows, len(m.items))
 	for i := m.offset; i < end; i++ {
 		// One click opens a puzzle; esc comes straight back, so there is no
 		// need to make selecting a separate step.
-		b.WriteString(h.mark(action{kind: actListRow, index: i},
+		lines = append(lines, h.mark(action{kind: actListRow, index: i},
 			m.renderRow(m.items[i], i == m.cursor)))
-		b.WriteString("\n")
 	}
 
 	if len(m.items) > visibleRows {
-		b.WriteString(st.muted.Render(fmt.Sprintf("\n  %d–%d of %d",
+		lines = append(lines, "", st.muted.Render(fmt.Sprintf("  %d–%d of %d",
 			m.offset+1, end, len(m.items))))
 	}
 	if prompt := m.deletePrompt(h); prompt != "" {
-		b.WriteString("\n\n" + prompt)
+		lines = append(lines, "", prompt)
 	}
-	return b.String()
+	return titled("puzzles", strings.Join(lines, "\n"))
 }
 
 // deletePrompt is the armed confirmation, drawn under the rows. Both halves are
