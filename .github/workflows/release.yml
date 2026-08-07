@@ -67,7 +67,7 @@ jobs:
             -o "dist/pkg/$name" .
 
           # The archive carries what someone unpacking it needs to get going.
-          cp README.md LICENSE docs/THEMES.md dist/pkg/
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md docs/THEMES.md dist/pkg/
 
           base="wortle_${version}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = windows ]; then
