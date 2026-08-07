@@ -41,6 +41,48 @@ func TestDefaultThemeIsBundled(t *testing.T) {
 	}
 }
 
+// Default() hardcodes the same palette that ember-dark.toml declares: one has
+// to work with no files at all, the other has to be a copyable example. Nothing
+// stops the two drifting except this test, and drift would mean the app looked
+// different depending on whether the bundled file happened to load.
+func TestDefaultMatchesItsBundledFile(t *testing.T) {
+	raw, err := bundled.ReadFile(defaultFile)
+	if err != nil {
+		t.Fatalf("read %s: %v", defaultFile, err)
+	}
+
+	// Parse would overlay the file onto Default() and hide exactly the drift
+	// this test is looking for, so read the declarations out of the text.
+	declared := map[string]string{}
+	for line := range strings.Lines(string(raw)) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		declared[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), `"`)
+	}
+	if len(declared) < 11 {
+		t.Fatalf("%s declared only %d keys; the palette should be complete", defaultFile, len(declared))
+	}
+
+	code := Default()
+	for key, hex := range declared {
+		if key == "name" {
+			if hex != code.Name {
+				t.Errorf("name: file has %q, Default() has %q", hex, code.Name)
+			}
+			continue
+		}
+		if got, want := code.Color(key), mustColor(hex); got != want {
+			t.Errorf("%s: file has %s, Default() has %v", key, hex, got)
+		}
+	}
+}
+
 func TestUserThemesShadowBundled(t *testing.T) {
 	dir := t.TempDir()
 	body := "name = \"" + DefaultName + "\"\naccent = \"#ff00ff\"\n"

@@ -1,4 +1,4 @@
-// Command wortle is Wordle for the terminal.
+// Command wortle is a word-guessing game for the terminal.
 package main
 
 import (

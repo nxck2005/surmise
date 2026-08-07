@@ -1,4 +1,5 @@
 name = "catppuccin mocha"
+author = "catppuccin"
 
 [colors]
 bg        = "#1e1e2e"

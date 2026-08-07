@@ -102,7 +102,7 @@ type Model struct {
 }
 
 // defaultLength is the word length the app opens on when nothing else says
-// otherwise, matching classic Wordle.
+// otherwise, matching the five letters the genre settled on.
 const defaultLength = 5
 
 // Options are the one-run overrides, from flags or the environment. Every zero
@@ -988,7 +988,7 @@ func (m *menuScreen) view(h *hitMap) string {
 	// choices well to the right of the word they belong under.
 	heading := lipgloss.JoinVertical(lipgloss.Center,
 		st.title.Render("wortle"),
-		st.muted.Render("wordle for the terminal"),
+		st.muted.Render("a word game for the terminal"),
 	)
 
 	// Labels are centred inside a column as wide as the longest, with the

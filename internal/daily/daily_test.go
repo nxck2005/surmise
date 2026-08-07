@@ -256,11 +256,14 @@ func TestDailyAnswersAreStable(t *testing.T) {
 		length int
 		answer string
 	}{
-		{"2026-08-06", 4, "baby"},
-		{"2026-08-06", 5, "broad"},
-		{"2026-08-06", 6, "fruits"},
-		{"2026-12-25", 5, "merge"},
-		{"2027-01-01", 5, "bride"},
+		// Last moved when the frequency source changed from
+		// google-10000-english to hermitdave/FrequencyWords, for the licensing
+		// reasons in internal/words/data/SOURCES.md.
+		{"2026-08-06", 4, "sets"},
+		{"2026-08-06", 5, "flick"},
+		{"2026-08-06", 6, "record"},
+		{"2026-12-25", 5, "bless"},
+		{"2027-01-01", 5, "lodge"},
 	}
 	for _, c := range cases {
 		g, err := New(t.Context(), Local(), day(t, c.date), c.length)

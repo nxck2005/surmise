@@ -1,4 +1,5 @@
 name = "everforest dark"
+author = "sainnhe"
 
 [colors]
 bg        = "#2d353b"

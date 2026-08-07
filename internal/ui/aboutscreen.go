@@ -16,7 +16,11 @@ import (
 const repoURL = "github.com/nxck2005/wortle"
 
 // license is the shipped licence, in the shortest honest form. Matches LICENSE.
-const license = "MIT © 2026 Nxck"
+// It is scoped deliberately: the MIT grant covers this project's own code and
+// data, while the linked modules, the adapted themes and the word lists stay
+// under their own terms. THIRD_PARTY_NOTICES.md, which ships in every release
+// archive, is where those live.
+const license = "MIT © 2026 Nishchal Ravi — deps under their own terms"
 
 // aboutScreen is the "what am I running" screen: version, build, where the
 // files are, and who the words belong to. It holds no cursor — the root handles

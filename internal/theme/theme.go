@@ -131,24 +131,29 @@ func (t *Theme) Override(element string) Override {
 	return t.Styles[element]
 }
 
-// Default is the built-in look: "serika dark", with Wordle's tile
-// colours desaturated to sit inside it. It is the base every loaded theme is
-// overlaid onto, so a four-line theme file is valid.
+// Default is the built-in look: "ember dark", a cool near-black ground under a
+// single warm accent. It is the base every loaded theme is overlaid onto, so a
+// four-line theme file is valid.
+//
+// This palette is duplicated in themes/ember-dark.toml, which is deliberate —
+// the bundled file has to be a worked example a user can copy, and this has to
+// stand alone when no file loads at all. Change one and change the other; the
+// theme package's tests compare them.
 func Default() *Theme {
 	t := &Theme{
-		Name: "serika dark",
+		Name: DefaultName,
 		palette: map[string]color.Color{
-			Bg:       mustColor("#0a0a0a"),
-			Text:     mustColor("#d1d0c5"),
-			Accent:   mustColor("#e2b714"),
-			Muted:    mustColor("#646669"),
-			Error:    mustColor("#ca4754"),
-			Correct:  mustColor("#6aaa64"),
-			Present:  mustColor("#c9b458"),
-			Absent:   mustColor("#3a3a3c"),
-			Slot:     mustColor("#565758"),
-			KeyFace:  mustColor("#565758"),
-			KeySpent: mustColor("#1c1c1e"),
+			Bg:       mustColor("#0b0c0e"),
+			Text:     mustColor("#c8ccd4"),
+			Accent:   mustColor("#d97757"),
+			Muted:    mustColor("#5c626e"),
+			Error:    mustColor("#d2555f"),
+			Correct:  mustColor("#4f9d69"),
+			Present:  mustColor("#cf9f4a"),
+			Absent:   mustColor("#34373d"),
+			Slot:     mustColor("#4a4f58"),
+			KeyFace:  mustColor("#4a4f58"),
+			KeySpent: mustColor("#17191d"),
 		},
 		Glyphs: Glyphs{
 			Caret:       "_",

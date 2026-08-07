@@ -132,7 +132,7 @@ func legendEntry(tile lipgloss.Style, label string) string {
 // keyboardRows is the QWERTY layout used for the letter-state display.
 var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 
-// Enter and backspace flank the bottom row, as on Wordle's own keyboard. They
+// Enter and backspace flank the bottom row, as on a phone keyboard. They
 // are what a mouse submits and deletes with, and they cost no vertical space:
 // row 0 stays the widest at 59 cells, row 2 grows from 41 to 53. Their glyphs
 // come from the theme, since not every font draws ⏎ and ⌫ well.

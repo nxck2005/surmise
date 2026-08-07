@@ -1,4 +1,5 @@
 name = "tokyo night"
+author = "enkia"
 
 [colors]
 bg        = "#1a1b26"

@@ -1,0 +1,29 @@
+name = "ember light"
+
+# The light counterpart: warm paper rather than cool grey, so the copper accent
+# stays the warmest thing on screen. Note the text-on-tile overrides: on a pale
+# ground the letters inside a filled tile want to stay dark rather than follow
+# `bg`.
+
+[colors]
+bg        = "#f4f2ef"
+text      = "#2f3237"
+accent    = "#b4552f"
+muted     = "#8b8f98"
+error     = "#b03a45"
+
+correct   = "#3f8a58"
+present   = "#b3862f"
+absent    = "#c8cad0"
+
+slot      = "#b4b7be"
+key_face  = "#c4c7cd"
+key_spent = "#e3e1dd"
+
+correct_text     = "#ffffff"
+present_text     = "#2f3237"
+absent_text      = "#f4f2ef"
+key_correct_text = "#ffffff"
+key_present_text = "#2f3237"
+key_absent_text  = "#7d818a"
+key_unused_text  = "#2f3237"
