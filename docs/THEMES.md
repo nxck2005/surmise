@@ -1,14 +1,14 @@
-# Writing a wortle theme
+# Writing a surmise theme
 
 A theme is one file. Drop it in your themes directory, and it appears in the
 picker (`esc` → `themes`). Sharing a theme means sending someone that file.
 
 ```sh
-wortle -themes          # where the directory is, and what is in it
-wortle -theme dracula   # start with a theme, without changing your saved choice
+surmise -themes          # where the directory is, and what is in it
+surmise -theme dracula   # start with a theme, without changing your saved choice
 ```
 
-The directory is `themes/` inside your data dir — `~/.config/wortle/themes` by
+The directory is `themes/` inside your data dir — `~/.config/surmise/themes` by
 default, or `<dir>/themes` when you pass `-data <dir>`. It is created on first
 run with an `example.toml` in it, which is a copy of the default theme with a
 header explaining itself: the fastest way to start is to edit that.
@@ -128,16 +128,16 @@ The legend on the puzzle screen (`A correct spot · A wrong spot · A not in
 word`) has no element of its own: it is drawn with `tile.correct`,
 `tile.present` and `tile.absent`, so whatever you do to the tiles it explains,
 it does too. Note that a large `tile_width` makes the legend the widest thing on
-the screen — wortle hides it rather than overflow a narrow terminal.
+the screen — surmise hides it rather than overflow a narrow terminal.
 
 ## When something is wrong
 
 A line the parser cannot read becomes a warning naming its line number; the rest
 of the theme still loads. The picker shows those warnings under the theme, and
-`wortle -themes` prints them:
+`surmise -themes` prints them:
 
 ```
-  broken                   ~/.config/wortle/themes/broken.toml
+  broken                   ~/.config/surmise/themes/broken.toml
       line 2: bad hex colour "#nothex"
       line 3: unknown key "wut"
 ```

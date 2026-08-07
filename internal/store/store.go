@@ -9,7 +9,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // ErrNotFound is returned by Load for an unknown id.

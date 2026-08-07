@@ -1,4 +1,4 @@
-// Package theme is the styleable surface of wortle, expressed as data.
+// Package theme is the styleable surface of surmise, expressed as data.
 //
 // A theme is one file of `key = value` lines (see parse.go). Everything the UI
 // can colour, letter or size is named here, so adding a themeable element means

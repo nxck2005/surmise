@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nxck2005/wortle/internal/store"
+	"github.com/nxck2005/surmise/internal/store"
 )
 
 // openSettings walks the menu to the settings screen the way a player would,

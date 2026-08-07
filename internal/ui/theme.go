@@ -7,7 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/theme"
+	"github.com/nxck2005/surmise/internal/theme"
 )
 
 // This file turns a theme.Theme — plain colours, glyphs and numbers — into the

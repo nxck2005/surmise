@@ -7,10 +7,10 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/daily"
-	"github.com/nxck2005/wortle/internal/stats"
-	"github.com/nxck2005/wortle/internal/store"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/stats"
+	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // distributionWidth is the character width of the longest histogram bar.

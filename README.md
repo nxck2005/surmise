@@ -1,12 +1,12 @@
 <div align="center">
 
-# wortle
+# surmise
 
 **the word game for the terminal.** fast, themeable, remembers where you left off.
 
-[![ci](https://github.com/nxck2005/wortle/actions/workflows/ci.yml/badge.svg)](https://github.com/nxck2005/wortle/actions/workflows/ci.yml)
-[![go reference](https://pkg.go.dev/badge/github.com/nxck2005/wortle.svg)](https://pkg.go.dev/github.com/nxck2005/wortle)
-[![go report card](https://goreportcard.com/badge/github.com/nxck2005/wortle)](https://goreportcard.com/report/github.com/nxck2005/wortle)
+[![ci](https://github.com/nxck2005/surmise/actions/workflows/ci.yml/badge.svg)](https://github.com/nxck2005/surmise/actions/workflows/ci.yml)
+[![go reference](https://pkg.go.dev/badge/github.com/nxck2005/surmise.svg)](https://pkg.go.dev/github.com/nxck2005/surmise)
+[![go report card](https://goreportcard.com/badge/github.com/nxck2005/surmise)](https://goreportcard.com/report/github.com/nxck2005/surmise)
 ![go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)
 [![built with bubble tea](https://img.shields.io/badge/built%20with-bubble%20tea-ff69b4)](https://charm.land)
 ![themes](https://img.shields.io/badge/themes-13-e2b714)
@@ -14,12 +14,12 @@
 </div>
 
 ```sh
-go install github.com/nxck2005/wortle@latest
+go install github.com/nxck2005/surmise@latest
 ```
 
-then run `wortle`.
+then run `surmise`.
 
-![Wortle main Screenshot](assets/demo/1.png)
+![Surmise main Screenshot](assets/demo/1.png)
 
 ## why you'd want it
 
@@ -74,15 +74,15 @@ averages cover wins only, so a bad day doesn't get to inflate your solve time.
 ## themes
 
 ```sh
-wortle -themes          # list what's installed, and where the directory is
-wortle -theme dracula   # play with a theme without changing your saved choice
+surmise -themes          # list what's installed, and where the directory is
+surmise -theme dracula   # play with a theme without changing your saved choice
 ```
 
 bundled: `ember-dark` (the default), `ember-light`, `catppuccin-mocha`,
 `dracula`, `everforest-dark`, `gruvbox-dark`, `high-contrast`, `matrix`,
 `nord`, `rose-pine`, `solarized-dark`, `terminal`, `tokyo-night`.
 
-yours go in `~/.config/wortle/themes`. a whole theme can be two lines:
+yours go in `~/.config/surmise/themes`. a whole theme can be two lines:
 
 ```toml
 name = "just the accent"
@@ -99,20 +99,20 @@ whether playing a different mode makes *that* the new default. both save as you
 change them.
 
 ```sh
-wortle -length 6        # start in a mode for one run, without saving it
-wortle -day 2026-08-06  # play another date's daily, without waiting for it
-wortle -data ./scratch  # keep saves and settings somewhere else
+surmise -length 6        # start in a mode for one run, without saving it
+surmise -day 2026-08-06  # play another date's daily, without waiting for it
+surmise -data ./scratch  # keep saves and settings somewhere else
 ```
 
 saves and settings otherwise live in your user config directory
-(`~/.config/wortle` on linux).
+(`~/.config/surmise` on linux).
 
 ## about
 
 the **about** row in the menu shows app info. for getting the version without opening the app:
 
 ```sh
-wortle -version         # wortle 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
+surmise -version         # surmise 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
 ```
 
 ## development
@@ -135,7 +135,7 @@ word-list provenance in
 
 ## licence
 
-wortle's own code, docs and data are mit licensed — see
+surmise's own code, docs and data are mit licensed — see
 [LICENSE](LICENSE).
 
 the linked go modules, the themes adapted from other people's palettes, and the

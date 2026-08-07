@@ -6,8 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nxck2005/wortle/internal/store"
-	"github.com/nxck2005/wortle/internal/theme"
+	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/theme"
 )
 
 // withTheme applies a theme for the duration of a test. The active style set is

@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nxck2005/wortle/internal/daily"
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/store"
+	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/store"
 )
 
 // testDay is the date the daily tests pin, so none of them depend on when they

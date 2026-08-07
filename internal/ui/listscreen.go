@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/store"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/store"
 )
 
 // defaultRows is how many rows a list shows when it has not been told the

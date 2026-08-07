@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/daily"
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // day is the reference date the daily tests are written around. Fixed rather

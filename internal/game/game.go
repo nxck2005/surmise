@@ -1,4 +1,4 @@
-// Package game holds the rules of Wortle: puzzle state, guess validation and
+// Package game holds the rules of Surmise: puzzle state, guess validation and
 // scoring. It has no knowledge of the terminal or of persistence, so the same
 // state can be driven by the TUI today and by a server later.
 package game
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // Status is the lifecycle of a puzzle.

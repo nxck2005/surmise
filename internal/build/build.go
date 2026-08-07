@@ -11,11 +11,13 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+
+	"github.com/nxck2005/surmise/internal/brand"
 )
 
 // version is stamped at release time:
 //
-//	go build -ldflags "-X github.com/nxck2005/wortle/internal/build.version=1.2.0"
+//	go build -ldflags "-X github.com/nxck2005/surmise/internal/build.version=1.2.0"
 //
 // Empty means "nobody said", which falls back to the module version and then to
 // devVersion. Unlike the daily's pepper (see internal/daily/local.go), this is
@@ -99,10 +101,10 @@ func (i Info) Toolchain() string {
 	return fmt.Sprintf("%s %s/%s", i.GoVersion, i.OS, i.Arch)
 }
 
-// String is the one-line form behind `wortle -version`.
+// String is the one-line form behind `surmise -version`.
 func (i Info) String() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "wortle %s", i.Version)
+	fmt.Fprintf(&b, "%s %s", brand.Name, i.Version)
 	if c := i.Commit(); c != "" {
 		fmt.Fprintf(&b, " (%s)", c)
 	}

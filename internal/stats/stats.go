@@ -10,8 +10,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/daily"
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // Summary is the whole-profile view. Fields are additive by design; the metric

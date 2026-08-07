@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // newFixed builds a game with a known answer, so tests do not depend on the

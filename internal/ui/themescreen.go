@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/theme"
+	"github.com/nxck2005/surmise/internal/theme"
 )
 
 // themeScreen picks the look. Moving the cursor applies the theme immediately

@@ -27,13 +27,17 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/nxck2005/surmise/internal/brand"
 )
 
 const outFile = "THIRD_PARTY_NOTICES.md"
 
 // selfPath is this module, which is covered by the root LICENSE and must not be
-// listed as a third party.
-const selfPath = "github.com/nxck2005/wortle"
+// listed as a third party. Taken from internal/brand so that a rename cannot
+// leave it stale — a wrong value here silently emits the project's own module
+// as somebody else's dependency.
+const selfPath = brand.Repo
 
 func main() {
 	log.SetFlags(0)
