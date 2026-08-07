@@ -110,6 +110,9 @@ jobs:
       - name: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job downloads artifacts rather than checking out, so gh has no
+          # git remote to infer the repository from and needs telling.
+          GH_REPO: ${{ github.repository }}
         run: |
           # A tag with a pre-release suffix (v0.1.0-rc1) must not become the
           # "latest" release people are pointed at.
