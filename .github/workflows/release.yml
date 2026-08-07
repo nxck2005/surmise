@@ -68,7 +68,12 @@ jobs:
             -o "dist/pkg/$name" .
 
           # The archive carries what someone unpacking it needs to get going.
-          cp README.md LICENSE THIRD_PARTY_NOTICES.md docs/THEMES.md dist/pkg/
+          # THEMES.md keeps its docs/ directory rather than being flattened
+          # alongside the rest, because the README shipping beside it links to
+          # docs/THEMES.md and that link has to resolve inside the archive too.
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md dist/pkg/
+          mkdir -p dist/pkg/docs
+          cp docs/THEMES.md dist/pkg/docs/
 
           base="surmise_${version}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = windows ]; then
