@@ -17,40 +17,9 @@
 go install github.com/nxck2005/wortle@latest
 ```
 
-then run `wortle`. it opens straight onto a puzzle — no menu, no splash, no
-account.
+then run `wortle`.
 
-```
-╭─ wortle ───────────────────────────────────────────────────────── × ╮
-│                                                                     │
-│                 wortle #352083   5 letters   –   2/6                │
-│                                                                     │
-│                  S       L       A       T       E                  │
-│                                                                     │
-│                  C       H       A       I       R                  │
-│                                                                     │
-│                  C       R       A       _       ·                  │
-│                                                                     │
-│                  ·       ·       ·       ·       ·                  │
-│                                                                     │
-│                  ·       ·       ·       ·       ·                  │
-│                                                                     │
-│                  ·       ·       ·       ·       ·                  │
-│                                                                     │
-│       Q     W     E     R     T     Y     U     I     O     P       │
-│                                                                     │
-│          A     S     D     F     G     H     J     K     L          │
-│                                                                     │
-│          ⏎     Z     X     C     V     B     N     M     ⌫         │
-│                                                                     │
-│                            4 guesses left                           │
-│                                                                     │
-│      A    correct spot ·    A    wrong spot ·    A    not in word   │
-│                                                                     │
-│     type a word · enter submit · tab+enter new puzzle · esc menu    │
-│                                                                     │
-╰─────────────────────────────────────────────────────────────────────╯
-```
+![Wortle main Screenshot](assets/demo/1.png)
 
 ## why you'd want it
 
@@ -58,7 +27,7 @@ account.
 tighter, longer gives you a guess more room. pick which one you open on, or let
 it just follow whatever you played last.
 
-**quit whenever.** every guess is saved the moment you make it. come back whenever! clock doesn't tick while you're away.
+**quit whenever.** every guess is saved the moment you make it. come back whenever!
 
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode.
@@ -85,66 +54,20 @@ nord and a lot more. write your own themes as well.
 
 ## the daily
 
-```
-╭─ daily ─────────────────────────────── × ╮
-│                                          │
-│                  daily                   │
-│      2026-08-06 · resets in 7h 21m       │
-│                                          │
-│    › #072140 4 letters  not started      │
-│      #390265 5 letters  solved 1/6       │
-│      #448851 6 letters  not started      │
-│                                          │
-│     ↑/↓ mode · enter play · esc back     │
-│                                          │
-╰──────────────────────────────────────────╯
-```
+![Dailies Screenshot](assets/demo/2.png)
 
-one puzzle a day in each mode, the same board for everyone who plays it.
+one puzzle a day in each mode, the same board for everyone.
 
 ## your puzzles
 
-```
-╭─ puzzles ──────────────────────────────────── × ╮
-│                                                 │
-│                     puzzles                     │
-│                                                 │
-│      › #715287 5 letters  in play 2/6    –      │
-│       #577098 5 letters  solved 2/6     40s     │
-│       #360144 5 letters  solved 2/6     47s     │
-│       #465966 5 letters  solved 2/6     54s     │
-│       #864121 5 letters  solved 2/6     1:01    │
-│       #462410 5 letters  solved 2/6     1:08    │
-│                                                 │
-│   ↑/↓ move · enter open · d delete · esc menu   │
-│                                                 │
-╰─────────────────────────────────────────────────╯
-```
+![Puzzles Screenshot](assets/demo/3.png)
 
 everything you've played, newest first. <kbd>enter</kbd> resumes, <kbd>d</kbd>
-twice deletes. deleting a puzzle really does destroy it — the answer and your
-guesses are gone — but your streak still knows a game happened there, so
-erasing a loss won't quietly hand you a longer best streak.
+twice deletes.
 
 ## your profile
 
-```
-╭─ profile ───────────────────────────────────────────────────── × ╮
-│                                                                  │
-│   played              won                 win rate               │
-│   5                   5                   100%                   │
-│                                                                  │
-│   avg attempts        avg time            streak                 │
-│   2                   54s                 5 (max 5)              │
-│                                                                  │
-│   guess distribution                                             │
-│    2 ████████████████████████ 5                                  │
-│                                                                  │
-│   by mode                                                        │
-│   5 letters  5 played      100%        avg 2 in 54s              │
-│                                                                  │
-╰──────────────────────────────────────────────────────────────────╯
-```
+![Profile Screenshot](assets/demo/4.png)
 
 averages cover wins only, so a bad day doesn't get to inflate your solve time.
 
@@ -171,7 +94,7 @@ reference in [docs/THEMES.md](docs/THEMES.md).
 
 ## settings
 
-the settings screen holds two things: the mode new puzzles start in, and
+the settings screen holds two things (for now): the mode new puzzles start in, and
 whether playing a different mode makes *that* the new default. both save as you
 change them.
 
@@ -186,18 +109,10 @@ saves and settings otherwise live in your user config directory
 
 ## about
 
-the **about** row in the menu shows the version, the commit it was built from,
-where your files live and where the words came from. same thing without opening
-the app:
+the **about** row in the menu shows app info. for getting the version without opening the app:
 
 ```sh
 wortle -version         # wortle 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
-```
-
-an unstamped build calls itself `dev`; a release stamps the number in:
-
-```sh
-go build -ldflags "-X github.com/nxck2005/wortle/internal/build.version=0.1.0"
 ```
 
 ## development
