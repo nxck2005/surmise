@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/store"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // settingsScreen edits the persisted preferences that are not the theme: which

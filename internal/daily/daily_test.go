@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 func day(t *testing.T, s string) Day {
@@ -115,9 +115,30 @@ func TestBeforeOrdersDays(t *testing.T) {
 // already on disk is orphaned and two versions of the app disagree about the
 // day's code.
 func TestIDIsStable(t *testing.T) {
-	const want = "13f0405e-2c98-8e40-ba2c-dce569a50a05"
+	const want = "96e3571f-e526-8b51-8740-452947979d36"
 	if got := ID(day(t, "2026-08-06"), 5); got != want {
 		t.Errorf("ID = %q, want %q\n(changing the id derivation orphans every saved daily)", got, want)
+	}
+}
+
+// TestDerivationTagsAreFrozen pins the three strings that feed the daily
+// hashes. They are wire format, not branding: an id is the key a saved daily
+// lives under, and the seed tags decide which word a date resolves to.
+//
+// The literal check exists because the obvious thing to do during a rename is
+// to sweep the product name through the whole tree, and these three would go
+// with it — silently orphaning every stored daily and changing every future
+// answer. They were made brand-neutral so that no such sweep would ever match
+// them; this test is the belt to that braces.
+func TestDerivationTagsAreFrozen(t *testing.T) {
+	for _, c := range []struct{ name, got, want string }{
+		{"idVersion", idVersion, "daily-id-v1"},
+		{"seedVersion", seedVersion, "daily-v1"},
+		{"pepper", string(pepper), "daily/2026: not a secret, see local.go"},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %q, want %q\n(these are format tags — they must not follow a rename)", c.name, c.got, c.want)
+		}
 	}
 }
 
@@ -256,14 +277,16 @@ func TestDailyAnswersAreStable(t *testing.T) {
 		length int
 		answer string
 	}{
-		// Last moved when the frequency source changed from
-		// google-10000-english to hermitdave/FrequencyWords, for the licensing
-		// reasons in internal/words/data/SOURCES.md.
-		{"2026-08-06", 4, "sets"},
-		{"2026-08-06", 5, "flick"},
-		{"2026-08-06", 6, "record"},
-		{"2026-12-25", 5, "bless"},
-		{"2027-01-01", 5, "lodge"},
+		// Last moved when seedVersion and pepper were made brand-neutral during
+		// the rename to surmise — a one-time, pre-release rotation done so that
+		// no product name is ever baked into a hash again. The move before that
+		// was the frequency source changing to hermitdave/FrequencyWords, for
+		// the licensing reasons in internal/words/data/SOURCES.md.
+		{"2026-08-06", 4, "worm"},
+		{"2026-08-06", 5, "teddy"},
+		{"2026-08-06", 6, "bodies"},
+		{"2026-12-25", 5, "tiger"},
+		{"2027-01-01", 5, "blind"},
 	}
 	for _, c := range cases {
 		g, err := New(t.Context(), Local(), day(t, c.date), c.length)

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // mk builds a finished-or-not puzzle directly, bypassing the word lists so

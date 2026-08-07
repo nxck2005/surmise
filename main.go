@@ -1,4 +1,4 @@
-// Command wortle is a word-guessing game for the terminal.
+// Command surmise is a word-guessing game for the terminal.
 package main
 
 import (
@@ -9,11 +9,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nxck2005/wortle/internal/build"
-	"github.com/nxck2005/wortle/internal/daily"
-	"github.com/nxck2005/wortle/internal/store"
-	"github.com/nxck2005/wortle/internal/theme"
-	"github.com/nxck2005/wortle/internal/ui"
+	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/build"
+	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/theme"
+	"github.com/nxck2005/surmise/internal/ui"
 )
 
 func main() {
@@ -21,7 +22,7 @@ func main() {
 	dataDir := flag.String("data", "", "directory for saved puzzles (default: user config dir)")
 	// -theme wins over the saved choice for one run, which is what makes
 	// screenshotting and theme authoring bearable.
-	themeName := flag.String("theme", os.Getenv("WORTLE_THEME"), "theme to start with (default: last used)")
+	themeName := flag.String("theme", os.Getenv(brand.Env("THEME")), "theme to start with (default: last used)")
 	listThemes := flag.Bool("themes", false, "list available themes and exit")
 	// -length likewise overrides the saved default mode for one run. A value
 	// the game has no words for is reported by the UI on its error line rather
@@ -29,7 +30,7 @@ func main() {
 	length := flag.Int("length", envLength(), "word length to start with: 4, 5 or 6 (default: last used)")
 	// -day plays another date's daily. Handy for looking at a board without
 	// waiting for it, and, like the rest of this family, it never writes.
-	day := flag.String("day", os.Getenv("WORTLE_DAY"), "date whose daily to play, YYYY-MM-DD (default: today, UTC)")
+	day := flag.String("day", os.Getenv(brand.Env("DAY")), "date whose daily to play, YYYY-MM-DD (default: today, UTC)")
 	// -version answers "which build is this" without opening the app, where the
 	// same information is on the about screen.
 	showVersion := flag.Bool("version", false, "print version information and exit")
@@ -43,16 +44,16 @@ func main() {
 	}
 
 	if err := run(*dataDir, *themeName, *day, *length, *listThemes); err != nil {
-		fmt.Fprintln(os.Stderr, "wortle:", err)
+		fmt.Fprintln(os.Stderr, brand.Name+":", err)
 		os.Exit(1)
 	}
 }
 
-// envLength is the default for -length: $WORTLE_LENGTH, matching how
-// $WORTLE_THEME defaults -theme. Unset or unreadable means zero — "use whatever
-// was saved" — which is the same fallback an unsupported value gets.
+// envLength is the default for -length: $SURMISE_LENGTH, matching how
+// $SURMISE_THEME defaults -theme. Unset or unreadable means zero — "use
+// whatever was saved" — which is the same fallback an unsupported value gets.
 func envLength() int {
-	n, err := strconv.Atoi(os.Getenv("WORTLE_LENGTH"))
+	n, err := strconv.Atoi(os.Getenv(brand.Env("LENGTH")))
 	if err != nil {
 		return 0
 	}

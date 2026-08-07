@@ -6,14 +6,15 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/build"
-	"github.com/nxck2005/wortle/internal/theme"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/build"
+	"github.com/nxck2005/surmise/internal/theme"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
-// repoURL is where the project lives. It is here rather than in a package doc
-// comment because this is the only place that shows it to a player.
-const repoURL = "github.com/nxck2005/wortle"
+// repoURL is where the project lives, shown to the player on the about screen.
+// It comes from internal/brand so that a rename does not have to find it here.
+const repoURL = brand.Repo
 
 // license is the shipped licence, in the shortest honest form. Matches LICENSE.
 // It is scoped deliberately: the MIT grant covers this project's own code and

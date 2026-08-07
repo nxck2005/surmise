@@ -21,8 +21,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // Seed is the secret input a day's answer is drawn from.

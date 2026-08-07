@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/nxck2005/surmise/internal/brand"
 )
 
 // The bundled themes are ordinary theme files, embedded rather than special-
@@ -196,7 +198,7 @@ func EnsureDir(dir string) error {
 // would look like the built-in theme had changed.
 func seedExample(bundledTheme []byte) []byte {
 	var b strings.Builder
-	b.WriteString(exampleHeader)
+	b.WriteString(exampleHeader())
 	for _, line := range strings.Split(string(bundledTheme), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "name") || strings.HasPrefix(trimmed, "author") {
@@ -208,7 +210,10 @@ func seedExample(bundledTheme []byte) []byte {
 	return []byte(b.String())
 }
 
-const exampleHeader = `# A wortle theme, named after its file. Change the colours below — or copy this
+// exampleHeader is a function rather than a const because it names the product,
+// which lives in one place (internal/brand) so that renaming stays cheap.
+func exampleHeader() string {
+	return `# A ` + brand.Name + ` theme, named after its file. Change the colours below — or copy this
 # file under a new name — and it shows up in the theme picker (esc → themes).
 # Every key is optional: anything you leave out keeps its built-in value.
 #
@@ -217,3 +222,4 @@ const exampleHeader = `# A wortle theme, named after its file. Change the colour
 # filename. See docs/THEMES.md for the full list of keys.
 
 `
+}

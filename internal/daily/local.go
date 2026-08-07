@@ -18,7 +18,10 @@ var ErrUnavailable = errors.New("daily: seed unavailable")
 // The two are versioned separately on purpose: bumping this changes future
 // answers, which is harmless, while changing ID would rename every daily on
 // disk and orphan them. Bump this; never change ID.
-const seedVersion = "wortle-daily-v1"
+//
+// Like idVersion it carries no product name: these are format tags, not
+// branding, and a rename must never reach them. See idVersion.
+const seedVersion = "daily-v1"
 
 // pepper keys the local derivation.
 //
@@ -36,8 +39,9 @@ const seedVersion = "wortle-daily-v1"
 // fetches a committed reveal, which is what this interface exists for.
 //
 // It must not be injected at build time (-ldflags): two builds would then
-// disagree about the word, which destroys the only property a daily has.
-var pepper = []byte("wortle/daily/2026: not a secret, see local.go")
+// disagree about the word, which destroys the only property a daily has. It
+// also carries no product name, for the reason given on idVersion.
+var pepper = []byte("daily/2026: not a secret, see local.go")
 
 // Local is the offline seed source: an HMAC over the date and length.
 //

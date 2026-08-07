@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 func newStore(t *testing.T) *JSON {

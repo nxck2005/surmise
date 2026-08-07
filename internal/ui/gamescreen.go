@@ -9,8 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/store"
+	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/store"
 )
 
 // messageTTL is how long a rejected-guess message stays on screen.
@@ -328,7 +329,7 @@ func (m *gameScreen) view(h *hitMap) string {
 		what = fmt.Sprintf("daily %s · %s", g.Daily, what)
 	}
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
-		st.title.Render(fmt.Sprintf("wortle #%s", game.Code(g.ID))),
+		st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
 		st.muted.Render(fmt.Sprintf("   %s   %s   %d/%d",
 			what, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
 	)

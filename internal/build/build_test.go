@@ -3,6 +3,8 @@ package build
 import (
 	"strings"
 	"testing"
+
+	"github.com/nxck2005/surmise/internal/brand"
 )
 
 // Every field the about screen prints unconditionally must be non-empty, since
@@ -31,7 +33,7 @@ func TestUnstampedBuildIsDev(t *testing.T) {
 func TestStringIsOneLine(t *testing.T) {
 	i := Info{Version: "1.2.0", Revision: "a1b2c3d", Modified: true, GoVersion: "go1.26.5", OS: "linux", Arch: "amd64"}
 	got := i.String()
-	want := "wortle 1.2.0 (a1b2c3d, dirty) go1.26.5 linux/amd64"
+	want := brand.Name + " 1.2.0 (a1b2c3d, dirty) go1.26.5 linux/amd64"
 	if got != want {
 		t.Errorf("String() = %q, want %q", got, want)
 	}
@@ -44,7 +46,7 @@ func TestStringIsOneLine(t *testing.T) {
 // stray punctuation in the line.
 func TestStringWithoutRevision(t *testing.T) {
 	i := Info{Version: "1.2.0", GoVersion: "go1.26.5", OS: "darwin", Arch: "arm64"}
-	if got, want := i.String(), "wortle 1.2.0 go1.26.5 darwin/arm64"; got != want {
+	if got, want := i.String(), brand.Name+" 1.2.0 go1.26.5 darwin/arm64"; got != want {
 		t.Errorf("String() = %q, want %q", got, want)
 	}
 	if i.Commit() != "" {

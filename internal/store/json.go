@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // JSON stores one file per puzzle under a directory.
@@ -31,14 +32,14 @@ type JSON struct {
 
 const puzzleDir = "puzzles"
 
-// DefaultDir is where puzzles live: ~/.config/wortle on Linux, and the
+// DefaultDir is where puzzles live: ~/.config/surmise on Linux, and the
 // platform equivalent elsewhere.
 func DefaultDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("store: locate config dir: %w", err)
 	}
-	return filepath.Join(base, "wortle"), nil
+	return filepath.Join(base, brand.Name), nil
 }
 
 // NewJSON opens (and creates if needed) a store rooted at dir.

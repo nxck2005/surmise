@@ -16,11 +16,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/nxck2005/wortle/internal/daily"
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/store"
-	"github.com/nxck2005/wortle/internal/theme"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/theme"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 type screen int
@@ -806,7 +807,7 @@ func (m *Model) View() tea.View {
 	// picker recolours the terminal itself and not just the panel.
 	v.BackgroundColor = st.bg
 	v.ForegroundColor = st.fg
-	v.WindowTitle = "wortle"
+	v.WindowTitle = brand.Name
 	// Clicking is a first-class input here: every keybind has an on-screen
 	// target. All-motion mode is what makes hover highlighting possible, since
 	// it reports the pointer with no button held.
@@ -886,7 +887,7 @@ func (m *Model) screenTitle() string {
 	case screenAbout:
 		return "about"
 	default:
-		return "wortle"
+		return brand.Name
 	}
 }
 
@@ -987,7 +988,7 @@ func (m *menuScreen) view(h *hitMap) string {
 	// the widest thing on the screen, and centring the list against it put the
 	// choices well to the right of the word they belong under.
 	heading := lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render("wortle"),
+		st.title.Render(brand.Name),
 		st.muted.Render("a word game for the terminal"),
 	)
 

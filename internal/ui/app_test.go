@@ -7,11 +7,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/nxck2005/wortle/internal/build"
-	"github.com/nxck2005/wortle/internal/game"
-	"github.com/nxck2005/wortle/internal/store"
-	"github.com/nxck2005/wortle/internal/theme"
-	"github.com/nxck2005/wortle/internal/words"
+	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/build"
+	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/theme"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // key builds the message the framework would deliver for a keystroke.
@@ -170,7 +171,7 @@ func TestPuzzleSavedOnFirstGuess(t *testing.T) {
 func TestMenuRendersModes(t *testing.T) {
 	m := newModel(t)
 	view := m.View().Content
-	for _, want := range []string{"wortle", "4 letters", "5 letters", "6 letters", "puzzles", "profile", "about"} {
+	for _, want := range []string{brand.Name, "4 letters", "5 letters", "6 letters", "puzzles", "profile", "about"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("menu missing %q\n%s", want, view)
 		}

@@ -1,4 +1,4 @@
-module github.com/nxck2005/wortle
+module github.com/nxck2005/surmise
 
 go 1.26.5
 

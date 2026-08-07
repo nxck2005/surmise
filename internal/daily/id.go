@@ -4,14 +4,20 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"github.com/nxck2005/wortle/internal/game"
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // idVersion names the id derivation. Unlike seedVersion it may never be
 // changed: the id is the key a daily is stored under, so a new one would orphan
 // every daily already on disk and hand two versions of the app different codes
 // for the same day.
-const idVersion = "wortle-daily-id-v1"
+//
+// It carries no product name on purpose. This is a wire-format tag, not
+// branding, and the two must not be confused: a name that appears in a hash is
+// a name that can never be changed again. Renaming the project must never reach
+// this string, which is why internal/daily does not import internal/brand and
+// why TestDerivationTagsAreFrozen pins the literal.
+const idVersion = "daily-id-v1"
 
 // ID is the puzzle id for a day's puzzle in a mode.
 //
