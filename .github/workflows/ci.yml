@@ -12,8 +12,13 @@ permissions:
   contents: read
 
 # Re-pushing a branch supersedes the run in flight rather than queueing behind it.
+#
+# The name is a literal rather than ${{ github.workflow }} because this workflow
+# is also *called* by release.yml, and in a called workflow that context is the
+# caller's name. Both files would then compute the same group, and
+# cancel-in-progress would have this run cancel the release run invoking it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

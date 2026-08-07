@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
-# Re-pushing a tag supersedes the run in flight, as in CI.
+# Re-pushing a tag supersedes the run in flight, as in CI. Literal name, and it
+# must stay distinct from ci.yml's — see the note there.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
