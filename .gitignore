@@ -9,7 +9,7 @@
 *.dylib
 
 # `go build .` at the root, and where the release workflow stages its archives.
-/wortle
+/surmise
 /dist/
 
 # Test binary, built with `go test -c`

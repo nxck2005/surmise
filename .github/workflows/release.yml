@@ -43,7 +43,7 @@ jobs:
           go-version-file: go.mod
 
       # Nothing before this step may write into the tree: the commit and the
-      # "dirty" flag in `wortle -version` come from the toolchain's own VCS
+      # "dirty" flag in `surmise -version` come from the toolchain's own VCS
       # stamps, and a modified worktree would mark every release binary dirty.
       - name: build
         env:
@@ -55,21 +55,21 @@ jobs:
           # compile-time feature and cross-compiles with no special handling.
           CGO_ENABLED: 0
         run: |
-          # The tag is the version, minus the leading v: `wortle -version` then
-          # prints "wortle 0.1.0 …", the form the README documents.
+          # The tag is the version, minus the leading v: `surmise -version` then
+          # prints "surmise 0.1.0 …", the form the README documents.
           version="${GITHUB_REF_NAME#v}"
-          name=wortle
-          if [ "$GOOS" = windows ]; then name=wortle.exe; fi
+          name=surmise
+          if [ "$GOOS" = windows ]; then name=surmise.exe; fi
 
           mkdir -p dist/pkg
           go build -trimpath \
-            -ldflags "-s -w -X github.com/nxck2005/wortle/internal/build.version=$version" \
+            -ldflags "-s -w -X github.com/nxck2005/surmise/internal/build.version=$version" \
             -o "dist/pkg/$name" .
 
           # The archive carries what someone unpacking it needs to get going.
           cp README.md LICENSE THIRD_PARTY_NOTICES.md docs/THEMES.md dist/pkg/
 
-          base="wortle_${version}_${GOOS}_${GOARCH}"
+          base="surmise_${version}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = windows ]; then
             (cd dist/pkg && zip -qr "../$base.zip" .)
           else
@@ -79,7 +79,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: wortle_${{ matrix.goos }}_${{ matrix.goarch }}
+          name: surmise_${{ matrix.goos }}_${{ matrix.goarch }}
           path: dist/*
           if-no-files-found: error
 
