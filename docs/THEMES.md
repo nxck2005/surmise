@@ -146,11 +146,25 @@ A theme whose `name` matches a built-in one replaces it, so you can adjust a
 bundled theme by copying it out and editing the copy. Drop the `name` line and
 the theme is called after its file.
 
+## Crediting a theme
+
+`author` is a free-text line beside `name`, shown under the theme in the picker:
+
+```toml
+name = "midnight"
+author = "you"
+```
+
+It is worth setting on anything you did not invent. Every bundled theme adapted
+from someone else's palette carries one, which is both a courtesy to whoever
+designed the colours and how their licence notice stays attached to them — see
+`THIRD_PARTY_NOTICES.md` at the repo root.
+
 ## The bundled themes
 
-`serika dark` (the default) and `serika light`, `dracula`, `nord`,
+`ember dark` (the default) and `ember light`, `dracula`, `nord`,
 `gruvbox dark`, `catppuccin mocha`, `tokyo night`, `rose pine`,
-`solarized dark`, `everforest dark`, `high contrast` (Wordle's colour-blind
+`solarized dark`, `everforest dark`, `high contrast` (a colour-blind-friendly
 orange/blue scheme), `terminal` (built entirely from ANSI numbers, so it follows
 your terminal's own palette) and `matrix`. They live in
 `internal/theme/themes/*.toml` and are written in exactly this format — every

@@ -1,4 +1,5 @@
 name = "dracula"
+author = "dracula theme"
 
 [colors]
 bg        = "#282a36"

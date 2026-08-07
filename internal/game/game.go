@@ -93,9 +93,9 @@ func (g *Game) Tombstone() *Game {
 	}
 }
 
-// attemptsFor returns how many guesses a word of length n allows. Classic
-// Wordle gives six for five letters; the shorter and longer modes scale with
-// it so difficulty stays roughly even.
+// attemptsFor returns how many guesses a word of length n allows. The genre
+// settled on six for five letters; the shorter and longer modes scale with it
+// so difficulty stays roughly even.
 func attemptsFor(n int) int { return n + 1 }
 
 // New starts a puzzle of the given length with a randomly chosen answer.

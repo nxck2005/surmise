@@ -1,4 +1,5 @@
 name = "nord"
+author = "arctic ice studio"
 
 [colors]
 bg        = "#2e3440"

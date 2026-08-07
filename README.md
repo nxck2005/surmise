@@ -32,7 +32,7 @@ it just follow whatever you played last.
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode.
 
-**wide assortment of themes, live preview.**  serika, catppuccin, dracula, gruvbox,
+**wide assortment of themes, live preview.**  ember, catppuccin, dracula, gruvbox,
 nord and a lot more. write your own themes as well.
 
 **built to be mouse first.** all of it.
@@ -78,7 +78,7 @@ wortle -themes          # list what's installed, and where the directory is
 wortle -theme dracula   # play with a theme without changing your saved choice
 ```
 
-bundled: `serika-dark` (the default), `serika-light`, `catppuccin-mocha`,
+bundled: `ember-dark` (the default), `ember-light`, `catppuccin-mocha`,
 `dracula`, `everforest-dark`, `gruvbox-dark`, `high-contrast`, `matrix`,
 `nord`, `rose-pine`, `solarized-dark`, `terminal`, `tokyo-night`.
 
@@ -122,16 +122,31 @@ go run .                    # play from a clone
 go test ./...
 go test -race ./internal/...
 go run ./tools/genwords     # regenerate the embedded word lists
+go run ./tools/gennotices   # regenerate THIRD_PARTY_NOTICES.md after a dep change
 ```
 
 `internal/game`, `store`, `words` and `stats` are the ui-agnostic core;
-`internal/ui` is the bubble tea layer on top. the split is deliberate — the same
-core is meant to be drivable by a server later. the ui has tests too: they drive
+`internal/ui` is the bubble tea layer on top. the ui has tests too: they drive
 the root model with synthetic key and mouse events and assert on the rendered
 frame, so no tty is involved.
 
 word-list provenance in
 [internal/words/data/SOURCES.md](internal/words/data/SOURCES.md).
+
+## licence
+
+wortle's own code, docs and data are mit licensed — see
+[LICENSE](LICENSE).
+
+the linked go modules, the themes adapted from other people's palettes, and the
+word lists stay under their own terms. all of them are permissive, all of them
+are reproduced in full in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and that file ships inside
+every release archive. regenerate it with `go run ./tools/gennotices` after any
+dependency change.
+
+not affiliated with the new york times company or any other rights holder in a
+similar game.
 
 ---
 

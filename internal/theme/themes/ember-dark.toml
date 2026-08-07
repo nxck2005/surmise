@@ -1,0 +1,21 @@
+name = "ember dark"
+
+# The default: a flat, faintly cool near-black ground with a single warm copper
+# accent carrying all emphasis, and muted slate for everything secondary. The
+# tile colours are picked to sit inside that ground rather than borrowed from
+# any other game's palette.
+
+[colors]
+bg        = "#0b0c0e"
+text      = "#c8ccd4"
+accent    = "#d97757"
+muted     = "#5c626e"
+error     = "#d2555f"
+
+correct   = "#4f9d69"
+present   = "#cf9f4a"
+absent    = "#34373d"
+
+slot      = "#4a4f58"
+key_face  = "#4a4f58"
+key_spent = "#17191d"

@@ -14,6 +14,26 @@ import (
 //go:embed data/blocked.txt
 var blockedList string
 
+// profaneList is the other hand-maintained input, and it is enforced the other
+// way round: these words must stay accepted as guesses and must never be an
+// answer. Embedded here for the same reason as blockedList.
+//
+//go:embed data/profanity.txt
+var profaneList string
+
+// wordsIn reads one of the hand-maintained lists, which carry section comments
+// that strings.Fields alone would happily return as words.
+func wordsIn(list string) []string {
+	var out []string
+	for line := range strings.Lines(list) {
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = line[:i]
+		}
+		out = append(out, strings.Fields(line)...)
+	}
+	return out
+}
+
 // TestListsLoad guards against a broken go:embed or a bad genwords run: the
 // lists must be present, correctly sized, and self-consistent.
 func TestListsLoad(t *testing.T) {
@@ -83,6 +103,62 @@ func TestNoBlockedWords(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestProfanityIsGuessableButNeverTheAnswer pins the distinction between the
+// two hand-maintained lists. blocked.txt is subtracted from the guess lists;
+// profanity.txt is subtracted only from the answers, so a player who types one
+// is still told it is a real word. Collapsing the two — in either direction —
+// fails here.
+func TestProfanityIsGuessableButNeverTheAnswer(t *testing.T) {
+	profane := wordsIn(profaneList)
+	if len(profane) == 0 {
+		t.Fatal("data/profanity.txt is empty")
+	}
+
+	profaneSet := make(map[string]struct{}, len(profane))
+	for _, w := range profane {
+		profaneSet[w] = struct{}{}
+	}
+
+	var checked int
+	for _, n := range Lengths {
+		l, err := get(n)
+		if err != nil {
+			t.Fatalf("length %d: %v", n, err)
+		}
+		for _, a := range l.answers {
+			if _, bad := profaneSet[a]; bad {
+				t.Errorf("length %d: %q is profanity and must not be an answer", n, a)
+			}
+		}
+		// The other half of the invariant: a profane word that ENABLE accepts
+		// must stay accepted. Only words the guess list would have had anyway
+		// are checked, so an entry for a length no mode reaches is not a
+		// failure.
+		for _, w := range profane {
+			if len(w) != n {
+				continue
+			}
+			if _, blocked := parseBlocked(blockedList)[w]; blocked {
+				continue // a slur takes precedence; it is not typeable at all
+			}
+			if _, ok := l.guesses[w]; ok {
+				checked++
+			}
+		}
+	}
+	if checked == 0 {
+		t.Error("no profane word is an accepted guess — the lists have been collapsed")
+	}
+}
+
+func parseBlocked(list string) map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, w := range wordsIn(list) {
+		out[w] = struct{}{}
+	}
+	return out
 }
 
 func TestRandomReturnsPlayableWord(t *testing.T) {

@@ -1,4 +1,5 @@
 name = "solarized dark"
+author = "ethan schoonover"
 
 [colors]
 bg        = "#002b36"

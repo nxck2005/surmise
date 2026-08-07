@@ -19,8 +19,13 @@ import (
 //go:embed themes/*.toml
 var bundled embed.FS
 
-// DefaultName is the theme used when nothing else is chosen.
-const DefaultName = "serika dark"
+// DefaultName is the theme used when nothing else is chosen. defaultFile is the
+// bundled file it comes from; the two are kept together because the seeded
+// example theme is a copy of that file.
+const (
+	DefaultName = "ember dark"
+	defaultFile = "themes/ember-dark.toml"
+)
 
 // dirName is the themes directory inside the data dir, beside `puzzles`.
 const dirName = "themes"
@@ -178,7 +183,7 @@ func EnsureDir(dir string) error {
 	if err != nil || len(entries) > 0 {
 		return nil
 	}
-	b, err := bundled.ReadFile("themes/serika-dark.toml")
+	b, err := bundled.ReadFile(defaultFile)
 	if err != nil {
 		return nil
 	}

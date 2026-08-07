@@ -1,4 +1,5 @@
 name = "gruvbox dark"
+author = "morhetz"
 
 [colors]
 bg        = "#282828"
