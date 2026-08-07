@@ -17,10 +17,18 @@ go install github.com/nxck2005/surmise@latest
 ```
 
 then run `surmise` — if your shell can't find it, `go install` puts binaries in
-`$(go env GOPATH)/bin`, which isn't on `$PATH` by default:
+`$(go env GOPATH)/bin`, which isn't on `$PATH` by default. add it to your shell's
+startup file so it sticks:
 
 ```sh
-export PATH="$PATH:$(go env GOPATH)/bin"
+# zsh
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
+
+# bash
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc
+
+# fish
+fish_add_path (go env GOPATH)/bin
 ```
 
 ![Surmise main Screenshot](assets/demo/1.png)
