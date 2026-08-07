@@ -9,7 +9,7 @@
 ![go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)
 [![built with bubble tea](https://img.shields.io/badge/built%20with-bubble%20tea-ff69b4)](https://charm.land)
 ![themes](https://img.shields.io/badge/themes-13-e2b714)
-
+![Surmise main Screenshot](assets/demo/1.png)
 </div>
 
 ```sh
@@ -31,7 +31,6 @@ echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc
 fish_add_path (go env GOPATH)/bin
 ```
 
-![Surmise main Screenshot](assets/demo/1.png)
 
 no go toolchain? every release carries a prebuilt binary:
 
