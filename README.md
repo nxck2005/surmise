@@ -19,9 +19,9 @@ go install github.com/nxck2005/surmise@latest
 
 then run `surmise`.
 
-no go toolchain? every release carries a prebuilt binary — unpack one from the
-[latest release](https://github.com/nxck2005/surmise/releases/latest) and put it
-on your `$PATH`. the archives are named for what they were built for:
+![Surmise main Screenshot](assets/demo/1.png)
+
+no go toolchain? every release carries a prebuilt binary:
 
 | platform | file |
 | --- | --- |
@@ -29,18 +29,11 @@ on your `$PATH`. the archives are named for what they were built for:
 | macos | `surmise_<version>_darwin_arm64.tar.gz` (apple silicon) · `..._darwin_amd64.tar.gz` (intel) |
 | windows | `surmise_<version>_windows_amd64.zip` · `..._windows_arm64.zip` |
 
-so v0.1.0 on an apple silicon mac is `surmise_0.1.0_darwin_arm64.tar.gz`. each
-release also ships a `checksums.txt`, if you want to check what you got:
+each release also ships a `checksums.txt`:
 
 ```sh
 sha256sum -c checksums.txt --ignore-missing
 ```
-
-the macos builds aren't signed or notarised, so gatekeeper will hold the first
-run — `xattr -d com.apple.quarantine surmise` clears it, or `go install` above
-sidesteps it entirely.
-
-![Surmise main Screenshot](assets/demo/1.png)
 
 ## why you'd want it
 
