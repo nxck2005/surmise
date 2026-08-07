@@ -6,7 +6,6 @@
 
 [![ci](https://github.com/nxck2005/surmise/actions/workflows/ci.yml/badge.svg)](https://github.com/nxck2005/surmise/actions/workflows/ci.yml)
 [![go reference](https://pkg.go.dev/badge/github.com/nxck2005/surmise.svg)](https://pkg.go.dev/github.com/nxck2005/surmise)
-[![go report card](https://goreportcard.com/badge/github.com/nxck2005/surmise)](https://goreportcard.com/report/github.com/nxck2005/surmise)
 ![go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)
 [![built with bubble tea](https://img.shields.io/badge/built%20with-bubble%20tea-ff69b4)](https://charm.land)
 ![themes](https://img.shields.io/badge/themes-13-e2b714)
@@ -17,7 +16,12 @@
 go install github.com/nxck2005/surmise@latest
 ```
 
-then run `surmise`.
+then run `surmise` — if your shell can't find it, `go install` puts binaries in
+`$(go env GOPATH)/bin`, which isn't on `$PATH` by default:
+
+```sh
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
 
 ![Surmise main Screenshot](assets/demo/1.png)
 
