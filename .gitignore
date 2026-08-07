@@ -8,6 +8,10 @@
 *.so
 *.dylib
 
+# `go build .` at the root, and where the release workflow stages its archives.
+/surmise
+/dist/
+
 # Test binary, built with `go test -c`
 *.test
 

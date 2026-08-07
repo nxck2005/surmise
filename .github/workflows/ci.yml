@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A tag push matches neither trigger above, so release.yml calls this rather
+  # than keeping a second copy of the matrix that could drift from it.
+  workflow_call:
 
 permissions:
   contents: read

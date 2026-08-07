@@ -1,0 +1,124 @@
+name: Release
+
+# Cutting a release is pushing a tag; there is no other trigger, so nothing is
+# published by accident from a branch.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Re-pushing a tag supersedes the run in flight, as in CI.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # A tag push does not match CI's own triggers, so a release would otherwise
+  # ship whatever the tag points at, untested. Calling CI rather than repeating
+  # it keeps one matrix to maintain.
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      # A broken target should still report the others.
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          # Follow the toolchain in go.mod, as CI does.
+          go-version-file: go.mod
+
+      # Nothing before this step may write into the tree: the commit and the
+      # "dirty" flag in `surmise -version` come from the toolchain's own VCS
+      # stamps, and a modified worktree would mark every release binary dirty.
+      - name: build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          # Explicit, because a native macOS or Linux build would otherwise
+          # default this on and a release would differ by runner. Nothing here
+          # uses cgo; the word lists and themes are go:embed, which is a
+          # compile-time feature and cross-compiles with no special handling.
+          CGO_ENABLED: 0
+        run: |
+          # The tag is the version, minus the leading v: `surmise -version` then
+          # prints "surmise 0.1.0 …", the form the README documents.
+          version="${GITHUB_REF_NAME#v}"
+          name=surmise
+          if [ "$GOOS" = windows ]; then name=surmise.exe; fi
+
+          mkdir -p dist/pkg
+          go build -trimpath \
+            -ldflags "-s -w -X github.com/nxck2005/surmise/internal/build.version=$version" \
+            -o "dist/pkg/$name" .
+
+          # The archive carries what someone unpacking it needs to get going.
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md docs/THEMES.md dist/pkg/
+
+          base="surmise_${version}_${GOOS}_${GOARCH}"
+          if [ "$GOOS" = windows ]; then
+            (cd dist/pkg && zip -qr "../$base.zip" .)
+          else
+            tar -czf "dist/$base.tar.gz" -C dist/pkg .
+          fi
+          rm -rf dist/pkg
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: surmise_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    # The only job that needs to write, so the token is widened here rather
+    # than at the top of the file.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          # One flat directory, since the checksums file and the upload both
+          # want the archives side by side.
+          merge-multiple: true
+
+      # Has to happen here, not in the matrix: a matrix job cannot see the
+      # other targets' archives.
+      - name: checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A tag with a pre-release suffix (v0.1.0-rc1) must not become the
+          # "latest" release people are pointed at.
+          case "$GITHUB_REF_NAME" in
+            *-*) prerelease=--prerelease ;;
+            *) prerelease= ;;
+          esac
+
+          # PR titles are conventional-commit style, so the generated notes
+          # read as a changelog without one being maintained by hand.
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes $prerelease
