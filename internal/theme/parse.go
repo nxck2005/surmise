@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 )
@@ -84,6 +85,15 @@ func Parse(name string, data []byte) (*Theme, []Warning) {
 // parseValue strips quotes and any trailing comment. A comment inside a quoted
 // string is part of the string — which matters, since every colour starts with
 // a '#'.
+//
+// It also refuses control characters, which is the one place that has to happen:
+// a theme is a file people send each other (docs/THEMES.md says so outright),
+// and every value read here is on its way to a terminal. A raw ESC in a glyph or
+// a name *is* an escape sequence once it is rendered, and one shaped like
+// "\x1b_12\x1b\\" is a hit-map marker — ui.hitMap.scan would read it as a real
+// one and move a click target to wherever that glyph was drawn. Keys and section
+// names need no such check: an unknown one is already reported through %q, which
+// escapes it.
 func parseValue(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -95,10 +105,20 @@ func parseValue(s string) (string, error) {
 		if end < 0 {
 			return "", fmt.Errorf("unterminated string")
 		}
-		return s[1 : 1+end], nil
-	}
-	if i := strings.IndexByte(s, '#'); i > 0 {
+		s = s[1 : 1+end]
+	} else if i := strings.IndexByte(s, '#'); i > 0 {
 		s = strings.TrimSpace(s[:i])
+	}
+
+	// unicode.IsControl rather than a wider "is this printable" test: it covers
+	// C0, DEL and C1, which is every escape introducer, while leaving alone the
+	// zero-width joiners and variation selectors that real emoji glyphs are
+	// built from. %q on the rune, never %c — the warning is itself printed to a
+	// terminal by -themes and by the picker, so it has to escape what it quotes.
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			return "", fmt.Errorf("control character %q is not allowed in a value", r)
+		}
 	}
 	return s, nil
 }

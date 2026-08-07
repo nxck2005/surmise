@@ -210,3 +210,43 @@ func TestMetricsAreRangeChecked(t *testing.T) {
 		t.Fatalf("warnings = %v, want one range complaint", warns)
 	}
 }
+
+// A theme file is untrusted input — THEMES.md tells people to send each other
+// one — and every value it holds ends up written to a terminal. A raw ESC is an
+// escape sequence the moment it renders, and one shaped like "\x1b_12\x1b\\" is
+// a ui.hitMap marker, which scan would believe and use to move a click target
+// onto the glyph that carried it. Refusing them is an ordinary warning, so the
+// rest of a hostile or merely mangled file still loads.
+func TestControlCharactersAreRefused(t *testing.T) {
+	const esc = "\x1b"
+	th, warns := Parse("test", []byte(
+		`accent = "#00ff00"`+"\n"+
+			`name = "evil`+esc+`]0;pwned`+"\x07"+`"`+"\n"+
+			`[glyphs]`+"\n"+
+			`empty = "`+esc+`_12`+esc+`\"`+"\n"))
+
+	if len(warns) != 2 {
+		t.Fatalf("got %d warnings, want 2: %v", len(warns), warns)
+	}
+
+	// The clean line still took effect, and neither hostile value reached the
+	// theme it was aimed at.
+	if got, want := rgb(th.Color(Accent)), rgb(mustColor("#00ff00")); got != want {
+		t.Errorf("accent = %v, want %v; a refused value stopped the parse", got, want)
+	}
+	if strings.ContainsRune(th.Name, 0x1b) {
+		t.Errorf("Name = %q kept an escape", th.Name)
+	}
+	if th.Glyphs.Empty != Default().Glyphs.Empty {
+		t.Errorf("empty glyph = %q, want the default", th.Glyphs.Empty)
+	}
+
+	// The warnings are printed to a terminal in their own right, by -themes and
+	// by the picker, so they must not carry the escape they are complaining
+	// about. This is what pins %q over %c in parseValue.
+	for _, w := range warns {
+		if strings.ContainsRune(w.String(), 0x1b) {
+			t.Errorf("warning %q carries a raw escape", w.String())
+		}
+	}
+}

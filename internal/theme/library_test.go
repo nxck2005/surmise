@@ -1,11 +1,50 @@
 package theme
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// parseValue refuses control characters inside a theme file, but a theme's
+// display name falls back to its *filename* and its Source is the path — neither
+// of which the parser ever sees. A file named with an escape in it would
+// otherwise reach the picker and -themes unfiltered.
+//
+// Driven through the helpers rather than through a real file on disk on purpose:
+// Windows will not create a filename containing an escape, and CI runs there.
+func TestFilenamesCannotCarryEscapes(t *testing.T) {
+	got := fallbackName("evil\x1b]0;pwned\x07.toml")
+	if strings.ContainsAny(got, "\x1b\x07") {
+		t.Errorf("fallbackName kept a control character: %q", got)
+	}
+	if want := "evil�]0;pwned�"; got != want {
+		t.Errorf("fallbackName = %q, want %q", got, want)
+	}
+
+	// An ordinary name is untouched, escapes being the whole of what changes.
+	if got, want := fallbackName("rose-pine.toml"), "rose pine"; got != want {
+		t.Errorf("fallbackName = %q, want %q", got, want)
+	}
+	// Including the non-ASCII a glyph or a name is legitimately made of.
+	if got, want := safeText("café ▓ 👩‍🚀"), "café ▓ 👩‍🚀"; got != want {
+		t.Errorf("safeText mangled ordinary text: %q, want %q", got, want)
+	}
+
+	// The path and the failure both quote the filename back, so both are
+	// repaired too.
+	if got := safeText("/themes/evil\x1b[2J.toml"); strings.ContainsRune(got, 0x1b) {
+		t.Errorf("safeText kept an escape in a path: %q", got)
+	}
+	if got := safeErr(errors.New("open /themes/evil\x1b[2J.toml: no such file")); strings.ContainsRune(got.Error(), 0x1b) {
+		t.Errorf("safeErr kept an escape: %q", got)
+	}
+	if safeErr(nil) != nil {
+		t.Error("safeErr(nil) should stay nil")
+	}
+}
 
 // The bundled themes are the worked examples users copy, so they have to be
 // exemplary: no warnings, a name, and a full palette. This is the test that

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/nxck2005/surmise/internal/brand"
 )
@@ -92,7 +93,7 @@ func (l *Library) loadDir(dir string) {
 	if err != nil {
 		// A missing themes directory is the normal case, not a problem.
 		if !errors.Is(err, fs.ErrNotExist) {
-			l.add(Entry{Name: dir, Source: dir, Err: err})
+			l.add(Entry{Name: safeText(dir), Source: safeText(dir), Err: safeErr(err)})
 		}
 		return
 	}
@@ -100,14 +101,26 @@ func (l *Library) loadDir(dir string) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 			continue
 		}
+		// path opens the file; safeText(path) is what anyone gets to look at.
 		path := filepath.Join(dir, e.Name())
 		b, err := os.ReadFile(path)
 		if err != nil {
-			l.add(Entry{Name: fallbackName(e.Name()), Source: path, Err: err})
+			l.add(Entry{Name: fallbackName(e.Name()), Source: safeText(path), Err: safeErr(err)})
 			continue
 		}
-		l.add(themeFile(e.Name(), b, path))
+		l.add(themeFile(e.Name(), b, safeText(path)))
 	}
+}
+
+// safeErr rebuilds an error around its repaired message. The errors reaching an
+// Entry are os.ReadDir's and os.ReadFile's, which quote the path they failed on
+// and so carry a hostile filename into the picker with them. Nothing inspects
+// Entry.Err beyond `!= nil`, so flattening the type here costs nothing.
+func safeErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	return errors.New(safeText(err.Error()))
 }
 
 func themeFile(filename string, data []byte, source string) Entry {
@@ -118,8 +131,31 @@ func themeFile(filename string, data []byte, source string) Entry {
 // fallbackName turns serika-dark.toml into "serika dark", so a theme file that
 // omits `name` is still presentable.
 func fallbackName(filename string) string {
-	base := strings.TrimSuffix(filename, ".toml")
+	base := strings.TrimSuffix(safeText(filename), ".toml")
 	return strings.ReplaceAll(base, "-", " ")
+}
+
+// safeText replaces control characters in text that reaches the terminal without
+// having passed through parseValue: a theme's filename, the path it was read
+// from, and the error from a file that would not open. Those are the way in that
+// refusing control characters in *values* leaves open — a name is still rendered
+// by the picker and by -themes whether or not the file inside it ever parsed.
+//
+// It repairs rather than refuses, unlike parseValue, because the two are not the
+// same kind of input: a file's contents are the theme author's to correct, while
+// a filename is the reader's, and a theme that works should not vanish over the
+// name someone else gave it. U+FFFD rather than dropping the rune, so a tampered
+// name looks wrong instead of looking fine.
+//
+// Only Source and the display name are repaired, never the path used to open the
+// file — loadDir keeps the real one for that.
+func safeText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '�'
+		}
+		return r
+	}, s)
 }
 
 // add appends an entry, replacing any existing one with the same name so user
