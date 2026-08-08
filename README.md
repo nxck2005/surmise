@@ -14,21 +14,13 @@
 
 ```sh
 go install github.com/nxck2005/surmise@latest
+surmise
+
+# shell can't find it? add go's bin directory to your PATH:
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc    # zsh
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc  # bash
+fish_add_path (go env GOPATH)/bin                                                 # fish
 ```
-
-then run `surmise`. in the event that your shell can't find it:
-
-```sh
-# zsh
-echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
-
-# bash
-echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc
-
-# fish
-fish_add_path (go env GOPATH)/bin
-```
-
 
 no go toolchain? every release carries a prebuilt binary:
 
