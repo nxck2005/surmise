@@ -160,7 +160,10 @@ func (m *splashScreen) help(h *hitMap) string {
 		// not promise something the screen will not honour.
 		return renderHelp(h)
 	}
+	// One whole sentence rather than the usual "key label" pair, because the key
+	// here is every key: there is nothing to print in the key column that would
+	// read as one.
 	return renderHelp(h,
-		helpItem{keys: "any key", label: "continue", act: action{kind: actSplashDismiss}},
+		helpItem{label: "press any key to continue", act: action{kind: actSplashDismiss}},
 	)
 }

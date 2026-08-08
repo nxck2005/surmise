@@ -139,8 +139,10 @@ func newStyles(t *theme.Theme) *styles {
 		help:       plain(c(theme.Muted)),
 		helpHover:  plain(c(theme.Accent)),
 		bar:        plain(c(theme.Correct)),
-		splash:     plain(c(theme.Accent)),
-		helpBar:    lipgloss.NewStyle().MarginTop(1),
+		// Bold: the art is drawn in line characters, and a bold weight is what
+		// makes them read as strokes rather than as punctuation.
+		splash:  plain(c(theme.Accent)).Bold(true),
+		helpBar: lipgloss.NewStyle().MarginTop(1),
 
 		tileCorrect: tile(c(theme.Correct), c("correct_text")),
 		tilePresent: tile(c(theme.Present), c("present_text")),

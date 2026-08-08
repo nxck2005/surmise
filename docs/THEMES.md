@@ -124,8 +124,9 @@ Elements: `title`, `text`, `muted`, `accent`, `error`, `help`, `help_hover`,
 `key.unused`, `key.correct`, `key.present`, `key.absent`, `status.won`,
 `status.lost`, `status.playing`.
 
-`splash` is the ASCII art drawn at startup — accent-coloured by default, and
-worth quietening (`fg = "muted"`) in a theme that wants a calmer opening. Which
+`splash` is the ASCII art drawn at startup — bold and accent-coloured by
+default, and worth quietening (`fg = "muted"`, `bold = false`) in a theme that
+wants a calmer opening. Which
 art it draws is a setting rather than part of the theme, so a theme colours
 whatever banner the player picked.
 
