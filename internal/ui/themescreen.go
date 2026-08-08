@@ -46,6 +46,35 @@ func (m *themeScreen) reload(lib *theme.Library, current string) {
 	m.clampOffset()
 }
 
+// refresh takes a reloaded library without moving the player. Unlike reload it
+// keeps the cursor where it is, and keeps it by **name**: a theme file added
+// above the highlighted one shifts every index below it, and re-homing on the
+// index would slide the selection out from under the pointer mid-edit.
+//
+// The theme that was highlighted may have been the one just deleted, so the
+// cursor is clamped first and only then re-found.
+func (m *themeScreen) refresh(lib *theme.Library) {
+	want := ""
+	if e, ok := m.selected(); ok {
+		want = e.Name
+	}
+
+	m.entries = lib.Entries()
+	m.cursor = min(max(m.cursor, 0), max(len(m.entries)-1, 0))
+	for i, e := range m.entries {
+		if e.Name == want {
+			m.cursor = i
+			break
+		}
+	}
+
+	// A list that shrank can leave the window past its end, which clampOffset
+	// cannot fix — it only ever pulls the window towards the cursor. This is
+	// the clamp scroll uses.
+	m.offset = min(max(m.offset, 0), max(len(m.entries)-m.rows(), 0))
+	m.clampOffset()
+}
+
 func (m *themeScreen) selected() (theme.Entry, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.entries) {
 		return theme.Entry{}, false
@@ -61,12 +90,12 @@ func (m *themeScreen) preview() {
 	}
 }
 
-// update moves the cursor, reporting whether the player committed a theme and
-// whether they asked to go back.
-func (m *themeScreen) update(msg tea.KeyPressMsg) (commit, back bool) {
+// update moves the cursor, reporting whether the player committed a theme,
+// asked to go back, or asked for the directory to be read again.
+func (m *themeScreen) update(msg tea.KeyPressMsg) (commit, back, reload bool) {
 	switch msg.String() {
 	case "esc", "q":
-		return false, true
+		return false, true, false
 	case "up", "k":
 		m.move(-1)
 	case "down", "j":
@@ -75,13 +104,17 @@ func (m *themeScreen) update(msg tea.KeyPressMsg) (commit, back bool) {
 		m.jumpTop()
 	case "end", "G":
 		m.jumpBottom()
+	case "r":
+		// The directory is polled anyway; this is for the edit the poll cannot
+		// see, and for not waiting out the interval.
+		return false, false, true
 	case "enter", " ":
 		if e, ok := m.selected(); ok && e.Theme != nil {
-			return true, false
+			return true, false, false
 		}
 	}
 	m.preview()
-	return false, false
+	return false, false, false
 }
 
 // jumpTop and jumpBottom are the ends of the list, shared by the keys and by
@@ -241,6 +274,7 @@ func (m *themeScreen) help(h *hitMap) string {
 	return renderHelp(h,
 		helpItem{keys: "↑/↓", label: "preview"},
 		helpItem{keys: "enter", label: "keep", act: action{kind: actThemeRow, index: m.cursor}},
+		helpItem{keys: "r", label: "reload", act: action{kind: actThemeReload}},
 		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
 	)
 }

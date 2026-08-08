@@ -13,6 +13,18 @@ default, or `<dir>/themes` when you pass `-data <dir>`. It is created on first
 run with an `example.toml` in it, which is a copy of the default theme with a
 header explaining itself: the fastest way to start is to edit that.
 
+**Edit with the app running.** The directory is re-read about once a second, so
+saving a file recolours what is on screen: open the picker on your theme and
+every save shows up there, or keep the theme selected and edit while you play.
+A new file appears in the list without moving your place in it. `r` in the
+picker reloads at once, for the rare edit the check misses — one that changes no
+byte count and lands in the same instant.
+
+A theme that is deleted, or that stops being readable, falls back to the default
+rather than leaving the screen mid-edit. A theme with a *mistake* in it is not
+that: the bad line is skipped, the rest of the file still applies, and the
+picker prints the warning (see "When something is wrong").
+
 ## The format
 
 Comments start with `#`. Everything else is `key = value`, optionally grouped

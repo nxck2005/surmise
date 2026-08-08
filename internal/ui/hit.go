@@ -43,6 +43,7 @@ const (
 	actListRow                // index: puzzle list row
 	actDailyRow               // index: daily screen row, one per mode
 	actThemeRow               // index: theme picker row
+	actThemeReload            // re-read the themes directory now
 	actSettingNext            // index: settings row, next value
 	actSettingPrev            // index: settings row, previous value
 	actLetter                 // letter: on-screen keyboard cap
