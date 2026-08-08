@@ -129,6 +129,12 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
 		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},
+		{"splash", func() { m.raiseSplash(); m.screen = screenSplash }},
+		{"splash waiting for a key", func() {
+			m.splash.mode = splashKey
+			m.raiseSplash()
+			m.screen = screenSplash
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup()

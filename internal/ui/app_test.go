@@ -48,9 +48,11 @@ func key(s string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: code}
 }
 
-// newModel returns a model sitting at the menu. The app really opens on a
-// puzzle (see TestStartsOnDefaultPuzzle); most tests start their game
-// explicitly from the menu, so the helper resets there for a clean slate.
+// newModel returns a model sitting at the menu. The app really opens on the
+// splash, in front of a puzzle (see TestStartsOnDefaultPuzzle); most tests start
+// their game explicitly from the menu, so the helper resets there for a clean
+// slate. The resolved splash art is left on the model rather than turned off
+// with Options, so a test that wants the splash can raise it.
 func newModel(t *testing.T) *Model {
 	t.Helper()
 	s, err := store.NewJSON(t.TempDir())
@@ -112,18 +114,27 @@ func TestKeyHelperMatchesFramework(t *testing.T) {
 	}
 }
 
-// The app opens directly on a 5-letter puzzle, not the menu.
+// The app opens directly on a 5-letter puzzle, not the menu. The splash is in
+// front of it, and the board is already built behind that — dismissing the
+// splash reveals it rather than making it.
 func TestStartsOnDefaultPuzzle(t *testing.T) {
 	s, err := store.NewJSON(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := New(s, nil, Options{})
-	if m.screen != screenGame {
-		t.Fatalf("screen = %v, want game", m.screen)
+	if m.screen != screenSplash {
+		t.Fatalf("screen = %v, want splash", m.screen)
 	}
 	if m.game == nil || m.game.g.Length != defaultLength {
-		t.Fatalf("did not open on a %d-letter puzzle", defaultLength)
+		t.Fatalf("did not build a %d-letter puzzle behind the splash", defaultLength)
+	}
+	send(t, m, "a")
+	if m.screen != screenGame {
+		t.Fatalf("screen after dismissing = %v, want game", m.screen)
+	}
+	if m.game.typing != "" {
+		t.Errorf("the key that dismissed the splash reached the board: typed %q", m.game.typing)
 	}
 }
 

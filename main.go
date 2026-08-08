@@ -31,6 +31,10 @@ func main() {
 	// -day plays another date's daily. Handy for looking at a board without
 	// waiting for it, and, like the rest of this family, it never writes.
 	day := flag.String("day", os.Getenv(brand.Env("DAY")), "date whose daily to play, YYYY-MM-DD (default: today, UTC)")
+	// -splash picks the startup art for one run, or turns it off: "off",
+	// "random", or a banner's name. Like the rest of this family it never writes,
+	// and an unknown name is reported on the UI's error line rather than here.
+	splash := flag.String("splash", os.Getenv(brand.Env("SPLASH")), "startup art: off, random, or a banner's name (default: last used)")
 	// -version answers "which build is this" without opening the app, where the
 	// same information is on the about screen.
 	showVersion := flag.Bool("version", false, "print version information and exit")
@@ -43,7 +47,7 @@ func main() {
 		return
 	}
 
-	if err := run(*dataDir, *themeName, *day, *length, *listThemes); err != nil {
+	if err := run(*dataDir, *themeName, *day, *splash, *length, *listThemes); err != nil {
 		fmt.Fprintln(os.Stderr, brand.Name+":", err)
 		os.Exit(1)
 	}
@@ -60,7 +64,7 @@ func envLength() int {
 	return n
 }
 
-func run(dataDir, themeName, day string, length int, listThemes bool) error {
+func run(dataDir, themeName, day, splash string, length int, listThemes bool) error {
 	if dataDir == "" {
 		var err error
 		if dataDir, err = store.DefaultDir(); err != nil {
@@ -94,6 +98,7 @@ func run(dataDir, themeName, day string, length int, listThemes bool) error {
 		Theme:      themeName,
 		Length:     length,
 		Day:        day,
+		Splash:     splash,
 		DailySeeds: daily.Local(),
 		DataDir:    dataDir,
 	}

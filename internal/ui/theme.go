@@ -54,6 +54,11 @@ type styles struct {
 	helpHover  lipgloss.Style
 	bar        lipgloss.Style
 
+	// splash is the startup art. It is its own element rather than the title's
+	// style because it is the one thing on screen drawn in glyphs rather than
+	// letters, and a theme may well want it quieter — or louder — than a heading.
+	splash lipgloss.Style
+
 	// helpBar spaces the keybind hints off the content above them. It sets no
 	// foreground on purpose: the hints are coloured per segment (they change on
 	// hover), and an outer colour would be cancelled by the inner resets.
@@ -134,6 +139,7 @@ func newStyles(t *theme.Theme) *styles {
 		help:       plain(c(theme.Muted)),
 		helpHover:  plain(c(theme.Accent)),
 		bar:        plain(c(theme.Correct)),
+		splash:     plain(c(theme.Accent)),
 		helpBar:    lipgloss.NewStyle().MarginTop(1),
 
 		tileCorrect: tile(c(theme.Correct), c("correct_text")),
@@ -168,7 +174,7 @@ func newStyles(t *theme.Theme) *styles {
 		"help": &s.help, "help_hover": &s.helpHover,
 		"border": &s.border, "panel_title": &s.panelTitle,
 		"menu_selected": &s.menuPick, "cursor": &s.cursor, "caret": &s.caret,
-		"bar":          &s.bar,
+		"bar": &s.bar, "splash": &s.splash,
 		"tile.correct": &s.tileCorrect, "tile.present": &s.tilePresent,
 		"tile.absent": &s.tileAbsent, "tile.active": &s.tileActive,
 		"tile.empty": &s.tileEmpty,

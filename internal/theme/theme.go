@@ -58,6 +58,7 @@ var Elements = []string{
 	"title", "text", "muted", "accent", "error",
 	"help", "help_hover", "hover",
 	"border", "panel_title", "menu_selected", "cursor", "caret", "bar",
+	"splash",
 	"tile.correct", "tile.present", "tile.absent", "tile.active", "tile.empty",
 	"key.unused", "key.correct", "key.present", "key.absent",
 	"status.won", "status.lost", "status.playing",

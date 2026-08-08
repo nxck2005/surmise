@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/banner"
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
@@ -35,6 +36,7 @@ const (
 	screenSettings
 	screenDaily
 	screenAbout
+	screenSplash
 )
 
 // tickInterval drives the on-screen clock and expires transient messages.
@@ -56,6 +58,23 @@ type tickMsg time.Time
 func tick() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
+
+// splashDuration is how long a timed splash lingers. Long enough to read, short
+// enough that someone who launches to play a puzzle does not wait on it.
+const splashDuration = 1200 * time.Millisecond
+
+// splashDoneMsg ends a timed splash. It is its own one-shot timer rather than a
+// deadline checked against the one-second tick, which would let a 1.2s splash
+// sit for up to 2.2s — the whole point of the duration is that it is brief.
+type splashDoneMsg struct{}
+
+func splashTimer() tea.Cmd {
+	return tea.Tick(splashDuration, func(time.Time) tea.Msg { return splashDoneMsg{} })
+}
+
+// tagline is the one-line description under the product's name, on the menu and
+// on the splash.
+const tagline = "a word game for the terminal"
 
 // Model is the root of the application.
 type Model struct {
@@ -81,6 +100,7 @@ type Model struct {
 	dataDir string
 
 	screen   screen
+	splash   splashScreen
 	menu     menuScreen
 	game     *gameScreen
 	list     listScreen
@@ -120,6 +140,11 @@ type Options struct {
 	// DailySeeds overrides where daily seeds come from. Nil means daily.Local,
 	// which is the only source there is today.
 	DailySeeds daily.Source
+	// Splash forces the startup splash for one run without saving it: "off" for
+	// none, "random" for any bundled art, or a banner's name. Empty means the
+	// saved choice, and it is what the headless tests pass to keep the first
+	// keystroke going where they expect.
+	Splash string
 	// DataDir is where saves, settings and themes live. It is display data —
 	// the about screen shows it, and the UI's own file access still goes
 	// through the store — so empty simply means "not known", which is what the
@@ -159,14 +184,20 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	m.applyStartupTheme(opts.Theme)
 	m.applyStartupLength(opts.Length)
 	m.applyStartupDay(opts.Day)
+	m.applyStartupSplash(opts.Splash)
 
 	g, err := newPuzzle(s, m.length)
 	if err != nil {
 		m.err = err
 		m.screen = screenMenu
-		return m
+	} else {
+		m.openGame(g, false)
 	}
-	m.openGame(g, false)
+	// The splash goes up last, in front of a screen that is already live. That
+	// is what makes dismissing it a screen swap and nothing else — and what
+	// sends a player whose puzzle could not be built to the menu rather than to
+	// a board that does not exist.
+	m.raiseSplash()
 	return m
 }
 
@@ -235,6 +266,80 @@ func (m *Model) applyStartupDay(override string) {
 	m.day = d
 }
 
+// applyStartupSplash resolves the startup art and how it is dismissed, the same
+// shape as the theme and the mode: an override first, then what was saved, then
+// the default. A name that resolves to nothing is reported rather than
+// swallowed, and never fatal — art that stopped shipping between releases must
+// cost a note on the error line, not a launch.
+//
+// "No splash" is carried as no art rather than as a flag, so there is one thing
+// to check: raiseSplash puts up whatever art there is, and an empty banner
+// simply never fits.
+func (m *Model) applyStartupSplash(override string) {
+	s := m.settingsOf()
+
+	mode, ok := parseSplashMode(s.SplashDismiss)
+	if !ok {
+		m.err = fmt.Errorf("no splash setting %q — using %s", s.SplashDismiss, splashSkip.setting())
+	}
+	m.splash.mode = mode
+
+	want := override
+	if want == splashOn {
+		// -splash on turns it back on for a run without saying which art, so it
+		// falls through to the saved choice.
+		want = ""
+	}
+	if want == "" {
+		if s.Splash == splashOff {
+			return
+		}
+		want = s.SplashArt
+	}
+
+	switch want {
+	case splashOff:
+		return
+	case "":
+		m.splash.art = banner.Default()
+	case splashRandom:
+		// Rolled once here, not once per frame: the splash must not flicker
+		// between banners as it redraws.
+		m.splash.art = banner.Random(nil)
+	default:
+		art, ok := banner.Get(want)
+		if !ok {
+			art = banner.Default()
+			m.err = fmt.Errorf("no splash art named %q — using %s", want, art.Name)
+		}
+		m.splash.art = art
+	}
+}
+
+// raiseSplash puts the splash in front of whatever screen is already live,
+// remembering that screen as where dismissing goes. It does nothing when there
+// is no art, or when the terminal is too small to draw it.
+func (m *Model) raiseSplash() {
+	m.splash.resize(m.width, m.height)
+	if !m.splash.fits() {
+		return
+	}
+	m.splash.next = m.screen
+	m.screen = screenSplash
+}
+
+// dismissSplash reveals the screen underneath. Both the key path and the click
+// path call it, and so does the timer, which is why it checks the screen: a
+// timer that fires after a manual skip must do nothing rather than send an
+// already-playing person somewhere.
+func (m *Model) dismissSplash() tea.Cmd {
+	if m.screen != screenSplash {
+		return nil
+	}
+	m.screen = m.splash.next
+	return nil
+}
+
 // settingsOf reads the saved preferences, or their defaults from a store that
 // does not keep any.
 func (m *Model) settingsOf() store.Settings {
@@ -257,7 +362,14 @@ func (m *Model) saveSettings(s store.Settings) {
 	}
 }
 
-func (m *Model) Init() tea.Cmd { return tick() }
+func (m *Model) Init() tea.Cmd {
+	// A timed splash gets its own one-shot timer alongside the clock; a splash
+	// that waits for input needs nothing.
+	if m.screen == screenSplash && m.splash.mode.timed() {
+		return tea.Batch(tick(), splashTimer())
+	}
+	return tick()
+}
 
 // pushSize hands the terminal's size to the screens that lay out against it.
 // They shed or scroll rather than let the panel outgrow the terminal, which
@@ -270,6 +382,14 @@ func (m *Model) pushSize() {
 	m.about.resize(m.width, m.height)
 	m.list.resize(m.height)
 	m.themes.resize(m.height)
+
+	// The splash is measured too late to be checked at startup — there is no
+	// size until the first WindowSizeMsg — so this is where art too big for the
+	// terminal gives up its turn rather than overflowing the frame.
+	m.splash.resize(m.width, m.height)
+	if m.screen == screenSplash && !m.splash.fits() {
+		m.dismissSplash()
+	}
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -282,6 +402,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Redraw so the clock advances and expired messages disappear.
 		return m, tick()
+
+	case splashDoneMsg:
+		// The mode is checked as well as the screen: only a timed splash arms a
+		// timer, so one arriving for a splash that waits for input belongs to a
+		// mode that has since changed, and must not cut it short.
+		if m.splash.mode.timed() {
+			return m, m.dismissSplash()
+		}
+		return m, nil
 
 	case dailyMsg:
 		if msg.err != nil {
@@ -362,6 +491,11 @@ func (m *Model) dispatch(a action) tea.Cmd {
 
 	case actBack:
 		return m.back()
+
+	case actSplashDismiss:
+		// The same method the key path calls; dismissSplash itself checks that
+		// the splash is what is showing.
+		return m.dismissSplash()
 
 	case actMenuChoice:
 		if m.screen != screenMenu || a.index >= len(m.menu.choices) {
@@ -528,6 +662,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.screen {
+	case screenSplash:
+		// Any key at all, which is why this arm reads no key: the splash offers
+		// exactly one thing to do. In the fixed mode it offers nothing, and the
+		// keystroke is swallowed rather than reaching the board behind it.
+		if m.splash.mode.dismissible() {
+			return m, m.dismissSplash()
+		}
+		return m, nil
 	case screenMenu:
 		return m.updateMenu(msg)
 	case screenGame:
@@ -742,6 +884,14 @@ func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) commitSettings(row int) {
 	s := m.settingsOf()
 	s.Length, s.RememberLast = m.settings.length, m.settings.rememberLast
+	// Written out rather than left empty for the defaults: a preference someone
+	// has actually visited should read back the same way it looks on screen.
+	s.Splash = splashOff
+	if m.settings.splash {
+		s.Splash = splashOn
+	}
+	s.SplashArt = m.settings.splashArt
+	s.SplashDismiss = m.settings.splashMode.setting()
 	m.saveSettings(s)
 
 	if row == rowLength {
@@ -893,6 +1043,8 @@ func (m *Model) screenTitle() string {
 
 func (m *Model) activeScreen(h *hitMap) (body, help string) {
 	switch m.screen {
+	case screenSplash:
+		return m.splash.view(h), m.splash.help(h)
 	case screenGame:
 		return m.game.view(h), m.game.help(h)
 	case screenList:
@@ -989,7 +1141,7 @@ func (m *menuScreen) view(h *hitMap) string {
 	// choices well to the right of the word they belong under.
 	heading := lipgloss.JoinVertical(lipgloss.Center,
 		st.title.Render(brand.Name),
-		st.muted.Render("a word game for the terminal"),
+		st.muted.Render(tagline),
 	)
 
 	// Labels are centred inside a column as wide as the longest, with the
