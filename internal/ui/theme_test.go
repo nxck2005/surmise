@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -243,6 +246,208 @@ func TestUnknownThemeNameFallsBackVisibly(t *testing.T) {
 	}
 	if !strings.Contains(sgr.ReplaceAllString(m.View().Content, ""), "no theme named") {
 		t.Error("the unknown theme was swallowed silently")
+	}
+}
+
+// --- hot reload ---
+
+// hotModel is a model over a real themes directory, which is what the reload
+// path needs and what newModel deliberately does not have: the bundled library
+// has no directory, so nothing there ever reloads.
+func hotModel(t *testing.T, dir string) *Model {
+	t.Helper()
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTheme(t, theme.Default())
+
+	m := New(s, theme.Open(dir), Options{})
+	m.screen = screenMenu
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	return m
+}
+
+// writeTheme puts a theme file in place and returns its name.
+func writeTheme(t *testing.T, dir, file, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// reload drives the message the watch delivers. send drops the commands it gets
+// back, so the watch cannot be exercised through it; this is the same message
+// the timer would produce.
+func reload(t *testing.T, m *Model) {
+	t.Helper()
+	m.Update(themesMsg{lib: m.themeLib.Reopen()})
+}
+
+// A theme file added above the highlighted one shifts every index below it. The
+// cursor has to follow the name, or an edit made while browsing slides the
+// selection out from under the player.
+func TestThemeReloadKeepsTheCursorWhereItWas(t *testing.T) {
+	dir := t.TempDir()
+	writeTheme(t, dir, "zzz.toml", "name = \"zzz mine\"\naccent = \"#ff00ff\"\n")
+	m := hotModel(t, dir)
+
+	openThemes(t, m)
+	send(t, m, "end") // "zzz mine" sorts last
+	want := m.themes.entries[m.themes.cursor].Name
+	if want != "zzz mine" {
+		t.Fatalf("cursor started on %q, want the user theme", want)
+	}
+
+	// A name sorting first, so every index moves.
+	writeTheme(t, dir, "aaa.toml", "name = \"aaa mine\"\naccent = \"#00ff00\"\n")
+	reload(t, m)
+
+	if got := m.themes.entries[m.themes.cursor].Name; got != want {
+		t.Errorf("cursor moved to %q, want it left on %q", got, want)
+	}
+	if _, ok := m.themeLib.Get("aaa mine"); !ok {
+		t.Error("the new theme was not picked up")
+	}
+	if st.theme.Name != want {
+		t.Errorf("the preview became %q, want %q", st.theme.Name, want)
+	}
+}
+
+// The point of reloading outside the picker: editing the theme you are playing
+// under recolours the board where you are.
+func TestEditedThemeAppliesOutsideThePicker(t *testing.T) {
+	dir := t.TempDir()
+	writeTheme(t, dir, "mine.toml", "name = \"mine\"\naccent = \"#ff00ff\"\n")
+	m := hotModel(t, dir)
+
+	openThemes(t, m)
+	for i, e := range m.themes.entries {
+		if e.Name == "mine" {
+			m.themes.cursor = i
+		}
+	}
+	m.commitTheme()
+	if m.screen != screenMenu {
+		t.Fatal("committing did not leave the picker")
+	}
+	before := st.accent.GetForeground()
+
+	writeTheme(t, dir, "mine.toml", "name = \"mine\"\naccent = \"#00ff00\"\n")
+	reload(t, m)
+
+	if st.theme.Name != "mine" {
+		t.Fatalf("active theme = %q, want it still mine", st.theme.Name)
+	}
+	if st.accent.GetForeground() == before {
+		t.Error("the edit did not reach the styles")
+	}
+}
+
+// A theme that is deleted, or that stops being readable, leaves nothing to
+// apply. Falling back to the default is what keeps the screen legible, and what
+// stops esc putting a theme back that no longer exists.
+func TestVanishedActiveThemeFallsBackToDefault(t *testing.T) {
+	dir := t.TempDir()
+	writeTheme(t, dir, "mine.toml", "name = \"mine\"\naccent = \"#ff00ff\"\n")
+	m := hotModel(t, dir)
+
+	openThemes(t, m)
+	for i, e := range m.themes.entries {
+		if e.Name == "mine" {
+			m.themes.cursor = i
+		}
+	}
+	m.commitTheme()
+
+	if err := os.Remove(filepath.Join(dir, "mine.toml")); err != nil {
+		t.Fatal(err)
+	}
+	reload(t, m)
+
+	if st.theme.Name != theme.DefaultName {
+		t.Errorf("fell back to %q, want %q", st.theme.Name, theme.DefaultName)
+	}
+	// The name is kept: the settings file still says "mine", so putting the file
+	// back brings the theme back.
+	if m.themeName != "mine" {
+		t.Errorf("themeName = %q, want it left alone", m.themeName)
+	}
+
+	// And backing out of the picker must not resurrect it either.
+	openThemes(t, m)
+	send(t, m, "esc")
+	if st.theme.Name != theme.DefaultName {
+		t.Errorf("escape restored %q, want the default", st.theme.Name)
+	}
+}
+
+// The other way a theme stops being applicable: the file is still there but
+// cannot be read, so the entry is listed with its error and a nil Theme. A
+// warning is not this — a bad line still loads over the default, by design —
+// so only the nil case falls back.
+func TestUnreadableActiveThemeFallsBackToDefault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not deny reads on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 file anyway")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mine.toml")
+	writeTheme(t, dir, "mine.toml", "name = \"mine\"\naccent = \"#ff00ff\"\n")
+	m := hotModel(t, dir)
+
+	openThemes(t, m)
+	for i, e := range m.themes.entries {
+		if e.Name == "mine" {
+			m.themes.cursor = i
+		}
+	}
+	m.commitTheme()
+
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	reload(t, m)
+
+	if st.theme.Name != theme.DefaultName {
+		t.Errorf("fell back to %q, want %q", st.theme.Name, theme.DefaultName)
+	}
+}
+
+// Mouse parity for the new keybind: the r key and the help bar's button are the
+// same method.
+func TestThemeReloadKeyMatchesItsButton(t *testing.T) {
+	for _, byClick := range []bool{false, true} {
+		name := "key"
+		if byClick {
+			name = "click"
+		}
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			m := hotModel(t, dir)
+			openThemes(t, m)
+
+			writeTheme(t, dir, "mine.toml", "name = \"mine\"\naccent = \"#ff00ff\"\n")
+			if _, ok := m.themeLib.Get("mine"); ok {
+				t.Fatal("the theme arrived without a reload")
+			}
+
+			if byClick {
+				click(t, m, action{kind: actThemeReload})
+			} else {
+				send(t, m, "r")
+			}
+
+			if _, ok := m.themeLib.Get("mine"); !ok {
+				t.Error("the reload did not pick the new theme up")
+			}
+			if m.screen != screenThemes {
+				t.Error("reloading left the picker")
+			}
+		})
 	}
 }
 

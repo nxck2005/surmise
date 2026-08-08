@@ -48,8 +48,14 @@ type Entry struct {
 func (e Entry) Builtin() bool { return e.Source == "built-in" }
 
 // Library is the set of themes available this run.
+//
+// It remembers the directory it was opened from so that reloading is something
+// the library can be asked for, rather than something a caller rebuilds a path
+// to do. stamp is what that directory looked like at the time, for Changed.
 type Library struct {
 	entries []Entry
+	dir     string // "" for the bundled-only set
+	stamp   string
 }
 
 // Dir returns the themes directory for a data dir. It follows -data, so a
@@ -60,13 +66,78 @@ func Dir(dataDir string) string { return filepath.Join(dataDir, dirName) }
 // name matches a bundled one replaces it, so a theme can be adjusted by copying
 // it out and editing the copy.
 func Open(dir string) *Library {
-	l := &Library{}
+	// The stamp is taken before the files are read, not after. A theme edited
+	// in between then leaves a stamp that no longer matches the directory, so
+	// the next Changed says yes and the edit is picked up on the following
+	// reload. Stamping afterwards would record the new state against the old
+	// contents, and that edit would never be seen again.
+	l := &Library{dir: dir, stamp: Stamp(dir)}
 	l.loadFS(bundled, "themes", "built-in")
 	if dir != "" {
 		l.loadDir(dir)
 	}
 	sort.Slice(l.entries, func(i, j int) bool { return l.entries[i].Name < l.entries[j].Name })
 	return l
+}
+
+// Stamp summarises a themes directory without opening a single file: the name,
+// size and modification time of every *.toml in it. Two stamps that differ mean
+// the directory has moved on.
+//
+// This is how a change is noticed, rather than a filesystem watcher, because
+// the dependency set is deliberately Charm-only and a directory read once a
+// second costs nothing. The limit of the cheap version is real: an edit that
+// keeps the byte count identical and lands within the modification time's
+// resolution is invisible. That is what the picker's manual reload is for.
+//
+// An empty or unreadable directory stamps as "", which is what makes the
+// bundled-only library permanently unchanged.
+func Stamp(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			// A file that vanished between the read and the stat is a change in
+			// its own right; name it so the next stamp differs from this one.
+			fmt.Fprintf(&b, "%s\x00gone\n", e.Name())
+			continue
+		}
+		fmt.Fprintf(&b, "%s\x00%d\x00%d\n", e.Name(), info.Size(), info.ModTime().UnixNano())
+	}
+	return b.String()
+}
+
+// Dir reports the themes directory this library was opened from, "" for the
+// bundled-only set.
+func (l *Library) Dir() string {
+	if l == nil {
+		return ""
+	}
+	return l.dir
+}
+
+// Changed reports whether the themes directory has moved on since Open read it.
+func (l *Library) Changed() bool {
+	if l == nil || l.dir == "" {
+		return false
+	}
+	return Stamp(l.dir) != l.stamp
+}
+
+// Reopen reads the same directory again. The result is a new library: the old
+// one stays valid, so whatever is still holding it keeps a consistent set.
+func (l *Library) Reopen() *Library {
+	return Open(l.Dir())
 }
 
 // Bundled returns only the themes compiled into the binary. Tests and the

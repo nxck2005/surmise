@@ -68,6 +68,35 @@ func splashTimer(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return splashDoneMsg{} })
 }
 
+// themeWatchInterval is how often the themes directory is looked at. The
+// unchanged path reads one directory and opens no file, so a second buys a
+// live edit-and-look loop for very little.
+const themeWatchInterval = time.Second
+
+// themesMsg carries a reloaded theme library. A nil lib means the directory was
+// looked at and had not moved on — the message still arrives, because receiving
+// it is what arms the next look.
+type themesMsg struct{ lib *theme.Library }
+
+// watchThemes re-reads the themes directory when it changes, so editing a theme
+// file shows up without a restart. It is its own timer rather than a check
+// hung off the one-second clock because the clock is a redraw, and this is disk
+// work that has to be able to stop: a library with no directory — the bundled
+// set, which is what the headless tests get — arms nothing at all.
+//
+// Nothing here closes over the model: commands run on another goroutine.
+func watchThemes(lib *theme.Library) tea.Cmd {
+	if lib.Dir() == "" {
+		return nil
+	}
+	return tea.Tick(themeWatchInterval, func(time.Time) tea.Msg {
+		if !lib.Changed() {
+			return themesMsg{}
+		}
+		return themesMsg{lib: lib.Reopen()}
+	})
+}
+
 // tagline is the one-line description under the product's name, on the menu and
 // on the splash.
 const tagline = "a word game for the terminal"
@@ -366,10 +395,9 @@ func (m *Model) saveSettings(s store.Settings) {
 }
 
 func (m *Model) Init() tea.Cmd {
-	if cmd := m.splashCmd(); cmd != nil {
-		return tea.Batch(tick(), cmd)
-	}
-	return tick()
+	// Batch drops the nils, so neither the splash timer nor the theme watch
+	// needs a condition here: each decides for itself whether it exists.
+	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd())
 }
 
 // splashCmd is the timer a timed splash runs on, or nil when there is nothing
@@ -414,6 +442,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Redraw so the clock advances and expired messages disappear.
 		return m, tick()
+
+	case themesMsg:
+		if msg.lib != nil {
+			m.applyThemes(msg.lib)
+		}
+		// Re-armed from the model's library rather than the message's, so the
+		// watch follows the swap instead of stamping the superseded one.
+		return m, watchThemes(m.themeLib)
 
 	case splashDoneMsg:
 		// The mode is checked as well as the screen: only a timed splash arms a
@@ -585,6 +621,13 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		m.themes.point(a.index)
 		return m.commitTheme()
 
+	case actThemeReload:
+		if m.screen != screenThemes {
+			return nil
+		}
+		// The same method the r key calls, so the two cannot drift.
+		return m.reloadThemes()
+
 	case actSettingNext, actSettingPrev:
 		if m.screen != screenSettings {
 			return nil
@@ -660,11 +703,42 @@ func (m *Model) commitTheme() tea.Cmd {
 	return nil
 }
 
-// restoreTheme puts back the committed theme after an abandoned preview.
-func (m *Model) restoreTheme() {
-	if t, ok := m.themeLib.Get(m.themeName); ok {
-		setTheme(t)
+// applyThemes takes a re-read theme library. It is the single place a reload
+// lands, whether the watch noticed the change or the player asked for one.
+func (m *Model) applyThemes(lib *theme.Library) {
+	m.themeLib = lib
+
+	if m.screen == screenThemes {
+		// Keep the player's place in the list, then re-apply what the cursor is
+		// on: editing the highlighted theme is the whole point of the loop, and
+		// the preview is what shows the edit.
+		m.themes.refresh(lib)
+		m.themes.preview()
+		return
 	}
+
+	// Anywhere else the committed theme is what is on screen, so re-apply that.
+	m.restoreTheme()
+}
+
+// reloadThemes re-reads the directory on demand. Synchronous, the way startup
+// reads it: the player asked, so the answer belongs in this frame.
+func (m *Model) reloadThemes() tea.Cmd {
+	m.applyThemes(m.themeLib.Reopen())
+	return nil
+}
+
+// restoreTheme puts back the committed theme after an abandoned preview, and is
+// also the fallback when a reload takes the committed theme away — Resolve
+// already means "this name, else ember dark, else the built-in default", so a
+// theme file deleted or made unreadable under us lands somewhere valid rather
+// than leaving whatever was previewed on screen.
+//
+// m.themeName is deliberately left alone: the settings file still names that
+// theme, so putting the file back brings it back.
+func (m *Model) restoreTheme() {
+	t, _ := m.themeLib.Resolve(m.themeName)
+	setTheme(t)
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -865,12 +939,14 @@ func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) updateThemes(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	commit, back := m.themes.update(msg)
+	commit, back, reload := m.themes.update(msg)
 	switch {
 	case back:
 		return m, m.back()
 	case commit:
 		return m, m.commitTheme()
+	case reload:
+		return m, m.reloadThemes()
 	}
 	return m, nil
 }

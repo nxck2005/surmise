@@ -185,6 +185,99 @@ func TestOpenIgnoresNonThemeFiles(t *testing.T) {
 	}
 }
 
+// The stamp is what tells a reload there is anything to do, so it has to follow
+// every change to a theme file and ignore everything else in the directory.
+func TestStampFollowsTheDirectory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mine.toml")
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	empty := Stamp(dir)
+
+	write("name = \"mine\"\naccent = \"#ff00ff\"\n")
+	added := Stamp(dir)
+	if added == empty {
+		t.Error("adding a theme did not change the stamp")
+	}
+
+	// A different length, so the check does not lean on the modification time's
+	// resolution — which is exactly what the manual reload exists to cover.
+	write("name = \"mine\"\naccent = \"#ff00ff\"\nbg = \"#101010\"\n")
+	if edited := Stamp(dir); edited == added {
+		t.Error("editing a theme did not change the stamp")
+	}
+
+	// Everything that is not a theme is invisible to the stamp, the same way it
+	// is invisible to loadDir.
+	before := Stamp(dir)
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if Stamp(dir) != before {
+		t.Error("a non-.toml file moved the stamp")
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if Stamp(dir) == before {
+		t.Error("deleting a theme did not change the stamp")
+	}
+}
+
+func TestReopenPicksUpANewTheme(t *testing.T) {
+	dir := t.TempDir()
+	lib := Open(dir)
+	if lib.Dir() != dir {
+		t.Errorf("Dir() = %q, want %q", lib.Dir(), dir)
+	}
+	if lib.Changed() {
+		t.Error("an untouched directory reported a change")
+	}
+
+	body := "name = \"mine\"\naccent = \"#ff00ff\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "mine.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !lib.Changed() {
+		t.Fatal("a new theme file went unnoticed")
+	}
+
+	// Reopen builds a new library; the old one keeps the set it was opened with,
+	// so anything still holding it stays consistent.
+	if _, ok := lib.Get("mine"); ok {
+		t.Error("the original library changed under us")
+	}
+	fresh := lib.Reopen()
+	if _, ok := fresh.Get("mine"); !ok {
+		t.Error("Reopen did not pick the new theme up")
+	}
+	if fresh.Changed() {
+		t.Error("a freshly reopened library reported a change")
+	}
+}
+
+// The bundled set has no directory, so it can never change — which is what
+// keeps the headless UI tests from arming a watch.
+func TestBundledLibraryNeverChanges(t *testing.T) {
+	lib := Bundled()
+	if lib.Dir() != "" {
+		t.Errorf("Dir() = %q, want empty", lib.Dir())
+	}
+	if lib.Changed() {
+		t.Error("the bundled set reported a change")
+	}
+	var nilLib *Library
+	if nilLib.Dir() != "" || nilLib.Changed() {
+		t.Error("a nil library must answer like an empty one")
+	}
+}
+
 func TestResolveFallsBackAndReports(t *testing.T) {
 	lib := Bundled()
 

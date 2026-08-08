@@ -65,6 +65,7 @@ nord and a lot more. write your own themes as well.
 | <kbd>esc</kbd> | back to the menu |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
+| <kbd>r</kbd> | re-read the themes directory (in the theme picker) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
 
 ## the daily
@@ -106,6 +107,9 @@ accent = "#ff0088"
 
 anything you leave out keeps its built-in value. glyphs and spacing are themeable too. full
 reference in [docs/THEMES.md](docs/THEMES.md).
+
+edits apply live — save the file and the colours change under you, no restart.
+(<kbd>r</kbd> in the picker reloads on the spot.)
 
 ## settings
 
