@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -29,6 +30,7 @@ type settingsScreen struct {
 	splash     bool
 	splashArt  string // a banner's name, or "random"
 	splashMode splashMode
+	splashTime time.Duration
 
 	cursor int
 }
@@ -40,6 +42,7 @@ const (
 	rowSplash
 	rowSplashArt
 	rowSplashDismiss
+	rowSplashTime
 	settingRows
 )
 
@@ -74,17 +77,24 @@ func (m *settingsScreen) reload(s store.Settings) {
 		m.splashArt = banner.Default().Name
 	}
 	m.splashMode, _ = parseSplashMode(s.SplashDismiss)
+	m.splashTime, _ = parseSplashDuration(s.SplashMillis)
 
 	m.cursor = 0
 }
 
-// enabled reports whether a row can be changed. The art and the dismissal are
-// only meaningful while the splash is on, so with it off they are shown greyed
-// out: no arrows, no click targets, and the cursor passes over them.
+// enabled reports whether a row can be changed. A row whose value would do
+// nothing is shown greyed out instead: no arrows, no click targets, and the
+// cursor passes over it.
+//
+// There are two levels of that here. The art and the dismissal need the splash
+// itself; the length needs a dismissal that is actually timed, since the mode
+// that waits for a key has nothing to time.
 func (m *settingsScreen) enabled(row int) bool {
 	switch row {
 	case rowSplashArt, rowSplashDismiss:
 		return m.splash
+	case rowSplashTime:
+		return m.splash && m.splashMode.timed()
 	default:
 		return true
 	}
@@ -151,6 +161,8 @@ func (m *settingsScreen) cycle(delta int) {
 		m.splashArt = stepArt(m.splashArt, delta)
 	case rowSplashDismiss:
 		m.splashMode = stepMode(m.splashMode, delta)
+	case rowSplashTime:
+		m.splashTime = stepSplashDuration(m.splashTime, delta)
 	}
 }
 
@@ -212,6 +224,7 @@ func (m *settingsScreen) view(h *hitMap) string {
 		m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
 		m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
 		m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
+		m.renderRow(h, rowSplashTime, "splash time", splashDurationLabel(m.splashTime)),
 	}
 
 	// The note is padded to the widest one there is, so moving the cursor does
@@ -282,6 +295,7 @@ var notes = struct {
 	length, remembering, notRemembering string
 	splashOn, splashOff                 string
 	art, randomArt, dismiss             string
+	splashTime, untimed                 string
 }{
 	length:         "the mode new puzzles start in",
 	remembering:    "playing a mode makes it the default",
@@ -291,6 +305,8 @@ var notes = struct {
 	art:            "which art the splash draws",
 	randomArt:      "a different banner each launch",
 	dismiss:        "how the splash gets out of the way",
+	splashTime:     "how long a timed splash stays up",
+	untimed:        "this dismissal waits, so there is nothing to time",
 }
 
 func (m *settingsScreen) note() string {
@@ -313,7 +329,14 @@ func (m *settingsScreen) note() string {
 		}
 		return notes.art
 	case rowSplashDismiss:
+		// The dismissal is the row that disables the one under it, so it is
+		// where saying so belongs.
+		if !m.splashMode.timed() {
+			return notes.untimed
+		}
 		return notes.dismiss
+	case rowSplashTime:
+		return notes.splashTime
 	default:
 		return notes.length
 	}
@@ -327,7 +350,9 @@ func noteWidth() int {
 		lipgloss.Width(notes.splashOff),
 		lipgloss.Width(notes.art),
 		lipgloss.Width(notes.randomArt),
-		lipgloss.Width(notes.dismiss))
+		lipgloss.Width(notes.dismiss),
+		lipgloss.Width(notes.splashTime),
+		lipgloss.Width(notes.untimed))
 }
 
 func onOff(b bool) string {

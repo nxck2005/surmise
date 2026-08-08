@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -20,6 +23,11 @@ import (
 type splashScreen struct {
 	art  banner.Banner
 	mode splashMode
+
+	// duration is how long a timed mode waits. It is held here rather than read
+	// from the settings each time the timer is armed, so the splash cannot
+	// change length under a player who is looking at it.
+	duration time.Duration
 
 	// next is where dismissing lands, captured when the splash was raised. It is
 	// normally the board, but a startup that failed to make a puzzle sits on the
@@ -54,6 +62,62 @@ const (
 
 // splashModes is the order the settings screen cycles through, default first.
 var splashModes = []splashMode{splashSkip, splashKey, splashFixed}
+
+// splashDuration is the built-in wait for a timed splash: long enough to read,
+// short enough that someone who launched to play a puzzle does not wait on it.
+const splashDuration = 1200 * time.Millisecond
+
+// splashDurations are what the settings screen steps through. A short list of
+// round numbers rather than a free number: the value only has to be roughly
+// right, and stepping to it must stay one keypress.
+//
+// The built-in default is one of them on purpose — a screen whose current value
+// is not among the ones it offers has to snap somewhere the moment it is
+// touched, and that is a change nobody asked for.
+var splashDurations = []time.Duration{
+	600 * time.Millisecond,
+	splashDuration,
+	2 * time.Second,
+	3 * time.Second,
+	5 * time.Second,
+}
+
+// maxSplashDuration bounds a hand-edited settings file. Past this the splash
+// stops reading as an opening and starts reading as a hang.
+const maxSplashDuration = time.Minute
+
+// parseSplashDuration reads a saved length in milliseconds. Zero is "nothing
+// chosen" and yields the default; anything outside the sane range is refused,
+// for the caller to report the way an unsupported -length is reported.
+func parseSplashDuration(ms int) (time.Duration, bool) {
+	switch {
+	case ms == 0:
+		return splashDuration, true
+	case ms < 0 || time.Duration(ms)*time.Millisecond > maxSplashDuration:
+		return splashDuration, false
+	default:
+		return time.Duration(ms) * time.Millisecond, true
+	}
+}
+
+// splashDurationLabel writes a length the way the settings screen shows it:
+// "0.6s", "1.2s", "2s".
+func splashDurationLabel(d time.Duration) string {
+	return strconv.FormatFloat(d.Seconds(), 'g', -1, 64) + "s"
+}
+
+// stepSplashDuration walks the offered lengths, wrapping. A value from a
+// hand-edited file that is not among them starts from the nearest one, so the
+// first step goes somewhere predictable rather than back to the beginning.
+func stepSplashDuration(current time.Duration, delta int) time.Duration {
+	at, best := 0, time.Duration(math.MaxInt64)
+	for i, d := range splashDurations {
+		if gap := (d - current).Abs(); gap < best {
+			at, best = i, gap
+		}
+	}
+	return splashDurations[wrap(at, delta, len(splashDurations))]
+}
 
 // setting is how a mode is written to settings.json; label is how the settings
 // screen shows it. They are kept apart so the file stays terse and stable while

@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -118,6 +119,7 @@ func TestSettingsScreenPersistsChoices(t *testing.T) {
 	want := store.Settings{
 		Length: 4, RememberLast: true,
 		Splash: splashOn, SplashArt: banner.Default().Name, SplashDismiss: splashSkip.setting(),
+		SplashMillis: int(splashDuration / time.Millisecond),
 	}
 	if got := s.Settings(); got != want {
 		t.Fatalf("saved settings = %+v, want %+v", got, want)

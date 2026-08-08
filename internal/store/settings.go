@@ -34,6 +34,13 @@ type Settings struct {
 	Splash        string `json:"splash,omitempty"`
 	SplashArt     string `json:"splash_art,omitempty"`
 	SplashDismiss string `json:"splash_dismiss,omitempty"`
+
+	// SplashMillis is how long a timed splash stays up. Zero is "nothing
+	// chosen", which the UI reads as its own default — the same rule Length
+	// follows, and the reason this is not a time.Duration: a duration's zero is
+	// a legitimate value (no wait at all) and could not be told apart from an
+	// older settings file that never had the field.
+	SplashMillis int `json:"splash_ms,omitempty"`
 }
 
 const settingsName = "settings.json"

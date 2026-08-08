@@ -111,8 +111,9 @@ reference in [docs/THEMES.md](docs/THEMES.md).
 
 the settings screen holds the mode new puzzles start in, whether playing a
 different mode makes *that* the new default, and the splash: whether you get one,
-which ascii art it draws, and how it goes away (timed, timed but skippable, or
-waiting for a key). everything saves as you change it.
+which ascii art it draws, how it goes away (timed, timed but skippable, or
+waiting for a key), and how long it stays up when it's timed. everything saves as
+you change it.
 
 ```sh
 surmise -length 6        # start in a mode for one run, without saving it

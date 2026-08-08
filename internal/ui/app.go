@@ -59,17 +59,13 @@ func tick() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// splashDuration is how long a timed splash lingers. Long enough to read, short
-// enough that someone who launches to play a puzzle does not wait on it.
-const splashDuration = 1200 * time.Millisecond
-
 // splashDoneMsg ends a timed splash. It is its own one-shot timer rather than a
 // deadline checked against the one-second tick, which would let a 1.2s splash
 // sit for up to 2.2s — the whole point of the duration is that it is brief.
 type splashDoneMsg struct{}
 
-func splashTimer() tea.Cmd {
-	return tea.Tick(splashDuration, func(time.Time) tea.Msg { return splashDoneMsg{} })
+func splashTimer(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return splashDoneMsg{} })
 }
 
 // tagline is the one-line description under the product's name, on the menu and
@@ -284,6 +280,13 @@ func (m *Model) applyStartupSplash(override string) {
 	}
 	m.splash.mode = mode
 
+	d, ok := parseSplashDuration(s.SplashMillis)
+	if !ok {
+		m.err = fmt.Errorf("splash length %dms is out of range — using %s",
+			s.SplashMillis, splashDurationLabel(splashDuration))
+	}
+	m.splash.duration = d
+
 	want := override
 	if want == splashOn {
 		// -splash on turns it back on for a run without saying which art, so it
@@ -363,12 +366,21 @@ func (m *Model) saveSettings(s store.Settings) {
 }
 
 func (m *Model) Init() tea.Cmd {
-	// A timed splash gets its own one-shot timer alongside the clock; a splash
-	// that waits for input needs nothing.
-	if m.screen == screenSplash && m.splash.mode.timed() {
-		return tea.Batch(tick(), splashTimer())
+	if cmd := m.splashCmd(); cmd != nil {
+		return tea.Batch(tick(), cmd)
 	}
 	return tick()
+}
+
+// splashCmd is the timer a timed splash runs on, or nil when there is nothing
+// to time — no splash showing, or a mode that waits for input instead. It is a
+// method rather than an inline condition in Init so a test can ask whether the
+// timer was armed without waiting out its duration.
+func (m *Model) splashCmd() tea.Cmd {
+	if m.screen != screenSplash || !m.splash.mode.timed() {
+		return nil
+	}
+	return splashTimer(m.splash.duration)
 }
 
 // pushSize hands the terminal's size to the screens that lay out against it.
@@ -892,6 +904,7 @@ func (m *Model) commitSettings(row int) {
 	}
 	s.SplashArt = m.settings.splashArt
 	s.SplashDismiss = m.settings.splashMode.setting()
+	s.SplashMillis = int(m.settings.splashTime / time.Millisecond)
 	m.saveSettings(s)
 
 	if row == rowLength {

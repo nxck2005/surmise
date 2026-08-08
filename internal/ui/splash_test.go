@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -10,14 +11,21 @@ import (
 	"github.com/nxck2005/surmise/internal/store"
 )
 
-// splashModel is a model sitting on the splash, as a launch leaves it.
-func splashModel(t *testing.T, opts Options) *Model {
+// mustStore is a store over a fresh directory, for the tests that do not also
+// need the directory back.
+func mustStore(t *testing.T) *store.JSON {
 	t.Helper()
 	s, err := store.NewJSON(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewJSON: %v", err)
 	}
-	m := New(s, nil, opts)
+	return s
+}
+
+// splashModel is a model sitting on the splash, as a launch leaves it.
+func splashModel(t *testing.T, opts Options) *Model {
+	t.Helper()
+	m := New(mustStore(t), nil, opts)
 	if m.screen != screenSplash {
 		t.Fatalf("screen = %v, want splash", m.screen)
 	}
@@ -273,6 +281,138 @@ func TestSplashRowsAreDisabledWhenItIsOff(t *testing.T) {
 	draw(t, m)
 	if _, ok := m.hits.find(action{kind: actSettingNext, index: rowSplashArt}); !ok {
 		t.Error("the art row did not come back")
+	}
+}
+
+// --- how long it stays up ---
+
+// The saved length is what a timed splash runs on, and it is only armed for a
+// mode that has something to time.
+func TestSplashDuration(t *testing.T) {
+	s, dir := newStore(t)
+	if err := s.SaveSettings(store.Settings{SplashMillis: 2500}); err != nil {
+		t.Fatal(err)
+	}
+
+	m := reopen(t, dir, Options{})
+	if m.splash.duration != 2500*time.Millisecond {
+		t.Errorf("duration = %v, want the saved 2.5s", m.splash.duration)
+	}
+	if m.splashCmd() == nil {
+		t.Error("a timed splash armed no timer")
+	}
+
+	// Nothing saved means the built-in default, not no wait at all.
+	m = reopen(t, dir, Options{})
+	m.splash.duration = 0
+	if d, ok := parseSplashDuration(0); !ok || d != splashDuration {
+		t.Errorf("parseSplashDuration(0) = %v, %v, want the default", d, ok)
+	}
+
+	// The mode that waits for a key has nothing to time.
+	if err := s.SaveSettings(store.Settings{SplashDismiss: splashKey.setting()}); err != nil {
+		t.Fatal(err)
+	}
+	if m := reopen(t, dir, Options{}); m.splashCmd() != nil {
+		t.Error("the key mode armed a timer")
+	}
+
+	// And no splash at all arms nothing either.
+	if m := New(mustStore(t), nil, Options{Splash: splashOff}); m.splashCmd() != nil {
+		t.Error("a switched-off splash armed a timer")
+	}
+}
+
+// A hand-edited length outside the sane range is reported and falls back,
+// rather than hanging the launch behind a splash nobody can dismiss.
+func TestSplashDurationOutOfRange(t *testing.T) {
+	for _, ms := range []int{-1, int(2 * time.Minute / time.Millisecond)} {
+		s, dir := newStore(t)
+		if err := s.SaveSettings(store.Settings{SplashMillis: ms}); err != nil {
+			t.Fatal(err)
+		}
+		m := reopen(t, dir, Options{})
+		if m.err == nil {
+			t.Errorf("%dms was not reported", ms)
+		}
+		if m.splash.duration != splashDuration {
+			t.Errorf("%dms gave duration %v, want the default", ms, m.splash.duration)
+		}
+	}
+}
+
+func TestSplashDurationLabels(t *testing.T) {
+	for _, tc := range []struct {
+		d    time.Duration
+		want string
+	}{
+		{600 * time.Millisecond, "0.6s"},
+		{splashDuration, "1.2s"},
+		{2 * time.Second, "2s"},
+	} {
+		if got := splashDurationLabel(tc.d); got != tc.want {
+			t.Errorf("label(%v) = %q, want %q", tc.d, got, tc.want)
+		}
+	}
+}
+
+// Stepping wraps, and a value from a hand-edited file starts from the nearest
+// offered one rather than from the beginning of the list.
+func TestStepSplashDuration(t *testing.T) {
+	last := splashDurations[len(splashDurations)-1]
+	if got := stepSplashDuration(last, 1); got != splashDurations[0] {
+		t.Errorf("stepping past the end gave %v, want %v", got, splashDurations[0])
+	}
+	if got := stepSplashDuration(splashDurations[0], -1); got != last {
+		t.Errorf("stepping back from the start gave %v, want %v", got, last)
+	}
+	// 1900ms is nearest 2s, so one step forward is the value after it.
+	want := splashDurations[wrap(indexOfDuration(2*time.Second), 1, len(splashDurations))]
+	if got := stepSplashDuration(1900*time.Millisecond, 1); got != want {
+		t.Errorf("stepping from an unlisted value gave %v, want %v", got, want)
+	}
+}
+
+func indexOfDuration(d time.Duration) int {
+	for i, x := range splashDurations {
+		if x == d {
+			return i
+		}
+	}
+	return 0
+}
+
+// The length row is dead while the dismissal has nothing to time.
+func TestSplashTimeRowFollowsTheDismissMode(t *testing.T) {
+	m := newModel(t)
+	openSettings(t, m)
+
+	m.settings.cursor = rowSplashDismiss
+	if !m.settings.enabled(rowSplashTime) {
+		t.Fatal("the length row starts disabled under a timed dismissal")
+	}
+
+	// Step to the mode that waits for a key.
+	for range len(splashModes) {
+		if m.settings.splashMode == splashKey {
+			break
+		}
+		send(t, m, "right")
+	}
+	if m.settings.splashMode != splashKey {
+		t.Fatal("could not reach the key mode")
+	}
+	if m.settings.enabled(rowSplashTime) {
+		t.Error("the length row is still live with nothing to time")
+	}
+
+	send(t, m, "down")
+	if m.settings.cursor != rowSplashDismiss {
+		t.Errorf("the cursor moved onto the disabled length row (%d)", m.settings.cursor)
+	}
+	draw(t, m)
+	if _, ok := m.hits.find(action{kind: actSettingNext, index: rowSplashTime}); ok {
+		t.Error("the disabled length row still offers a click target")
 	}
 }
 
