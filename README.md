@@ -16,9 +16,7 @@
 go install github.com/nxck2005/surmise@latest
 ```
 
-then run `surmise` — if your shell can't find it, `go install` puts binaries in
-`$(go env GOPATH)/bin`, which isn't on `$PATH` by default. add it to your shell's
-startup file so it sticks:
+then run `surmise`. in the event that your shell can't find it:
 
 ```sh
 # zsh
