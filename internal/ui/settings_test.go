@@ -3,9 +3,11 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/nxck2005/surmise/internal/banner"
 	"github.com/nxck2005/surmise/internal/store"
 )
 
@@ -112,7 +114,13 @@ func TestSettingsScreenPersistsChoices(t *testing.T) {
 	send(t, m, "right", "right")
 	send(t, m, "down", "right")
 
-	want := store.Settings{Length: 4, RememberLast: true}
+	// The splash's three are written out as well: every save is the whole file,
+	// and a visited preference reads back as what the screen shows.
+	want := store.Settings{
+		Length: 4, RememberLast: true,
+		Splash: splashOn, SplashArt: banner.Default().Name, SplashDismiss: splashSkip.setting(),
+		SplashMillis: int(splashDuration / time.Millisecond),
+	}
 	if got := s.Settings(); got != want {
 		t.Fatalf("saved settings = %+v, want %+v", got, want)
 	}

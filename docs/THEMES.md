@@ -120,9 +120,15 @@ underline = false
 
 Elements: `title`, `text`, `muted`, `accent`, `error`, `help`, `help_hover`,
 `hover`, `border`, `panel_title`, `menu_selected`, `cursor`, `caret`, `bar`,
-`tile.correct`, `tile.present`, `tile.absent`, `tile.active`, `tile.empty`,
+`splash`, `tile.correct`, `tile.present`, `tile.absent`, `tile.active`, `tile.empty`,
 `key.unused`, `key.correct`, `key.present`, `key.absent`, `status.won`,
 `status.lost`, `status.playing`.
+
+`splash` is the ASCII art drawn at startup — bold and accent-coloured by
+default, and worth quietening (`fg = "muted"`, `bold = false`) in a theme that
+wants a calmer opening. Which
+art it draws is a setting rather than part of the theme, so a theme colours
+whatever banner the player picked.
 
 The legend on the puzzle screen (`A correct spot · A wrong spot · A not in
 word`) has no element of its own: it is drawn with `tile.correct`,

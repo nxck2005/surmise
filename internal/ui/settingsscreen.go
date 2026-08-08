@@ -3,10 +3,12 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/banner"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/words"
 )
@@ -21,21 +23,40 @@ import (
 type settingsScreen struct {
 	length       int
 	rememberLast bool
-	cursor       int
+
+	// The splash's three: whether it appears, which art it draws, and how it
+	// goes away. The last two are meaningless with the first off, and the screen
+	// disables them rather than letting someone set a value that does nothing.
+	splash     bool
+	splashArt  string // a banner's name, or "random"
+	splashMode splashMode
+	splashTime time.Duration
+
+	cursor int
 }
 
 // The rows, in display order. Their order is the index carried by a click.
 const (
 	rowLength = iota
 	rowRememberLast
+	rowSplash
+	rowSplashArt
+	rowSplashDismiss
+	rowSplashTime
 	settingRows
 )
 
-// The two columns, in display cells. Fixed rather than measured because there
-// are two rows: a widest-of helper would be more machinery than the numbers.
+// The two columns, in display cells. Fixed rather than measured because the
+// rows are few and their values are short: a widest-of helper would be more
+// machinery than the numbers. A banner named wider than valueWidth is what
+// would change that.
 const (
 	labelWidth = 16
-	valueWidth = 13
+	// Wide enough for the longest value there is with a space either side of it:
+	// "timed + skip" filled the old 13 cells edge to edge and read as cramped
+	// against the step arrow. A banner named wider than this is what would move
+	// it again.
+	valueWidth = 15
 )
 
 // reload takes the saved preferences. A zero length means nothing was ever
@@ -46,7 +67,37 @@ func (m *settingsScreen) reload(s store.Settings) {
 		m.length = defaultLength
 	}
 	m.rememberLast = s.RememberLast
+
+	m.splash = s.Splash != splashOff
+	m.splashArt = s.SplashArt
+	if _, ok := banner.Get(m.splashArt); !ok && m.splashArt != splashRandom {
+		// Nothing chosen, or art that no longer ships. Either way the screen
+		// shows what the app would actually draw, not a name with nothing behind
+		// it — the same reasoning as a zero length showing as the default mode.
+		m.splashArt = banner.Default().Name
+	}
+	m.splashMode, _ = parseSplashMode(s.SplashDismiss)
+	m.splashTime, _ = parseSplashDuration(s.SplashMillis)
+
 	m.cursor = 0
+}
+
+// enabled reports whether a row can be changed. A row whose value would do
+// nothing is shown greyed out instead: no arrows, no click targets, and the
+// cursor passes over it.
+//
+// There are two levels of that here. The art and the dismissal need the splash
+// itself; the length needs a dismissal that is actually timed, since the mode
+// that waits for a key has nothing to time.
+func (m *settingsScreen) enabled(row int) bool {
+	switch row {
+	case rowSplashArt, rowSplashDismiss:
+		return m.splash
+	case rowSplashTime:
+		return m.splash && m.splashMode.timed()
+	default:
+		return true
+	}
 }
 
 // update moves between rows and steps the highlighted value, reporting whether
@@ -69,14 +120,25 @@ func (m *settingsScreen) update(msg tea.KeyPressMsg) (changed, back bool) {
 	return false, false
 }
 
+// move steps the cursor to the next row it can do anything with, so a disabled
+// row is passed over rather than landed on. Running out of enabled rows in that
+// direction leaves the cursor where it was, which is what clamping did before.
 func (m *settingsScreen) move(delta int) {
-	m.cursor = min(max(m.cursor+delta, 0), settingRows-1)
+	for row := m.cursor + delta; row >= 0 && row < settingRows; row += delta {
+		if m.enabled(row) {
+			m.cursor = row
+			return
+		}
+	}
 }
 
 // point selects the row under the pointer, so hovering moves the cursor the way
-// it does on the menu and the puzzle list.
+// it does on the menu and the puzzle list. A disabled row marks no target, so
+// this is never called with one — the guard is here because point is the seam
+// the mouse comes through, and a stale hit map from the frame before the splash
+// was switched off would otherwise land on it.
 func (m *settingsScreen) point(row int) {
-	if row >= 0 && row < settingRows {
+	if row >= 0 && row < settingRows && m.enabled(row) {
 		m.cursor = row
 	}
 }
@@ -84,13 +146,61 @@ func (m *settingsScreen) point(row int) {
 // cycle steps the highlighted row's value. Both the arrow keys and the clicked
 // ‹ › targets land here, so the two inputs cannot drift apart.
 func (m *settingsScreen) cycle(delta int) {
+	if !m.enabled(m.cursor) {
+		return
+	}
 	switch m.cursor {
 	case rowLength:
 		m.length = stepLength(m.length, delta)
 	case rowRememberLast:
 		// Two values, so either direction is a toggle.
 		m.rememberLast = !m.rememberLast
+	case rowSplash:
+		m.splash = !m.splash
+	case rowSplashArt:
+		m.splashArt = stepArt(m.splashArt, delta)
+	case rowSplashDismiss:
+		m.splashMode = stepMode(m.splashMode, delta)
+	case rowSplashTime:
+		m.splashTime = stepSplashDuration(m.splashTime, delta)
 	}
+}
+
+// stepArt walks the bundled banners and then "random", wrapping like the modes
+// do. Random sits at the end rather than the start so stepping forward from the
+// default shows the art itself first — the names are the point, and random is
+// the answer for someone who has seen them all.
+func stepArt(current string, delta int) string {
+	choices := append(banner.Names(), splashRandom)
+	return choices[wrap(indexOf(choices, current), delta, len(choices))]
+}
+
+func stepMode(current splashMode, delta int) splashMode {
+	at := 0
+	for i, mode := range splashModes {
+		if mode == current {
+			at = i
+		}
+	}
+	return splashModes[wrap(at, delta, len(splashModes))]
+}
+
+func indexOf(all []string, want string) int {
+	for i, s := range all {
+		if s == want {
+			return i
+		}
+	}
+	return 0
+}
+
+// wrap steps an index around a list of n, in either direction.
+func wrap(at, delta, n int) int {
+	next := (at + delta) % n
+	if next < 0 {
+		next += n
+	}
+	return next
 }
 
 // stepLength walks the supported modes, wrapping at both ends: the list is
@@ -102,11 +212,7 @@ func stepLength(current, delta int) int {
 			at = i
 		}
 	}
-	next := (at + delta) % len(words.Lengths)
-	if next < 0 {
-		next += len(words.Lengths)
-	}
-	return words.Lengths[next]
+	return words.Lengths[wrap(at, delta, len(words.Lengths))]
 }
 
 func (m *settingsScreen) view(h *hitMap) string {
@@ -115,6 +221,10 @@ func (m *settingsScreen) view(h *hitMap) string {
 			fmt.Sprintf("%d letters", m.length)),
 		m.renderRow(h, rowRememberLast, "remember last",
 			onOff(m.rememberLast)),
+		m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
+		m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
+		m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
+		m.renderRow(h, rowSplashTime, "splash time", splashDurationLabel(m.splashTime)),
 	}
 
 	// The note is padded to the widest one there is, so moving the cursor does
@@ -146,7 +256,14 @@ func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) stri
 		labelStyle, valueStyle = st.text, st.accent
 	}
 
+	// A disabled row keeps its label and its value — it still says what it is
+	// set to — but loses the arrows, which is the whole of the greying out. The
+	// space they occupied is kept, so switching the splash off does not resize
+	// the panel around the rows that are left.
 	arrow := func(a action, glyph string) string {
+		if !m.enabled(row) {
+			return strings.Repeat(" ", lipgloss.Width(glyph))
+		}
 		style := st.muted
 		if h.hovered(a) {
 			style = st.hover(st.accent)
@@ -160,37 +277,82 @@ func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) stri
 	// Both columns are fixed-width so the rows line up under each other: the
 	// label left-aligned, the value centred between its arrows.
 	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
+	cell := valueBox.Render(valueStyle.Render(value))
+	if m.enabled(row) {
+		cell = h.mark(next, cell)
+	}
 	return prefix +
 		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
 		arrow(prev, st.glyph.ValuePrev) +
-		h.mark(next, valueBox.Render(valueStyle.Render(value))) +
+		cell +
 		arrow(next, st.glyph.ValueNext)
 }
 
 // notes are the one-line explanations, since neither setting says what it does
 // and one of them quietly overrides the other. They are listed together so the
 // screen can reserve the width of the longest.
-var notes = struct{ length, remembering, notRemembering string }{
+var notes = struct {
+	length, remembering, notRemembering string
+	splashOn, splashOff                 string
+	art, randomArt, dismiss             string
+	splashTime, untimed                 string
+}{
 	length:         "the mode new puzzles start in",
 	remembering:    "playing a mode makes it the default",
 	notRemembering: "the default stays whatever is set here",
+	splashOn:       "the art drawn while the app starts",
+	splashOff:      "turn it on to choose art and dismissal",
+	art:            "which art the splash draws",
+	randomArt:      "a different banner each launch",
+	dismiss:        "how the splash gets out of the way",
+	splashTime:     "how long a timed splash stays up",
+	untimed:        "this dismissal waits, so there is nothing to time",
 }
 
 func (m *settingsScreen) note() string {
-	switch {
-	case m.cursor != rowRememberLast:
-		return notes.length
-	case m.rememberLast:
-		return notes.remembering
-	default:
+	switch m.cursor {
+	case rowRememberLast:
+		if m.rememberLast {
+			return notes.remembering
+		}
 		return notes.notRemembering
+	case rowSplash:
+		// With the splash off, the note explains the two dead rows below it —
+		// they are the only thing on screen that has just changed.
+		if !m.splash {
+			return notes.splashOff
+		}
+		return notes.splashOn
+	case rowSplashArt:
+		if m.splashArt == splashRandom {
+			return notes.randomArt
+		}
+		return notes.art
+	case rowSplashDismiss:
+		// The dismissal is the row that disables the one under it, so it is
+		// where saying so belongs.
+		if !m.splashMode.timed() {
+			return notes.untimed
+		}
+		return notes.dismiss
+	case rowSplashTime:
+		return notes.splashTime
+	default:
+		return notes.length
 	}
 }
 
 func noteWidth() int {
 	return max(lipgloss.Width(notes.length),
 		lipgloss.Width(notes.remembering),
-		lipgloss.Width(notes.notRemembering))
+		lipgloss.Width(notes.notRemembering),
+		lipgloss.Width(notes.splashOn),
+		lipgloss.Width(notes.splashOff),
+		lipgloss.Width(notes.art),
+		lipgloss.Width(notes.randomArt),
+		lipgloss.Width(notes.dismiss),
+		lipgloss.Width(notes.splashTime),
+		lipgloss.Width(notes.untimed))
 }
 
 func onOff(b bool) string {

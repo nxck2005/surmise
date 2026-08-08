@@ -109,12 +109,16 @@ reference in [docs/THEMES.md](docs/THEMES.md).
 
 ## settings
 
-the settings screen holds two things (for now): the mode new puzzles start in, and
-whether playing a different mode makes *that* the new default. both save as you
-change them.
+the settings screen holds the mode new puzzles start in, whether playing a
+different mode makes *that* the new default, and the splash: whether you get one,
+which ascii art it draws, how it goes away (timed, timed but skippable, or
+waiting for a key), and how long it stays up when it's timed. everything saves as
+you change it.
 
 ```sh
 surmise -length 6        # start in a mode for one run, without saving it
+surmise -splash off      # skip the startup art for one run
+surmise -splash random   # a different banner each launch
 surmise -day 2026-08-06  # play another date's daily, without waiting for it
 surmise -data ./scratch  # keep saves and settings somewhere else
 ```
