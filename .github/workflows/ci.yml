@@ -84,19 +84,17 @@ jobs:
           GOOS=js GOARCH=wasm go build ./...
           GOOS=js GOARCH=wasm go vet ./...
 
-      # Compiling is not running. Go's own Node shim starts the binary far
-      # enough to prove the runtime comes up, the options parse and the bridge
-      # reports a missing page rather than panicking — which is exactly what a
-      # host with no browser globals should do.
+      # Compiling is not running. This drives the real binary against a stub
+      # xterm.js and asserts on what it writes, which is the only automated
+      # cover the browser build has.
+      #
+      # Two of its checks earn their place on their own: a js.Func callback that
+      # blocks hangs the whole runtime, and a missing colour profile renders the
+      # game in monochrome. Neither shows up in a compile.
       - name: wasm smoke test
         run: |
           GOOS=js GOARCH=wasm go build -o /tmp/surmise.wasm .
-          out=$(node "$(go env GOROOT)/lib/wasm/wasm_exec_node.js" /tmp/surmise.wasm 2>&1 || true)
-          echo "$out"
-          case "$out" in
-            *"globalThis.surmise is missing"*) ;;
-            *) echo "unexpected startup output"; exit 1 ;;
-          esac
+          node scripts/smoke-web.mjs /tmp/surmise.wasm
 
       # Proves the vendored copy is upstream plus exactly the two patch files.
       # See third_party/bubbletea/PATCHES.md.

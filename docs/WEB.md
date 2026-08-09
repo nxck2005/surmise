@@ -79,6 +79,17 @@ python3 -m http.server -d web/dist
 Then open the address it prints. The build needs Go and npm; `npm ci` installs
 the pinned xterm.js into `web/node_modules`.
 
+To check it without a browser:
+
+```sh
+GOOS=js GOARCH=wasm go build -o /tmp/surmise.wasm .
+node scripts/smoke-web.mjs /tmp/surmise.wasm
+```
+
+That drives the real binary against a stub xterm.js and asserts on what it
+writes — the alternate screen, mouse tracking, 24-bit colour, typing, and a
+resize. CI runs it. Colour, layout and hover still need eyes.
+
 `web/dist` and `web/node_modules` are both ignored by git. `wasm_exec.js` is
 copied from the Go toolchain on every build and is never committed: it has to
 match the compiler that produced the `.wasm`, and a mismatched pair fails to
