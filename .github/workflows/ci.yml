@@ -52,9 +52,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # third_party is someone else's code, held byte-for-byte so the drift
+      # check below can prove it. A future toolchain's formatter changing its
+      # mind about it must not fail this build.
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l .)
+          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -v '^third_party/'))
           if [ -n "$unformatted" ]; then
             echo "these files need gofmt:"
             echo "$unformatted"
@@ -66,7 +69,36 @@ jobs:
 
       # The dependency set is deliberately Charm-only; this keeps an unused
       # module from drifting back into go.mod unnoticed.
+      #
+      # GOWORK=off on purpose: the check has to measure the go.mod a downstream
+      # consumer resolves, not the one the workspace happens to build.
       - name: tidy
         run: |
-          go mod tidy
+          GOWORK=off go mod tidy
           git diff --exit-code go.mod go.sum
+
+      # The browser build has no platform in the test matrix, so without this
+      # step it breaks silently the next time internal/ui is touched.
+      - name: wasm
+        run: |
+          GOOS=js GOARCH=wasm go build ./...
+          GOOS=js GOARCH=wasm go vet ./...
+
+      # Compiling is not running. Go's own Node shim starts the binary far
+      # enough to prove the runtime comes up, the options parse and the bridge
+      # reports a missing page rather than panicking — which is exactly what a
+      # host with no browser globals should do.
+      - name: wasm smoke test
+        run: |
+          GOOS=js GOARCH=wasm go build -o /tmp/surmise.wasm .
+          out=$(node "$(go env GOROOT)/lib/wasm/wasm_exec_node.js" /tmp/surmise.wasm 2>&1 || true)
+          echo "$out"
+          case "$out" in
+            *"globalThis.surmise is missing"*) ;;
+            *) echo "unexpected startup output"; exit 1 ;;
+          esac
+
+      # Proves the vendored copy is upstream plus exactly the two patch files.
+      # See third_party/bubbletea/PATCHES.md.
+      - name: bubbletea copy is unmodified
+        run: bash scripts/check-bubbletea.sh
