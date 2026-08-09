@@ -30,15 +30,23 @@ var browserTerm *web.Terminal
 // nobody can see. Their zero values mean "not asked for", which is exactly what
 // config wants.
 func loadConfig() config {
-	params := js.Global().Get("URLSearchParams").New(
-		js.Global().Get("location").Get("search"))
+	get := func(string) string { return "" }
 
-	get := func(name string) string {
-		v := params.Call("get", name)
-		if !v.Truthy() {
-			return ""
+	// Nothing here may assume a browser. syscall/js panics on a Get against an
+	// undefined value, and a host without a location — Node, which is how the
+	// binary is smoke-tested — has to reach the ordinary "no options chosen"
+	// path rather than a stack trace.
+	loc := js.Global().Get("location")
+	usp := js.Global().Get("URLSearchParams")
+	if loc.Truthy() && usp.Truthy() {
+		params := usp.New(loc.Get("search"))
+		get = func(name string) string {
+			v := params.Call("get", name)
+			if !v.Truthy() {
+				return ""
+			}
+			return v.String()
 		}
-		return v.String()
 	}
 
 	cfg := config{
