@@ -96,8 +96,15 @@ type module struct {
 // build rather than parsing go.mod, so a module listed as indirect but never
 // actually linked does not appear, and one pulled in transitively does.
 func linkedModules() ([]module, error) {
-	out, err := exec.Command("go", "list", "-deps",
-		"-f", "{{if .Module}}{{.Module.Path}}\t{{.Module.Version}}\t{{.Module.Dir}}{{end}}", ".").Output()
+	cmd := exec.Command("go", "list", "-deps",
+		"-f", "{{if .Module}}{{.Module.Path}}\t{{.Module.Version}}\t{{.Module.Dir}}{{end}}", ".")
+	// GOWORK=off, or the workspace answers for the module it redirects: a
+	// workspace member has no version, so bubbletea would be listed with a blank
+	// one and its licence read from third_party rather than from the release
+	// this project actually depends on. Notices describe what a consumer
+	// resolves, which is what go.mod says.
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}

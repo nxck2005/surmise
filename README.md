@@ -98,6 +98,9 @@ bundled: `ember-dark` (the default), `ember-light`, `catppuccin-mocha`,
 `dracula`, `everforest-dark`, `gruvbox-dark`, `high-contrast`, `matrix`,
 `nord`, `rose-pine`, `solarized-dark`, `terminal`, `tokyo-night`.
 
+writing your own needs a file on disk, so it's terminal-only; the browser build
+ships the bundled set.
+
 yours go in `~/.config/surmise/themes`. a whole theme can be two lines:
 
 ```toml
@@ -138,12 +141,27 @@ the **about** row in the menu shows app info. for getting the version without op
 surmise -version         # surmise 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
 ```
 
+## in a browser
+
+the same game compiles to webassembly and runs on xterm.js — no install, no
+server. saved puzzles go to `localStorage` instead of a config directory, and
+only the bundled themes come along.
+
+```sh
+scripts/build-web.sh              # writes web/dist
+python3 -m http.server -d web/dist
+```
+
+it isn't hosted anywhere yet. details, and the query-string equivalents of the
+flags, in [docs/WEB.md](docs/WEB.md).
+
 ## development
 
 ```sh
 go run .                    # play from a clone
 go test ./...
 go test -race ./internal/...
+scripts/build-web.sh        # build the browser bundle into web/dist
 go run ./tools/genwords     # regenerate the embedded word lists
 go run ./tools/gennotices   # regenerate THIRD_PARTY_NOTICES.md after a dep change
 ```

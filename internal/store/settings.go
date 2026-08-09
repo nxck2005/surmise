@@ -1,8 +1,6 @@
 package store
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -55,18 +53,14 @@ func (s *JSON) Settings() Settings {
 	if err != nil {
 		return Settings{}
 	}
-	var out Settings
-	if err := json.Unmarshal(b, &out); err != nil {
-		return Settings{}
-	}
-	return out
+	return decodeSettings(b)
 }
 
 // SaveSettings persists preferences, atomically like every other write here.
 func (s *JSON) SaveSettings(v Settings) error {
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := encodeSettings(v)
 	if err != nil {
-		return fmt.Errorf("store: encode settings: %w", err)
+		return err
 	}
 	return writeFileAtomic(s.settingsPath(), b)
 }

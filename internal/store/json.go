@@ -1,15 +1,12 @@
 package store
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/game"
@@ -56,12 +53,9 @@ func (s *JSON) pathFor(id string) string {
 }
 
 func (s *JSON) Save(g *game.Game) error {
-	if err := g.Validate(); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(g, "", "  ")
+	b, err := encodeGame(g)
 	if err != nil {
-		return fmt.Errorf("store: encode puzzle %s: %w", g.ID, err)
+		return err
 	}
 	return writeFileAtomic(s.pathFor(g.ID), b)
 }
@@ -90,14 +84,7 @@ func (s *JSON) load(id string) (*game.Game, error) {
 		return nil, fmt.Errorf("store: read puzzle %s: %w", id, err)
 	}
 
-	var g game.Game
-	if err := json.Unmarshal(b, &g); err != nil {
-		return nil, fmt.Errorf("store: decode puzzle %s: %w", id, err)
-	}
-	if err := g.Validate(); err != nil {
-		return nil, fmt.Errorf("store: puzzle %s: %w", id, err)
-	}
-	return &g, nil
+	return decodeGame(id, b)
 }
 
 // Delete removes a puzzle.
@@ -133,40 +120,12 @@ func (s *JSON) Delete(id string) error {
 	return nil
 }
 
-// tombstoneRecord is how a deleted puzzle is written: the fields game.Tombstone
-// keeps, and no others. Encoding the *game.Game itself would spell out every
-// field it no longer has ("answer": "", "guesses": null, a zero startedAt),
-// which reads as a corrupt puzzle rather than as a deliberate marker — and
-// Game's tags carry no omitempty on purpose, so that an ordinary save is
-// written exactly as it always was. The keys match Game's, so reading a
-// tombstone is just decoding a Game.
-type tombstoneRecord struct {
-	ID        string      `json:"id"`
-	Length    int         `json:"length"`
-	Status    game.Status `json:"status"`
-	UpdatedAt time.Time   `json:"updatedAt"`
-	// Daily carries omitempty, unlike its neighbours, so a casual puzzle's
-	// tombstone is written exactly as it always was and only a deleted daily
-	// gains a key. See game.Tombstone for why a deleted day has to remember
-	// which day it was.
-	Daily   string `json:"daily,omitempty"`
-	Deleted bool   `json:"deleted"`
-}
-
+// saveTombstone writes the marker in the puzzle's place. The encoding is shared
+// with the browser store; see codec.go.
 func (s *JSON) saveTombstone(g *game.Game) error {
-	if err := g.Validate(); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(tombstoneRecord{
-		ID:        g.ID,
-		Length:    g.Length,
-		Status:    g.Status,
-		UpdatedAt: g.UpdatedAt,
-		Daily:     g.Daily,
-		Deleted:   g.Deleted,
-	}, "", "  ")
+	b, err := encodeTombstone(g)
 	if err != nil {
-		return fmt.Errorf("store: encode tombstone %s: %w", g.ID, err)
+		return err
 	}
 	return writeFileAtomic(s.pathFor(g.ID), b)
 }
@@ -203,19 +162,7 @@ func (s *JSON) List() ([]Summary, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Tombstones are history, not puzzles: they belong to the streak walk, not
-	// to the browse list or to anything else built on List.
-	out := make([]Summary, 0, len(games))
-	for _, g := range games {
-		if g.Deleted {
-			continue
-		}
-		out = append(out, summarize(g))
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].UpdatedAt.After(out[j].UpdatedAt)
-	})
-	return out, nil
+	return summaries(games), nil
 }
 
 // writeFileAtomic writes via a temp file in the same directory, then renames.

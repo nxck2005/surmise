@@ -1,0 +1,22 @@
+// A workspace, deliberately, and not a `replace` directive in go.mod.
+//
+// The README's first install instruction is `go install <module>@latest`, and
+// `go help install` says the named module's go.mod "must not contain directives
+// (replace and exclude) that would cause it to be interpreted differently than
+// if it were the main module". A replace line would break that command for
+// everyone.
+//
+// A workspace redirects the build for anyone working inside this repository,
+// while the published go.mod keeps requiring upstream bubbletea. That is
+// honest: the copy under third_party is upstream v2.0.8 plus two additive
+// js-only files, so a native build is identical either way. Only the
+// WebAssembly build needs the copy.
+//
+// See third_party/bubbletea/PATCHES.md.
+
+go 1.26.5
+
+use (
+	.
+	./third_party/bubbletea
+)

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>surmise</title>
+    <meta name="description" content="A word-guessing game for the terminal, in your browser." />
+    <link rel="stylesheet" href="vendor/xterm.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- The loader is plain text on purpose: it has to be readable before any
+         script runs, and it is what the player sees while the WebAssembly
+         module downloads. -->
+    <div id="loading" class="overlay">
+      <pre class="art">surmise</pre>
+      <p class="hint">loading…</p>
+      <noscript><p class="hint">This needs JavaScript.</p></noscript>
+    </div>
+
+    <div id="terminal"></div>
+
+    <!-- Revealed when the program quits. Without it, quitting leaves a dead
+         black terminal and no way back. -->
+    <div id="exit" class="overlay" hidden>
+      <pre class="art">surmise</pre>
+      <p class="hint">thanks for playing</p>
+      <button id="again" type="button">play again</button>
+    </div>
+
+    <div id="error" class="overlay" hidden>
+      <p class="hint" id="error-text"></p>
+    </div>
+
+    <script src="vendor/xterm.js"></script>
+    <script src="vendor/addon-fit.js"></script>
+    <script src="wasm_exec.js"></script>
+    <script src="boot.js"></script>
+  </body>
+</html>

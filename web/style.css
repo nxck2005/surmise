@@ -1,0 +1,80 @@
+/* The page is a frame around the terminal, and nothing more.
+ *
+ * --surmise-bg is set from the theme at run time: bubbletea emits the palette's
+ * background as OSC 11, and boot.js turns that into this variable. So switching
+ * theme in the picker recolours the letterboxing as well as the board, and the
+ * page never disagrees with the game inside it. The value below is "ember
+ * dark", the default palette, so the first paint is already right. */
+:root {
+  --surmise-bg: #14100e;
+  --surmise-fg: #e8ded5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--surmise-bg);
+  color: var(--surmise-fg);
+  font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  /* The terminal owns scrolling. The page must never have its own. */
+  overflow: hidden;
+}
+
+#terminal {
+  height: 100%;
+  width: 100%;
+  padding: 8px;
+}
+
+/* xterm draws its own background; let the page's show through so the two are
+ * one colour rather than two that nearly match. */
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: var(--surmise-bg);
+  z-index: 10;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.art {
+  margin: 0;
+  font-size: clamp(1.5rem, 6vw, 3rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.hint {
+  margin: 0;
+  opacity: 0.7;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.8;
+}

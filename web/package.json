@@ -1,0 +1,10 @@
+{
+  "name": "surmise-web",
+  "private": true,
+  "description": "Browser shell for surmise: xterm.js in front of the WebAssembly build.",
+  "license": "MIT",
+  "dependencies": {
+    "@xterm/xterm": "5.5.0",
+    "@xterm/addon-fit": "0.10.0"
+  }
+}
