@@ -24,16 +24,22 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
-go.work.sum
+# The workspace is committed on purpose: it points the build at the patched
+# bubbletea copy under third_party. See go.work for why that is not a `replace`.
 
 # env file
 .env
 
+# Browser build output. Ignored, not merely untidy: release.yml relies on the
+# worktree staying clean, because a dirty tree makes Go stamp every release
+# binary "dirty", and ignored files are not reported as changes.
+/web/dist/
+/web/node_modules/
+
 # Local scratch
 notes/
 CLAUDE.md
+AGENTS.md
 .claude/
 
 # Editor/IDE
