@@ -670,6 +670,24 @@ SOFTWARE.
 `blocked.txt` and `profanity.txt` are hand-maintained here and covered by the
 root `LICENSE`.
 
+## Browser build
+
+The WebAssembly build in `web/` carries components the terminal build does not.
+None of them ships in the release archives; they are part of the hosted page.
+
+| Component | Source | Licence |
+|---|---|---|
+| `xterm.js` | [xterm.js](https://github.com/xtermjs/xterm.js) | MIT |
+| `addon-fit.js` | [xterm.js](https://github.com/xtermjs/xterm.js) | MIT |
+| `wasm_exec.js` | The Go distribution | BSD-3-Clause |
+
+`wasm_exec.js` is copied verbatim from the Go toolchain at build time and is
+covered by the Go licence, reproduced with the Go modules above.
+
+`third_party/bubbletea` is Bubble Tea v2.0.8 with two small files added, because
+upstream has no WebAssembly build. Nothing upstream is modified, and the copy
+stays under the same MIT terms; see `third_party/bubbletea/PATCHES.md`.
+
 ## Trademarks
 
 This project is not affiliated with, endorsed by, or connected to The New York
