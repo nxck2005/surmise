@@ -116,6 +116,10 @@ Two implementation notes worth knowing before changing `internal/web`:
   would deliver deadlocks the runtime, and the symptom is a page that draws one
   frame and then freezes. Append and signal without blocking; call
   `Program.Send` from a goroutine only.
+- **The Program is handed a stub tty.** Bubble Tea turns on newline mapping when
+  standard input is not a tty, and that leaves fragments of a larger frame on
+  screen when the frame shrinks. xterm.js behaves like a raw-mode terminal, so
+  the stub tells the truth.
 - **The colour profile is forced.** The output is not a tty, so detection would
   find no colour and every theme would collapse to monochrome.
 
