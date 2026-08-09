@@ -1,11 +1,16 @@
-// Command surmise is a word-guessing game for the terminal.
+// Command surmise is a word-guessing game for the terminal, and — built for
+// WebAssembly — for a browser.
+//
+// What the two builds share is here. What only one of them can do is in
+// main_native.go and main_js.go: a browser has no flags, no environment and no
+// config directory, and a terminal has no query string. The split is by what
+// the platform can do, not by taste, and the option *names* are declared once
+// so a flag and a URL parameter cannot drift apart.
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
-	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -17,92 +22,76 @@ import (
 	"github.com/nxck2005/surmise/internal/ui"
 )
 
-func main() {
-	// A custom data directory keeps test or demo play out of the real profile.
-	dataDir := flag.String("data", "", "directory for saved puzzles (default: user config dir)")
-	// -theme wins over the saved choice for one run, which is what makes
-	// screenshotting and theme authoring bearable.
-	themeName := flag.String("theme", os.Getenv(brand.Env("THEME")), "theme to start with (default: last used)")
-	listThemes := flag.Bool("themes", false, "list available themes and exit")
-	// -length likewise overrides the saved default mode for one run. A value
-	// the game has no words for is reported by the UI on its error line rather
-	// than refused here, so a typo costs a note, not a launch.
-	length := flag.Int("length", envLength(), "word length to start with: 4, 5 or 6 (default: last used)")
-	// -day plays another date's daily. Handy for looking at a board without
-	// waiting for it, and, like the rest of this family, it never writes.
-	day := flag.String("day", os.Getenv(brand.Env("DAY")), "date whose daily to play, YYYY-MM-DD (default: today, UTC)")
-	// -splash picks the startup art for one run, or turns it off: "off",
-	// "random", or a banner's name. Like the rest of this family it never writes,
-	// and an unknown name is reported on the UI's error line rather than here.
-	splash := flag.String("splash", os.Getenv(brand.Env("SPLASH")), "startup art: off, random, or a banner's name (default: last used)")
-	// -version answers "which build is this" without opening the app, where the
-	// same information is on the about screen.
-	showVersion := flag.Bool("version", false, "print version information and exit")
-	flag.Parse()
+// The option names, used by the flags natively and by the URL query string in a
+// browser. One declaration, so `-theme` and `?theme=` cannot diverge.
+const (
+	optData    = "data"
+	optTheme   = "theme"
+	optThemes  = "themes"
+	optLength  = "length"
+	optDay     = "day"
+	optSplash  = "splash"
+	optVersion = "version"
+)
 
-	// Unlike -themes, this needs no store and no theme directory, so it does not
-	// go through run: printing a version must never create anything on disk.
-	if *showVersion {
+// config is what the player asked for, however they asked. Every zero value
+// means "nothing chosen", matching store.Settings, so an option that the
+// platform cannot express simply stays zero.
+type config struct {
+	dataDir     string
+	theme       string
+	day         string
+	splash      string
+	length      int
+	listThemes  bool
+	showVersion bool
+}
+
+func main() {
+	cfg := loadConfig()
+
+	// This needs no store and no theme directory, so it does not go through run:
+	// printing a version must never create anything on disk.
+	if cfg.showVersion {
 		fmt.Println(build.Get())
 		return
 	}
 
-	if err := run(*dataDir, *themeName, *day, *splash, *length, *listThemes); err != nil {
+	if err := run(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, brand.Name+":", err)
 		os.Exit(1)
 	}
 }
 
-// envLength is the default for -length: $SURMISE_LENGTH, matching how
-// $SURMISE_THEME defaults -theme. Unset or unreadable means zero — "use
-// whatever was saved" — which is the same fallback an unsupported value gets.
-func envLength() int {
-	n, err := strconv.Atoi(os.Getenv(brand.Env("LENGTH")))
-	if err != nil {
-		return 0
-	}
-	return n
-}
-
-func run(dataDir, themeName, day, splash string, length int, listThemes bool) error {
-	if dataDir == "" {
-		var err error
-		if dataDir, err = store.DefaultDir(); err != nil {
-			return err
-		}
-	}
-
-	// Themes live beside the puzzles, so -data isolates the look as well as the
-	// history. Seeding the directory means "write your own theme" starts from a
-	// file that is already there.
-	themeDir := theme.Dir(dataDir)
-	if err := theme.EnsureDir(themeDir); err != nil {
-		return err
-	}
-	lib := theme.Open(themeDir)
-
-	if listThemes {
-		printThemes(lib, themeDir)
-		return nil
-	}
-
-	s, err := store.NewJSON(dataDir)
-	if err != nil {
-		return err
-	}
-
+// uiOptions is the one place ui.Options is built, so both platforms pass the
+// same shape and a new field is added once.
+//
+// dataDir is display-only — the about screen shows it and nothing reads through
+// it — which is why the browser can pass a description rather than a path.
+func uiOptions(cfg config, dataDir string) ui.Options {
 	// The daily's seeds come from here, which is the one place a future remote
 	// source would be chosen; ui.Options carries it in so nothing below has to
 	// know which one it got.
-	opts := ui.Options{
-		Theme:      themeName,
-		Length:     length,
-		Day:        day,
-		Splash:     splash,
+	return ui.Options{
+		Theme:      cfg.theme,
+		Length:     cfg.length,
+		Day:        cfg.day,
+		Splash:     cfg.splash,
 		DailySeeds: daily.Local(),
 		DataDir:    dataDir,
 	}
-	_, err = tea.NewProgram(ui.New(s, lib, opts)).Run()
+}
+
+// start runs the program. Every tea.NewProgram in this command goes through
+// here: the native build passes no options and takes bubbletea's terminal
+// defaults, and the browser build passes the several it needs to talk to
+// xterm.js instead of a tty.
+// attach is the platform's chance to hold the Program, which the browser needs
+// so a resize can be sent in. It is a no-op natively.
+func start(s store.Store, lib *theme.Library, opts ui.Options, popts ...tea.ProgramOption) error {
+	p := tea.NewProgram(ui.New(s, lib, opts), popts...)
+	attach(p)
+	_, err := p.Run()
 	return err
 }
 
