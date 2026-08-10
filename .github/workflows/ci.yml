@@ -85,13 +85,13 @@ jobs:
           GOOS=js GOARCH=wasm go vet ./...
 
       # Compiling is not running. This drives the real binary against the real
-      # xterm.js engine, headless, and asserts on the resulting screen buffer —
-      # the only automated cover the browser build has.
+      # xterm.js engine, headless, and asserts on the resulting screen buffer
+      # and browser storage — the only automated cover the browser build has.
       #
-      # Three of its checks earn their place on their own, because none of them
-      # shows up in a compile: a js.Func callback that blocks hangs the runtime,
-      # a missing colour profile renders the game in monochrome, and non-tty
-      # newline mapping leaves fragments of a larger frame on screen.
+      # Four checks earn their place on their own because none appears in a
+      # compile: a blocking js.Func callback hangs the runtime, a missing colour
+      # profile renders in monochrome, non-tty newline mapping leaves stale
+      # cells, and a localStorage failure silently forgets history on reload.
       - name: wasm smoke test
         run: |
           npm ci --prefix web

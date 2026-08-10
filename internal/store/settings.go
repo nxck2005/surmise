@@ -6,8 +6,9 @@ import (
 )
 
 // Settings is what the player has chosen, as opposed to what they have played.
-// It sits beside meta.json at the root of the data dir — small, rewritten
-// rarely, and safe to lose: every field has a working zero value.
+// Native builds keep it at the root of the data dir; KVStore uses the same
+// codec under its browser settings key. It is small, rewritten rarely and safe
+// to lose: every field has a working zero value.
 type Settings struct {
 	Theme string `json:"theme,omitempty"`
 	// DisplayName is local presentation on the profile screen. It is not an
@@ -50,8 +51,7 @@ const settingsName = "settings.json"
 func (s *JSON) settingsPath() string { return filepath.Join(s.dir, settingsName) }
 
 // Settings reads the saved preferences. A missing or damaged file yields the
-// defaults rather than an error, the same way a damaged counter is recovered
-// from rather than fatal: a bad settings file must never cost a puzzle.
+// defaults rather than an error: a bad settings file must never cost a puzzle.
 func (s *JSON) Settings() Settings {
 	b, err := os.ReadFile(s.settingsPath())
 	if err != nil {

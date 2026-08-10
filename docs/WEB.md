@@ -86,9 +86,11 @@ GOOS=js GOARCH=wasm go build -o /tmp/surmise.wasm .
 node scripts/smoke-web.mjs /tmp/surmise.wasm
 ```
 
-That drives the real binary against a stub xterm.js and asserts on what it
-writes — the alternate screen, mouse tracking, 24-bit colour, typing, and a
-resize. CI runs it. Colour, layout and hover still need eyes.
+That drives the real binary against the headless xterm.js engine and checks its
+first frame, title, 24-bit colour, input and resize behaviour. It also submits a
+guess into browser storage, starts a fresh instance and confirms the saved
+puzzle loads from the list. CI runs the same command. Fonts, colour fidelity,
+layout and hover still need eyes.
 
 `web/dist` and `web/node_modules` are both ignored by git. `wasm_exec.js` is
 copied from the Go toolchain on every build and is never committed: it has to

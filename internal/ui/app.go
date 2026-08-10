@@ -178,8 +178,8 @@ type Options struct {
 }
 
 // settingsStore is the part of a store that remembers preferences. It is a
-// separate interface rather than part of store.Store because a remote backend
-// might well serve puzzles without owning the local look; a store that does not
+// separate interface rather than part of store.Store because puzzle history
+// and local presentation choices are different concerns; a store that does not
 // implement it simply cannot persist a theme choice.
 type settingsStore interface {
 	Settings() store.Settings
