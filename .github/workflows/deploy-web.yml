@@ -1,0 +1,105 @@
+name: Deploy web
+
+# Two deploys out of one file. A push to main refreshes the staging URL, and a
+# v* tag promotes a build to production, so the live page matches the release
+# people can download rather than whatever main happens to hold.
+#
+# Nothing here touches release.yml: the archives carry no wasm, because the
+# browser build is a deployment and not a download.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two pushes to main must not race to be the staging URL. Literal name, distinct
+# from ci.yml's and release.yml's — see the note in ci.yml for why.
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # The CLI reads these from the environment, and they identify the project
+      # a prebuilt deploy lands in. Neither is a secret in the usual sense, but
+      # both come from the same `vercel link` step, so they are kept together.
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          # Follow the toolchain in go.mod, as CI and the release do.
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: build
+        run: |
+          # A tag is the version minus the leading v, exactly as release.yml
+          # computes it, so the page and the archives agree about what they are.
+          # A push to main is not a release and must not claim a version number.
+          case "$GITHUB_REF" in
+            refs/tags/*) version="${GITHUB_REF_NAME#v}" ;;
+            *) version="dev-$(git rev-parse --short HEAD)" ;;
+          esac
+          bash scripts/build-web.sh "$version"
+
+      # Vercel's build image ships Node and not Go, so the wasm cannot be built
+      # there at all. Deploying prebuilt keeps the build on a runner that
+      # already has the toolchain, the pinned xterm.js and the go.work view of
+      # the vendored bubbletea copy.
+      #
+      # web/vercel-output.json is the Build Output API config, and it carries no
+      # comments because that schema rejects keys it does not know. What it says:
+      # the wasm is served as application/wasm, which instantiateStreaming
+      # insists on, and is the one file cached hard — boot.js appends
+      # ?v=<hash of the wasm>, so each build asks for a URL the browser has never
+      # seen and an immutable year can never go stale. Every other file keeps a
+      # constant name, so caching one of those hard would pin a visitor to an old
+      # build with no way to recover; they revalidate instead, which costs a 304.
+      - name: stage the build output
+        run: |
+          mkdir -p .vercel/output/static
+          cp -r web/dist/. .vercel/output/static/
+          cp web/vercel-output.json .vercel/output/config.json
+
+      - name: deploy
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          # A tag goes to production. Everything else stays on a preview URL,
+          # which is what makes main safe to push to.
+          target=
+          case "$GITHUB_REF" in refs/tags/*) target=--prod ;; esac
+
+          # The CLI prints the deployment URL on stdout and its progress on
+          # stderr, so the URL can be captured without parsing anything.
+          url=$(npx --yes vercel@58.9.0 deploy --prebuilt $target --token "$VERCEL_TOKEN")
+          echo "url=$url" >>"$GITHUB_OUTPUT"
+          echo "deployed $url" >>"$GITHUB_STEP_SUMMARY"
+
+      # A preview URL is unique per deploy, so without an alias the staging
+      # address changes every push and cannot be bookmarked. This is deliberately
+      # not fatal: the deploy above already succeeded, and a taken or unavailable
+      # alias is not a reason to report the deployment as failed.
+      - name: point the staging alias at it
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          alias=surmise-staging.vercel.app
+          if npx --yes vercel@58.9.0 alias set "${{ steps.deploy.outputs.url }}" "$alias" \
+              --token "$VERCEL_TOKEN"; then
+            echo "staging: https://$alias" >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "could not alias $alias; the deploy URL above still works" \
+              >>"$GITHUB_STEP_SUMMARY"
+          fi

@@ -152,8 +152,10 @@ scripts/build-web.sh              # writes web/dist
 python3 -m http.server -d web/dist
 ```
 
-it isn't hosted anywhere yet. details, and the query-string equivalents of the
-flags, in [docs/WEB.md](docs/WEB.md).
+details, and the query-string equivalents of the flags, in
+[docs/WEB.md](https://github.com/nxck2005/surmise/blob/main/docs/WEB.md). that
+link is absolute on purpose: the release archives carry no wasm, so they carry
+no `docs/WEB.md` either, and a relative link would dangle inside them.
 
 ## development
 
