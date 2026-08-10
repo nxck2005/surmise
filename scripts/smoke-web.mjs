@@ -11,9 +11,90 @@
 // a js.Func callback that blocks hangs the runtime, a missing colour profile
 // renders the game in monochrome, and non-tty newline mapping leaves fragments
 // of a larger frame behind when the screen shrinks.
-import { readFileSync } from "node:fs";
+import { execSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
-import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const phase = process.argv[3];
+const wasm = resolve(process.argv[2] ?? "web/dist/surmise.wasm");
+
+// Persistence needs two browser lifetimes. Run this file once to save a puzzle
+// and again against the same Web Storage file to prove the next instance reads
+// it back. Keeping the orchestration here preserves the one-command smoke test.
+if (!phase) {
+  const dir = mkdtempSync(join(tmpdir(), "surmise-web-smoke-"));
+  const storage = join(dir, "localstorage.json");
+  const script = fileURLToPath(import.meta.url);
+  let status = 0;
+
+  try {
+    for (const childPhase of ["write", "read"]) {
+      const child = spawnSync(
+        process.execPath,
+        [script, wasm, childPhase, storage],
+        { stdio: "inherit" },
+      );
+      if (child.status !== 0) {
+        status = child.status ?? 1;
+        break;
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  process.exit(status);
+}
+
+// Node does not expose Web Storage consistently across supported versions.
+// This file-backed implementation has the browser API used by LocalStorage and
+// lets the two child processes model a reload without another dependency.
+class FileStorage {
+  constructor(filename) {
+    this.filename = filename;
+    this.values = existsSync(filename)
+      ? JSON.parse(readFileSync(filename, "utf8"))
+      : {};
+  }
+
+  get length() {
+    return Object.keys(this.values).length;
+  }
+
+  key(index) {
+    return Object.keys(this.values)[index] ?? null;
+  }
+
+  getItem(key) {
+    return Object.prototype.hasOwnProperty.call(this.values, key)
+      ? this.values[key]
+      : null;
+  }
+
+  setItem(key, value) {
+    this.values[key] = String(value);
+    this.save();
+  }
+
+  removeItem(key) {
+    delete this.values[key];
+    this.save();
+  }
+
+  save() {
+    writeFileSync(this.filename, JSON.stringify(this.values));
+  }
+}
+
+globalThis.localStorage = new FileStorage(process.argv[4]);
 const require = createRequire(import.meta.url);
 
 // The engine lives with the page's other pinned JS, in web/node_modules.
@@ -46,7 +127,7 @@ globalThis.surmise = { term, onExit: () => (exited = true) };
 
 const go = new Go();
 const { instance } = await WebAssembly.instantiate(
-  readFileSync(process.argv[2] ?? "web/dist/surmise.wasm"),
+  readFileSync(wasm),
   go.importObject,
 );
 go.run(instance);
@@ -88,8 +169,39 @@ const hasTrueColour = () => {
 
 const results = [];
 const check = (label, ok, detail = "") => results.push({ label, ok, detail });
+const report = () => {
+  for (const { label, ok, detail } of results) {
+    console.log(`${ok ? "PASS" : "FAIL"}  ${label}${!ok && detail ? ` — ${detail}` : ""}`);
+  }
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    console.log("\n--- screen ---");
+    screen().forEach((l, i) => console.log(String(i).padStart(2) + "|" + l));
+  }
+  console.log(
+    failed.length ? `\n${failed.length} failed` : `\nall passed (exit overlay wired: ${exited === false})`,
+  );
+  process.exit(failed.length ? 1 : 0);
+};
 
 await wait(800); // the splash, then the first frame
+if (phase === "read") {
+  await type("\r"); // dismiss the splash
+  await wait(300);
+  await type("\x1b"); // open the menu
+  await wait(400);
+  for (let i = 0; i < 4; i++) await type("j");
+  await type("\r"); // open puzzles
+  await wait(400);
+
+  const puzzles = screen();
+  check(
+    "loaded the saved puzzle in a fresh browser run",
+    puzzles.some((l) => /#\d{6} 5 letters/.test(l)),
+    "saved puzzle is absent from the puzzle list",
+  );
+  report();
+}
 
 check("drew a first frame", screen().some((l) => l.length > 0));
 check("set the window title", title !== "", `title is ${JSON.stringify(title)}`);
@@ -106,6 +218,23 @@ await wait(300);
 const board = screen();
 check("typed letters reach the board", board.some((l) => /C\s+R\s+A\s+N\s+E/.test(l)));
 check("the board draws its keyboard", board.some((l) => /Q\s+W\s+E\s+R\s+T/.test(l)));
+const puzzleKeys = Array.from(
+  { length: localStorage.length },
+  (_, i) => localStorage.key(i),
+).filter((key) => key?.startsWith("surmise/v1/puzzle/"));
+check(
+  "saved the puzzle to browser storage",
+  puzzleKeys.length === 1,
+  `found keys ${JSON.stringify(puzzleKeys)}`,
+);
+const saved = puzzleKeys.length === 1
+  ? JSON.parse(localStorage.getItem(puzzleKeys[0]))
+  : null;
+check(
+  "stored the submitted guess",
+  saved?.guesses?.[0] === "crane",
+  `first guess is ${JSON.stringify(saved?.guesses?.[0])}`,
+);
 
 // The regression this file exists for: the frame shrinks going back to the
 // menu. See third_party/bubbletea/tty_js.go.
@@ -129,13 +258,4 @@ const resized = screen();
 check("a resize redraws", resized.some((l) => l.trim().length > 0));
 check("the resized frame left no stale cells", leftEdges(resized).size === 1);
 
-for (const { label, ok, detail } of results) {
-  console.log(`${ok ? "PASS" : "FAIL"}  ${label}${!ok && detail ? ` — ${detail}` : ""}`);
-}
-const failed = results.filter((r) => !r.ok);
-if (failed.length) {
-  console.log("\n--- screen ---");
-  screen().forEach((l, i) => console.log(String(i).padStart(2) + "|" + l));
-}
-console.log(failed.length ? `\n${failed.length} failed` : `\nall passed (exit overlay wired: ${exited === false})`);
-process.exit(failed.length ? 1 : 0);
+report();
