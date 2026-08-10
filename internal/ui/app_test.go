@@ -318,8 +318,14 @@ func TestWinningShowsResult(t *testing.T) {
 	if m.game.g.Status != game.Won {
 		t.Fatalf("status = %v, want won", m.game.g.Status)
 	}
+	if m.screen != screenResult {
+		t.Fatalf("screen = %v after winning, want result", m.screen)
+	}
 	if !strings.Contains(view, "solved in 1") {
 		t.Errorf("missing win message\n%s", view)
+	}
+	if !strings.Contains(view, "1/6") || !strings.Contains(view, game.Code(m.game.g.ID)) {
+		t.Errorf("result is missing attempts or puzzle code\n%s", view)
 	}
 }
 
@@ -336,6 +342,9 @@ func TestLosingRevealsAnswer(t *testing.T) {
 
 	if m.game.g.Status != game.Lost {
 		t.Fatalf("status = %v, want lost", m.game.g.Status)
+	}
+	if m.screen != screenResult {
+		t.Fatalf("screen = %v after losing, want result", m.screen)
 	}
 	if !strings.Contains(view, "CRANE") {
 		t.Errorf("answer not revealed\n%s", view)
@@ -841,7 +850,7 @@ func TestKeyboardKeepsBestLetterState(t *testing.T) {
 	send(t, m, "down", "enter")
 	m.game.g.Answer = "crane"
 
-	send(t, m, "c", "r", "a", "n", "e", "enter") // C correct
+	send(t, m, "c", "r", "a", "m", "p", "enter") // C correct, puzzle still open
 	states := m.game.g.LetterStates()
 	if states['c'] != game.Correct {
 		t.Fatalf("c = %v, want correct", states['c'])

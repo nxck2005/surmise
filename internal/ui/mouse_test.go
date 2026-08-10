@@ -113,12 +113,21 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 	// second boundary between them would read as marking having moved things.
 	freezeClock(m)
 
+	result, err := game.NewFrom("result-layout", "crane", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := result.Guess("crane"); err != nil {
+		t.Fatal(err)
+	}
+
 	for _, tc := range []struct {
 		name  string
 		setup func()
 	}{
 		{"game", func() { m.screen = screenGame }},
 		{"game with restart prompt", func() { m.screen, m.game.confirmNew = screenGame, true }},
+		{"result", func() { m.result.open(result, ""); m.screen = screenResult }},
 		{"menu", func() { m.screen, m.game.confirmNew = screenMenu, false }},
 		{"list", func() { m.list.reload(m.store); m.screen = screenList }},
 		{"list with delete prompt", func() {
@@ -320,8 +329,29 @@ func TestPlayingByClickingOnly(t *testing.T) {
 	if m.game.g.Status != game.Won {
 		t.Fatalf("status = %v, want won", m.game.g.Status)
 	}
+	if m.screen != screenResult {
+		t.Fatalf("screen after mouse-only win = %v, want result", m.screen)
+	}
 	if !strings.Contains(m.View().Content, "solved in 2") {
 		t.Error("missing win message after a mouse-only game")
+	}
+
+	first := m.game.g.ID
+	click(t, m, action{kind: actResultReview})
+	if m.screen != screenGame {
+		t.Fatalf("screen after clicking review = %v, want game", m.screen)
+	}
+	click(t, m, action{kind: actSubmit})
+	if m.screen != screenResult {
+		t.Fatalf("screen after clicking result on the board = %v, want result", m.screen)
+	}
+	click(t, m, action{kind: actResultCopy})
+	if !m.result.copyRequested {
+		t.Fatal("clicking copy did not record its acknowledgement")
+	}
+	click(t, m, action{kind: actResultNext})
+	if m.screen != screenGame || m.game.g.ID == first {
+		t.Errorf("clicking next left screen %v with puzzle %q", m.screen, m.game.g.ID)
 	}
 }
 

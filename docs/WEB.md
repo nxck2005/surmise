@@ -56,9 +56,10 @@ the about screen.
 ## Keys the browser keeps
 
 Everything reaches the game except the chords the browser will not give up:
-`Ctrl`/`Cmd`+`W`, `Ctrl`/`Cmd`+`T`, `Cmd`+`Q` and friends. Copy and paste are
-deliberately left to the browser as well — `Ctrl`/`Cmd`+`C` copies when there is
-a selection, and `Ctrl`/`Cmd`+`V` pastes.
+`Ctrl`/`Cmd`+`W`, `Ctrl`/`Cmd`+`T`, `Cmd`+`Q` and friends. Selection copy and
+paste stay native to the browser: `Ctrl`/`Cmd`+`C` copies a selection and
+`Ctrl`/`Cmd`+`V` pastes. On a result screen, plain `c` asks the game to copy its
+spoiler-safe summary through the browser Clipboard API.
 
 The mouse works exactly as it does in a terminal, because xterm.js sends the
 same sequences a terminal would.
@@ -104,6 +105,7 @@ xterm.js  --onData-->  reader  --> tea.WithInput  \
                                                    bubbletea Program
 xterm.js  <--write--   writer  <-- tea.WithOutput /
 xterm.js  --onResize-> channel --> Program.Send(WindowSizeMsg)
+xterm.js  --OSC 52--> browser Clipboard API
 ```
 
 The bridge is a byte pipe, not a translation layer. xterm.js already turns key
