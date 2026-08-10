@@ -75,15 +75,18 @@ func TestBundledThemesAreClean(t *testing.T) {
 }
 
 func TestDefaultThemeIsBundled(t *testing.T) {
+	if DefaultName != "tokyo night" {
+		t.Fatalf("default theme = %q, want tokyo night", DefaultName)
+	}
 	if _, ok := Bundled().Get(DefaultName); !ok {
 		t.Fatalf("no bundled theme named %q", DefaultName)
 	}
 }
 
-// Default() hardcodes the same palette that ember-dark.toml declares: one has
-// to work with no files at all, the other has to be a copyable example. Nothing
-// stops the two drifting except this test, and drift would mean the app looked
-// different depending on whether the bundled file happened to load.
+// Default() hardcodes the same palette that the bundled default file declares:
+// one has to work with no files at all, the other has to be a copyable example.
+// Nothing stops the two drifting except this test, and drift would mean the app
+// looked different depending on whether the bundled file happened to load.
 func TestDefaultMatchesItsBundledFile(t *testing.T) {
 	raw, err := bundled.ReadFile(defaultFile)
 	if err != nil {
@@ -110,15 +113,30 @@ func TestDefaultMatchesItsBundledFile(t *testing.T) {
 
 	code := Default()
 	for key, hex := range declared {
-		if key == "name" {
+		switch key {
+		case "name":
 			if hex != code.Name {
 				t.Errorf("name: file has %q, Default() has %q", hex, code.Name)
 			}
-			continue
+		case "author":
+			// Attribution belongs to the bundled entry, not Default(): Parse
+			// overlays every partial theme onto Default, so putting an author
+			// there would falsely attribute themes that omit one.
+		default:
+			if got, want := code.Color(key), mustColor(hex); got != want {
+				t.Errorf("%s: file has %s, Default() has %v", key, hex, got)
+			}
 		}
-		if got, want := code.Color(key), mustColor(hex); got != want {
-			t.Errorf("%s: file has %s, Default() has %v", key, hex, got)
-		}
+	}
+}
+
+func TestDefaultAttributionDoesNotLeakIntoPartialThemes(t *testing.T) {
+	th, warnings := Parse("mine", []byte(`name = "mine"`))
+	if len(warnings) != 0 {
+		t.Fatalf("Parse warnings: %v", warnings)
+	}
+	if th.Author != "" {
+		t.Errorf("partial theme inherited author %q from the default", th.Author)
 	}
 }
 

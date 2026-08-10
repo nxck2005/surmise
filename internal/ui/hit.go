@@ -38,21 +38,25 @@ const (
 type actionKind int
 
 const (
-	actNone        actionKind = iota
-	actMenuChoice             // index: menu row
-	actListRow                // index: puzzle list row
-	actDailyRow               // index: daily screen row, one per mode
-	actThemeRow               // index: theme picker row
-	actThemeReload            // re-read the themes directory now
-	actSettingNext            // index: settings row, next value
-	actSettingPrev            // index: settings row, previous value
-	actLetter                 // letter: on-screen keyboard cap
-	actSubmit                 // enter
-	actBackspace              // backspace
-	actTrim                   // index: erase the typed row back to this slot
-	actNewPuzzle              // tab+enter
-	actCancelNew              // dismiss the armed new-puzzle prompt
-	actBack                   // esc
+	actNone                 actionKind = iota
+	actMenuChoice                      // index: menu row
+	actListRow                         // index: puzzle list row
+	actDailyRow                        // index: daily screen row, one per mode
+	actThemeRow                        // index: theme picker row
+	actThemeReload                     // re-read the themes directory now
+	actSettingNext                     // index: settings row, next value
+	actSettingPrev                     // index: settings row, previous value
+	actSettingNameEdit                 // begin editing the local profile display name
+	actSettingNameDone                 // keep the display-name draft
+	actSettingNameCancel               // discard the display-name draft
+	actSettingNameBackspace            // erase one rune from the display-name draft
+	actLetter                          // letter: on-screen keyboard cap
+	actSubmit                          // enter
+	actBackspace                       // backspace
+	actTrim                            // index: erase the typed row back to this slot
+	actNewPuzzle                       // tab+enter
+	actCancelNew                       // dismiss the armed new-puzzle prompt
+	actBack                            // esc
 	actQuit
 	actDeletePuzzle // index: puzzle list row to delete; arms, then confirms
 	actCancelDelete // dismiss the armed delete prompt

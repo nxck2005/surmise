@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/banner"
 	"github.com/nxck2005/surmise/internal/store"
@@ -118,7 +119,7 @@ func TestSettingsScreenPersistsChoices(t *testing.T) {
 	// and a visited preference reads back as what the screen shows.
 	want := store.Settings{
 		Length: 4, RememberLast: true,
-		Splash: splashOn, SplashArt: banner.Default().Name, SplashDismiss: splashSkip.setting(),
+		Splash: splashOn, SplashArt: banner.Default().Name, SplashDismiss: splashKey.setting(),
 		SplashMillis: int(splashDuration / time.Millisecond),
 	}
 	if got := s.Settings(); got != want {
@@ -128,6 +129,83 @@ func TestSettingsScreenPersistsChoices(t *testing.T) {
 	// The next launch opens on it.
 	if m2 := reopen(t, dir, Options{}); m2.game.g.Length != 4 {
 		t.Errorf("reopened on a %d-letter puzzle, want 4", m2.game.g.Length)
+	}
+}
+
+func TestProfileDisplayNamePersistsAndAppearsOnProfile(t *testing.T) {
+	s, dir := newStore(t)
+	m := New(s, nil, Options{})
+	m.screen = screenMenu
+	openSettings(t, m)
+
+	m.settings.cursor = rowProfileName
+	send(t, m, "enter", "n", "i", "c", "k", "enter")
+	if got := s.Settings().DisplayName; got != "nick" {
+		t.Fatalf("saved display name = %q, want nick", got)
+	}
+	send(t, m, "esc")
+
+	for i, c := range m.menu.choices {
+		if c.kind == choiceProfile {
+			m.menu.cursor = i
+			send(t, m, "enter")
+			break
+		}
+	}
+	if m.screen != screenProfile {
+		t.Fatal("profile menu entry did not open")
+	}
+	if view := sgr.ReplaceAllString(m.View().Content, ""); !strings.Contains(view, "nick") {
+		t.Errorf("profile does not show the display name\n%s", view)
+	}
+
+	m2 := reopen(t, dir, Options{})
+	m2.screen = screenMenu
+	for i, c := range m2.menu.choices {
+		if c.kind == choiceProfile {
+			m2.menu.cursor = i
+			send(t, m2, "enter")
+			break
+		}
+	}
+	if view := sgr.ReplaceAllString(m2.View().Content, ""); !strings.Contains(view, "nick") {
+		t.Errorf("reopened profile lost the display name\n%s", view)
+	}
+}
+
+func TestProfileDisplayNameEditCanBeCancelled(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.SaveSettings(store.Settings{DisplayName: "nick"}); err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{})
+	m.screen = screenMenu
+	openSettings(t, m)
+	m.settings.cursor = rowProfileName
+
+	send(t, m, "enter", "x", "esc")
+	if m.settings.editingName {
+		t.Fatal("escape left the name editor open")
+	}
+	if m.screen != screenSettings {
+		t.Fatalf("escape left the settings screen for %v", m.screen)
+	}
+	if got := s.Settings().DisplayName; got != "nick" {
+		t.Errorf("cancel saved %q, want nick", got)
+	}
+	if m.settings.displayName != "nick" {
+		t.Errorf("cancel left draft %q, want nick", m.settings.displayName)
+	}
+}
+
+func TestProfileDisplayNameIsSanitizedAndBounded(t *testing.T) {
+	got := sanitizeDisplayName("  ni\x1bck\n" + strings.Repeat("x", 50))
+	if strings.ContainsAny(got, "\x1b\n") {
+		t.Errorf("display name retained terminal controls: %q", got)
+	}
+	if width := lipgloss.Width(got); width > displayNameMaxWidth {
+		t.Errorf("display name is %d cells wide, want at most %d: %q",
+			width, displayNameMaxWidth, got)
 	}
 }
 

@@ -125,7 +125,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			m.list.reload(m.store)
 			m.screen, m.list.confirmDelete = screenList, true
 		}},
-		{"profile", func() { m.profile.reload(m.store, m.day); m.screen = screenProfile }},
+		{"profile", func() { m.profile.reload(m.store, m.day, ""); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
 		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},
@@ -259,6 +259,29 @@ func TestSettingsByClickingOnly(t *testing.T) {
 	}
 	if got := s.Settings(); !got.RememberLast || got.Length != defaultLength {
 		t.Errorf("saved settings = %+v, want the clicked values", got)
+	}
+}
+
+func TestProfileDisplayNameEditorHasMouseControls(t *testing.T) {
+	m := newModel(t)
+	m.settings.reload(m.settingsOf())
+	m.screen = screenSettings
+	m.settings.cursor = rowProfileName
+
+	click(t, m, action{kind: actSettingNameEdit})
+	if !m.settings.editingName {
+		t.Fatal("clicking the profile name did not start editing")
+	}
+	send(t, m, "n", "i", "x")
+	click(t, m, action{kind: actSettingNameBackspace})
+	click(t, m, action{kind: actSettingNameDone})
+
+	if m.settings.editingName {
+		t.Fatal("clicking save left the name editor open")
+	}
+	s := m.store.(settingsStore)
+	if got := s.Settings().DisplayName; got != "ni" {
+		t.Errorf("saved display name = %q, want ni", got)
 	}
 }
 
@@ -680,7 +703,7 @@ func TestProfileShedsExtrasOnAShortTerminal(t *testing.T) {
 	m.game.g.Answer = "crane"
 	send(t, m, "c", "r", "a", "n", "e", "enter")
 	send(t, m, "esc")
-	m.profile.reload(m.store, m.day)
+	m.profile.reload(m.store, m.day, "")
 	m.screen = screenProfile
 
 	roomy := drawAt(t, m, testHeight)

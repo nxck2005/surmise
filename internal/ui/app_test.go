@@ -798,7 +798,7 @@ func TestProfileReflectsPlay(t *testing.T) {
 	send(t, m, "c", "r", "a", "n", "e", "enter")
 	send(t, m, "esc")
 
-	m.profile.reload(m.store, m.day)
+	m.profile.reload(m.store, m.day, "")
 	m.screen = screenProfile
 	view := m.View().Content
 
