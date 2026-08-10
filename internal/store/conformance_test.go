@@ -260,7 +260,10 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 			t.Errorf("Settings before any save = %+v, want the zero value", got)
 		}
 
-		want := Settings{Theme: "nord", Length: 6, SplashDismiss: "key", SplashMillis: 1200}
+		want := Settings{
+			Theme: "nord", Length: 6, DisplayName: "nick",
+			SplashDismiss: "key", SplashMillis: 1200,
+		}
 		if err := s.SaveSettings(want); err != nil {
 			t.Fatalf("SaveSettings: %v", err)
 		}

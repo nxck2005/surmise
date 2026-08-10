@@ -19,8 +19,9 @@ const distributionWidth = 24
 // profileScreen shows aggregate performance, in the spirit of a typing test's
 // account page.
 type profileScreen struct {
-	summary stats.Summary
-	err     error
+	summary     stats.Summary
+	err         error
+	displayName string
 
 	// width and height are the terminal's, pushed down by the root so the
 	// screen can shed what it cannot afford to draw. Zero means unmeasured,
@@ -32,8 +33,11 @@ func (m *profileScreen) resize(w, h int) { m.width, m.height = w, h }
 
 // reload recomputes the profile. The day comes from the root rather than from
 // the clock so that -day moves the daily streak the same way it moves the
-// board: the screen and the puzzle it describes agree on what today is.
-func (m *profileScreen) reload(s store.Store, today daily.Day) {
+// board: the screen and the puzzle it describes agree on what today is. The
+// display name is a local setting supplied by the root, not identity attached
+// to any game.
+func (m *profileScreen) reload(s store.Store, today daily.Day, displayName string) {
+	m.displayName = sanitizeDisplayName(displayName)
 	games, err := s.All()
 	if err != nil {
 		m.err = err
@@ -45,13 +49,13 @@ func (m *profileScreen) reload(s store.Store, today daily.Day) {
 
 func (m *profileScreen) view(h *hitMap) string {
 	if m.err != nil {
-		return titled("profile",
+		return titled(m.title(),
 			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
 	}
 
 	s := m.summary
 	if s.Played == 0 && s.InPlay == 0 {
-		return titled("profile", st.muted.Render("no games played yet"))
+		return titled(m.title(), st.muted.Render("no games played yet"))
 	}
 
 	// The sections stay left-joined: these are label-over-value columns and a
@@ -90,7 +94,14 @@ func (m *profileScreen) view(h *hitMap) string {
 			sections = append(sections, "", extra)
 		}
 	}
-	return titled("profile", lipgloss.JoinVertical(lipgloss.Left, sections...))
+	return titled(m.title(), lipgloss.JoinVertical(lipgloss.Left, sections...))
+}
+
+func (m *profileScreen) title() string {
+	if m.displayName != "" {
+		return m.displayName
+	}
+	return "profile"
 }
 
 // affordable returns the leading run of extras that fits under the terminal's

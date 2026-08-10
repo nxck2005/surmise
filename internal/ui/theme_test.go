@@ -136,7 +136,8 @@ func TestThemePickerPersistsChoice(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
 
 	openThemes(t, m)
-	send(t, m, "down", "enter")
+	moveThemeSelection(t, m)
+	send(t, m, "enter")
 
 	if m.screen != screenThemes && m.themeName == theme.DefaultName {
 		t.Fatal("choosing a theme did nothing")
@@ -164,7 +165,7 @@ func TestThemePickerRevertsOnEscape(t *testing.T) {
 
 	openThemes(t, m)
 	before := m.themeName
-	send(t, m, "down", "down")
+	moveThemeSelection(t, m)
 
 	if st.theme.Name == before {
 		t.Fatal("moving the cursor did not preview anything")
@@ -466,4 +467,16 @@ func openThemes(t *testing.T, m *Model) {
 		}
 	}
 	t.Fatal("no themes entry on the menu")
+}
+
+// moveThemeSelection uses a key to leave the active theme regardless of where
+// that theme sorts. Tokyo Night is last alphabetically; assuming "down" always
+// moves made the picker tests accidentally depend on the old default.
+func moveThemeSelection(t *testing.T, m *Model) {
+	t.Helper()
+	if m.themes.cursor > 0 {
+		send(t, m, "up")
+		return
+	}
+	send(t, m, "down")
 }

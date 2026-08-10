@@ -86,6 +86,8 @@ twice deletes.
 ![Profile Screenshot](assets/demo/4.png)
 
 averages cover wins only, so a bad day doesn't get to inflate your solve time.
+you can add an optional local display name in settings. it is just a profile
+label, not an account or sign-in.
 
 ## themes
 
@@ -94,9 +96,9 @@ surmise -themes          # list what's installed, and where the directory is
 surmise -theme dracula   # play with a theme without changing your saved choice
 ```
 
-bundled: `ember-dark` (the default), `ember-light`, `catppuccin-mocha`,
-`dracula`, `everforest-dark`, `gruvbox-dark`, `high-contrast`, `matrix`,
-`nord`, `rose-pine`, `solarized-dark`, `terminal`, `tokyo-night`.
+bundled: `tokyo-night` (the default), `ember-dark`, `ember-light`,
+`catppuccin-mocha`, `dracula`, `everforest-dark`, `gruvbox-dark`,
+`high-contrast`, `matrix`, `nord`, `rose-pine`, `solarized-dark`, `terminal`.
 
 writing your own needs a file on disk, so it's terminal-only; the browser build
 ships the bundled set.
@@ -116,11 +118,11 @@ edits apply live — save the file and the colours change under you, no restart.
 
 ## settings
 
-the settings screen holds the mode new puzzles start in, whether playing a
-different mode makes *that* the new default, and the splash: whether you get one,
-which ascii art it draws, how it goes away (timed, timed but skippable, or
-waiting for a key), and how long it stays up when it's timed. everything saves as
-you change it.
+the settings screen holds an optional local profile name, the mode new puzzles
+start in, whether playing a different mode makes *that* the new default, and the
+splash: whether you get one, which ascii art it draws, how it goes away, and how
+long it stays up when it's timed. a fresh install waits for any key on the
+splash. cycling choices save immediately; the name editor saves on enter.
 
 ```sh
 surmise -length 6        # start in a mode for one run, without saving it

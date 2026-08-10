@@ -1,7 +1,7 @@
 name = "ember dark"
 
-# The default: a flat, faintly cool near-black ground with a single warm copper
-# accent carrying all emphasis, and muted slate for everything secondary. The
+# A flat, faintly cool near-black ground with a single warm copper accent
+# carrying all emphasis, and muted slate for everything secondary. The
 # tile colours are picked to sit inside that ground rather than borrowed from
 # any other game's palette.
 

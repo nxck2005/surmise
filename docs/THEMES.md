@@ -180,10 +180,10 @@ designed the colours and how their licence notice stays attached to them — see
 
 ## The bundled themes
 
-`ember dark` (the default) and `ember light`, `dracula`, `nord`,
-`gruvbox dark`, `catppuccin mocha`, `tokyo night`, `rose pine`,
-`solarized dark`, `everforest dark`, `high contrast` (a colour-blind-friendly
-orange/blue scheme), `terminal` (built entirely from ANSI numbers, so it follows
+`tokyo night` (the default), `ember dark`, `ember light`, `dracula`, `nord`,
+`gruvbox dark`, `catppuccin mocha`, `rose pine`, `solarized dark`,
+`everforest dark`, `high contrast` (a colour-blind-friendly orange/blue scheme),
+`terminal` (built entirely from ANSI numbers, so it follows
 your terminal's own palette) and `matrix`. They live in
 `internal/theme/themes/*.toml` and are written in exactly this format — every
 one of them is a worked example.

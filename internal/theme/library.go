@@ -26,8 +26,8 @@ var bundled embed.FS
 // bundled file it comes from; the two are kept together because the seeded
 // example theme is a copy of that file.
 const (
-	DefaultName = "ember dark"
-	defaultFile = "themes/ember-dark.toml"
+	DefaultName = "tokyo night"
+	defaultFile = "themes/tokyo-night.toml"
 )
 
 // dirName is the themes directory inside the data dir, beside `puzzles`.

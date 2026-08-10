@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -13,16 +15,19 @@ import (
 	"github.com/nxck2005/surmise/internal/words"
 )
 
-// settingsScreen edits the persisted preferences that are not the theme: which
-// mode the app opens on, and whether playing a mode changes that.
+// settingsScreen edits the persisted preferences that are not the theme:
+// profile presentation, the opening mode, and the startup splash.
 //
-// Unlike the theme picker there is nothing to preview here, so there is no
-// commit step — the root saves after every change and esc has nothing to undo.
-// The screen holds the values it is editing rather than reading the store each
-// frame, so rendering stays free of I/O.
+// Cycling preferences save on every step. The profile name is the one staged
+// value: enter keeps its text draft and esc discards it. The screen holds every
+// value it is editing rather than reading the store each frame, so rendering
+// stays free of I/O.
 type settingsScreen struct {
-	length       int
-	rememberLast bool
+	length         int
+	rememberLast   bool
+	displayName    string
+	nameBeforeEdit string
+	editingName    bool
 
 	// The splash's three: whether it appears, which art it draws, and how it
 	// goes away. The last two are meaningless with the first off, and the screen
@@ -39,6 +44,7 @@ type settingsScreen struct {
 const (
 	rowLength = iota
 	rowRememberLast
+	rowProfileName
 	rowSplash
 	rowSplashArt
 	rowSplashDismiss
@@ -46,17 +52,13 @@ const (
 	settingRows
 )
 
-// The two columns, in display cells. Fixed rather than measured because the
-// rows are few and their values are short: a widest-of helper would be more
-// machinery than the numbers. A banner named wider than valueWidth is what
-// would change that.
+// The two columns, in display cells. Fixed so every row shares one alignment.
+// valueWidth also bounds the cosmetic profile name; its last cell is reserved
+// for the caret while editing.
 const (
-	labelWidth = 16
-	// Wide enough for the longest value there is with a space either side of it:
-	// "timed + skip" filled the old 13 cells edge to edge and read as cramped
-	// against the step arrow. A banner named wider than this is what would move
-	// it again.
-	valueWidth = 15
+	labelWidth          = 16
+	valueWidth          = 20
+	displayNameMaxWidth = valueWidth - 1
 )
 
 // reload takes the saved preferences. A zero length means nothing was ever
@@ -67,6 +69,9 @@ func (m *settingsScreen) reload(s store.Settings) {
 		m.length = defaultLength
 	}
 	m.rememberLast = s.RememberLast
+	m.displayName = sanitizeDisplayName(s.DisplayName)
+	m.nameBeforeEdit = ""
+	m.editingName = false
 
 	m.splash = s.Splash != splashOff
 	m.splashArt = s.SplashArt
@@ -86,10 +91,13 @@ func (m *settingsScreen) reload(s store.Settings) {
 // nothing is shown greyed out instead: no arrows, no click targets, and the
 // cursor passes over it.
 //
-// There are two levels of that here. The art and the dismissal need the splash
-// itself; the length needs a dismissal that is actually timed, since the mode
-// that waits for a key has nothing to time.
+// The art and dismissal need the splash itself; the time needs a dismissal
+// that is actually timed. While the name editor owns text input, every other
+// row is temporarily inert so a typed key cannot change an unrelated setting.
 func (m *settingsScreen) enabled(row int) bool {
+	if m.editingName {
+		return row == rowProfileName
+	}
 	switch row {
 	case rowSplashArt, rowSplashDismiss:
 		return m.splash
@@ -100,9 +108,24 @@ func (m *settingsScreen) enabled(row int) bool {
 	}
 }
 
-// update moves between rows and steps the highlighted value, reporting whether
-// anything changed (so the root can save) and whether to go back.
+// update moves between rows, edits the profile name, and steps ordinary
+// values. It reports whether a completed change must be persisted and whether
+// the screen asked to go back.
 func (m *settingsScreen) update(msg tea.KeyPressMsg) (changed, back bool) {
+	if m.editingName {
+		switch msg.String() {
+		case "esc":
+			m.finishNameEdit(false)
+		case "enter":
+			return m.finishNameEdit(true), false
+		case "backspace":
+			m.deleteNameRune()
+		default:
+			m.typeName(msg.Text)
+		}
+		return false, false
+	}
+
 	switch msg.String() {
 	case "esc", "q":
 		return false, true
@@ -111,13 +134,101 @@ func (m *settingsScreen) update(msg tea.KeyPressMsg) (changed, back bool) {
 	case "down", "j":
 		m.move(1)
 	case "left", "h":
-		m.cycle(-1)
-		return true, false
+		if m.cursor != rowProfileName {
+			m.cycle(-1)
+			return true, false
+		}
 	case "right", "l", "enter", " ":
-		m.cycle(1)
-		return true, false
+		if m.cursor == rowProfileName {
+			m.beginNameEdit()
+		} else {
+			m.cycle(1)
+			return true, false
+		}
 	}
 	return false, false
+}
+
+func (m *settingsScreen) beginNameEdit() {
+	if m.editingName {
+		return
+	}
+	m.cursor = rowProfileName
+	m.nameBeforeEdit = m.displayName
+	m.editingName = true
+}
+
+func (m *settingsScreen) finishNameEdit(save bool) bool {
+	if !m.editingName {
+		return false
+	}
+	m.editingName = false
+	if !save {
+		m.displayName = m.nameBeforeEdit
+		return false
+	}
+	m.displayName = sanitizeDisplayName(m.displayName)
+	return m.displayName != m.nameBeforeEdit
+}
+
+func (m *settingsScreen) deleteNameRune() {
+	if !m.editingName || m.displayName == "" {
+		return
+	}
+	_, size := utf8.DecodeLastRuneInString(m.displayName)
+	m.displayName = m.displayName[:len(m.displayName)-size]
+}
+
+func (m *settingsScreen) typeName(text string) {
+	if !m.editingName || text == "" {
+		return
+	}
+	var b strings.Builder
+	b.Grow(len(m.displayName) + len(text))
+	b.WriteString(m.displayName)
+	width := lipgloss.Width(m.displayName)
+	for _, r := range text {
+		r, ok := displayNameRune(r)
+		if !ok {
+			continue
+		}
+		runeWidth := lipgloss.Width(string(r))
+		if width+runeWidth > displayNameMaxWidth {
+			break
+		}
+		b.WriteRune(r)
+		width += runeWidth
+	}
+	m.displayName = b.String()
+}
+
+// sanitizeDisplayName protects the terminal and the fixed-width settings row
+// from a hand-edited settings file. The result is presentation only; this does
+// not define an account-name or network-identity format.
+func sanitizeDisplayName(name string) string {
+	var b strings.Builder
+	b.Grow(len(name))
+	width := 0
+	for _, r := range name {
+		r, ok := displayNameRune(r)
+		if !ok {
+			continue
+		}
+		runeWidth := lipgloss.Width(string(r))
+		if width+runeWidth > displayNameMaxWidth {
+			break
+		}
+		b.WriteRune(r)
+		width += runeWidth
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func displayNameRune(r rune) (rune, bool) {
+	if unicode.IsSpace(r) {
+		return ' ', true
+	}
+	return r, unicode.IsPrint(r)
 }
 
 // move steps the cursor to the next row it can do anything with, so a disabled
@@ -221,6 +332,7 @@ func (m *settingsScreen) view(h *hitMap) string {
 			fmt.Sprintf("%d letters", m.length)),
 		m.renderRow(h, rowRememberLast, "remember last",
 			onOff(m.rememberLast)),
+		m.renderNameRow(h),
 		m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
 		m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
 		m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
@@ -241,10 +353,10 @@ func (m *settingsScreen) view(h *hitMap) string {
 	)
 }
 
-// renderRow lays out one setting: label on the left, the value flanked by the
-// step arrows on the right. The value and the › both step forward — the value
-// is the bigger target, and stepping backwards through three modes is rare
-// enough to leave to the ‹.
+// renderRow lays out one cycling setting: label on the left, the value flanked
+// by step arrows on the right. The value and the › both step forward — the
+// value is the bigger target, and stepping backwards is rare enough to leave
+// to the ‹.
 func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) string {
 	prev := action{kind: actSettingPrev, index: row}
 	next := action{kind: actSettingNext, index: row}
@@ -288,11 +400,41 @@ func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) stri
 		arrow(next, st.glyph.ValueNext)
 }
 
-// notes are the one-line explanations, since neither setting says what it does
-// and one of them quietly overrides the other. They are listed together so the
-// screen can reserve the width of the longest.
+func (m *settingsScreen) renderNameRow(h *hitMap) string {
+	kind := actSettingNameEdit
+	value := m.displayName
+	if m.editingName {
+		kind = actSettingNameDone
+		value += st.glyph.Caret
+	} else if value == "" {
+		value = "not set"
+	}
+	a := action{kind: kind, index: rowProfileName}
+
+	prefix := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
+	labelStyle, valueStyle := st.muted, st.muted
+	if m.cursor == rowProfileName {
+		prefix = st.cursor.Render(st.glyph.Cursor)
+		labelStyle, valueStyle = st.text, st.accent
+	}
+	if h.hovered(a) {
+		valueStyle = st.hover(valueStyle)
+	}
+
+	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
+	cell := h.mark(a, valueBox.Render(valueStyle.Render(value)))
+	return prefix +
+		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, "profile name")) +
+		strings.Repeat(" ", lipgloss.Width(st.glyph.ValuePrev)) +
+		cell +
+		strings.Repeat(" ", lipgloss.Width(st.glyph.ValueNext))
+}
+
+// notes are the one-line explanations for the selected preference. They are
+// listed together so the screen can reserve the width of the longest.
 var notes = struct {
 	length, remembering, notRemembering string
+	profileName                         string
 	splashOn, splashOff                 string
 	art, randomArt, dismiss             string
 	splashTime, untimed                 string
@@ -300,6 +442,7 @@ var notes = struct {
 	length:         "the mode new puzzles start in",
 	remembering:    "playing a mode makes it the default",
 	notRemembering: "the default stays whatever is set here",
+	profileName:    "a local profile label, not an account or sign-in",
 	splashOn:       "the art drawn while the app starts",
 	splashOff:      "turn it on to choose art and dismissal",
 	art:            "which art the splash draws",
@@ -316,6 +459,8 @@ func (m *settingsScreen) note() string {
 			return notes.remembering
 		}
 		return notes.notRemembering
+	case rowProfileName:
+		return notes.profileName
 	case rowSplash:
 		// With the splash off, the note explains the two dead rows below it —
 		// they are the only thing on screen that has just changed.
@@ -346,6 +491,7 @@ func noteWidth() int {
 	return max(lipgloss.Width(notes.length),
 		lipgloss.Width(notes.remembering),
 		lipgloss.Width(notes.notRemembering),
+		lipgloss.Width(notes.profileName),
 		lipgloss.Width(notes.splashOn),
 		lipgloss.Width(notes.splashOff),
 		lipgloss.Width(notes.art),
@@ -363,6 +509,20 @@ func onOff(b bool) string {
 }
 
 func (m *settingsScreen) help(h *hitMap) string {
+	if m.editingName {
+		return renderHelp(h,
+			helpItem{keys: "⌫", label: "erase", act: action{kind: actSettingNameBackspace}},
+			helpItem{keys: "enter", label: "save", act: action{kind: actSettingNameDone}},
+			helpItem{keys: "esc", label: "cancel", act: action{kind: actSettingNameCancel}},
+		)
+	}
+	if m.cursor == rowProfileName {
+		return renderHelp(h,
+			helpItem{keys: "↑/↓", label: "move"},
+			helpItem{keys: "enter", label: "edit", act: action{kind: actSettingNameEdit}},
+			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+		)
+	}
 	return renderHelp(h,
 		helpItem{keys: "↑/↓", label: "move"},
 		// Two buttons rather than one: the hint said ←/→ while the target only

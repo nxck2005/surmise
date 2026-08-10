@@ -50,10 +50,11 @@ const (
 type splashMode int
 
 const (
-	// splashSkip is the default: it goes on its own after splashDuration, and
-	// any key or click cuts that short.
+	// splashSkip goes on its own after splashDuration, and any key or click
+	// cuts that short.
 	splashSkip splashMode = iota
-	// splashKey waits for input and never times out — a title screen proper.
+	// splashKey is the default. It waits for input and never times out — a title
+	// screen proper.
 	splashKey
 	// splashFixed times out and ignores input, for a launch that always looks
 	// the same. ctrl+c still quits, since that is handled above every screen.
@@ -61,7 +62,7 @@ const (
 )
 
 // splashModes is the order the settings screen cycles through, default first.
-var splashModes = []splashMode{splashSkip, splashKey, splashFixed}
+var splashModes = []splashMode{splashKey, splashSkip, splashFixed}
 
 // splashDuration is the built-in wait for a timed splash: long enough to read,
 // short enough that someone who launched to play a puzzle does not wait on it.
@@ -155,7 +156,7 @@ func (m splashMode) dismissible() bool { return m != splashFixed }
 func parseSplashMode(s string) (splashMode, bool) {
 	switch s {
 	case "":
-		return splashSkip, true
+		return splashKey, true
 	case "skip":
 		return splashSkip, true
 	case "key":
@@ -163,7 +164,7 @@ func parseSplashMode(s string) (splashMode, bool) {
 	case "fixed":
 		return splashFixed, true
 	}
-	return splashSkip, false
+	return splashKey, false
 }
 
 func (m *splashScreen) resize(w, h int) { m.width, m.height = w, h }

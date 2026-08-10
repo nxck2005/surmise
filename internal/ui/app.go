@@ -305,7 +305,7 @@ func (m *Model) applyStartupSplash(override string) {
 
 	mode, ok := parseSplashMode(s.SplashDismiss)
 	if !ok {
-		m.err = fmt.Errorf("no splash setting %q — using %s", s.SplashDismiss, splashSkip.setting())
+		m.err = fmt.Errorf("no splash setting %q — using %s", s.SplashDismiss, mode.setting())
 	}
 	m.splash.mode = mode
 
@@ -525,6 +525,8 @@ func (m *Model) handleMotion(x, y int) {
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
 		m.themes.point(a.index)
+	case actSettingNameEdit, actSettingNameDone:
+		m.settings.point(rowProfileName)
 	case actSettingNext, actSettingPrev:
 		m.settings.point(a.index)
 	}
@@ -538,6 +540,10 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		return m.quit()
 
 	case actBack:
+		if m.screen == screenSettings && m.settings.editingName {
+			m.settings.finishNameEdit(false)
+			return nil
+		}
 		return m.back()
 
 	case actSplashDismiss:
@@ -628,8 +634,39 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		// The same method the r key calls, so the two cannot drift.
 		return m.reloadThemes()
 
+	case actSettingNameEdit:
+		if m.screen != screenSettings {
+			return nil
+		}
+		m.settings.beginNameEdit()
+		return nil
+
+	case actSettingNameDone:
+		if m.screen != screenSettings {
+			return nil
+		}
+		if m.settings.finishNameEdit(true) {
+			m.commitSettings(rowProfileName)
+		}
+		return nil
+
+	case actSettingNameCancel:
+		if m.screen == screenSettings {
+			m.settings.finishNameEdit(false)
+		}
+		return nil
+
+	case actSettingNameBackspace:
+		if m.screen == screenSettings {
+			m.settings.deleteNameRune()
+		}
+		return nil
+
 	case actSettingNext, actSettingPrev:
 		if m.screen != screenSettings {
+			return nil
+		}
+		if m.settings.editingName {
 			return nil
 		}
 		m.settings.point(a.index)
@@ -730,7 +767,7 @@ func (m *Model) reloadThemes() tea.Cmd {
 
 // restoreTheme puts back the committed theme after an abandoned preview, and is
 // also the fallback when a reload takes the committed theme away — Resolve
-// already means "this name, else ember dark, else the built-in default", so a
+// already means "this name, else Tokyo Night, else the built-in default", so a
 // theme file deleted or made unreadable under us lands somewhere valid rather
 // than leaving whatever was previewed on screen.
 //
@@ -817,7 +854,8 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.screen = screenList
 
 	case choiceProfile:
-		m.profile.reload(m.store, m.day)
+		s := m.settingsOf()
+		m.profile.reload(m.store, m.day, s.DisplayName)
 		m.screen = screenProfile
 
 	case choiceThemes:
@@ -962,9 +1000,9 @@ func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// commitSettings writes what the settings screen now holds. There is nothing
-// to preview here, unlike the theme picker, so every change is saved as it is
-// made and esc has nothing to undo.
+// commitSettings writes what the settings screen now holds. Cycling rows save
+// immediately; the profile-name editor calls this only when its draft is kept,
+// so escape can discard text without making settings generally transactional.
 //
 // row is what was just changed: only a change to the mode moves the length this
 // run is playing, so toggling the other setting cannot quietly discard a
@@ -972,6 +1010,7 @@ func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) commitSettings(row int) {
 	s := m.settingsOf()
 	s.Length, s.RememberLast = m.settings.length, m.settings.rememberLast
+	s.DisplayName = m.settings.displayName
 	// Written out rather than left empty for the defaults: a preference someone
 	// has actually visited should read back the same way it looks on screen.
 	s.Splash = splashOff

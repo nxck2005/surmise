@@ -10,6 +10,10 @@ import (
 // rarely, and safe to lose: every field has a working zero value.
 type Settings struct {
 	Theme string `json:"theme,omitempty"`
+	// DisplayName is local presentation on the profile screen. It is not an
+	// account ID, puzzle owner, authentication claim, or uniqueness promise;
+	// future networking can add identity without inheriting this field's rules.
+	DisplayName string `json:"display_name,omitempty"`
 	// Length is the word length the app opens on. Zero means "no choice made",
 	// which the UI reads as its own default rather than as an invalid mode.
 	Length int `json:"length,omitempty"`
@@ -24,7 +28,7 @@ type Settings struct {
 	//
 	//	Splash        "" (on), "on", "off"
 	//	SplashArt     "" (the default art), "random", or a banner's name
-	//	SplashDismiss "" (skip), "skip", "key", "fixed"
+	//	SplashDismiss "" (key), "skip", "key", "fixed"
 	//
 	// The UI resolves each of them, and an unknown value is reported on its
 	// error line rather than refused — art that stopped shipping must not cost

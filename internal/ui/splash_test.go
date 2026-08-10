@@ -53,10 +53,11 @@ func TestSplashDrawsItsArt(t *testing.T) {
 	}
 }
 
-// The timer is what ends a splash nobody touches, and it must not act on a
-// splash that has already gone.
-func TestSplashTimerDismisses(t *testing.T) {
+// A timed splash ends on its timer, and a timer that arrives after it has gone
+// must not act on the screen underneath.
+func TestTimedSplashDismisses(t *testing.T) {
 	m := splashModel(t, Options{})
+	m.splash.mode = splashSkip
 
 	m.Update(splashDoneMsg{})
 	if m.screen != screenGame {
@@ -69,6 +70,25 @@ func TestSplashTimerDismisses(t *testing.T) {
 	m.Update(splashDoneMsg{})
 	if m.screen != screenMenu {
 		t.Errorf("a late timer moved the screen to %v", m.screen)
+	}
+}
+
+func TestDefaultSplashWaitsForAnyKey(t *testing.T) {
+	m := splashModel(t, Options{})
+	if m.splash.mode != splashKey {
+		t.Fatalf("default mode = %v, want any key", m.splash.mode)
+	}
+	if m.splashCmd() != nil {
+		t.Fatal("the default splash armed a timer")
+	}
+
+	m.Update(splashDoneMsg{})
+	if m.screen != screenSplash {
+		t.Fatalf("timer dismissed the default splash to %v", m.screen)
+	}
+	send(t, m, "a")
+	if m.screen != screenGame {
+		t.Fatalf("key dismissed the default splash to %v, want game", m.screen)
 	}
 }
 
@@ -201,7 +221,7 @@ func TestSavedSplashPreferences(t *testing.T) {
 	if m.err == nil {
 		t.Error("an unknown dismissal was not reported")
 	}
-	if m.splash.mode != splashSkip {
+	if m.splash.mode != splashKey {
 		t.Errorf("mode = %v, want the default", m.splash.mode)
 	}
 }
@@ -224,7 +244,7 @@ func TestSplashSettingsPersist(t *testing.T) {
 	if got.SplashArt == banner.Default().Name {
 		t.Errorf("the art row did not step: %q", got.SplashArt)
 	}
-	if got.SplashDismiss == splashSkip.setting() {
+	if got.SplashDismiss == splashKey.setting() {
 		t.Errorf("the dismissal row did not step: %q", got.SplashDismiss)
 	}
 
@@ -290,7 +310,10 @@ func TestSplashRowsAreDisabledWhenItIsOff(t *testing.T) {
 // mode that has something to time.
 func TestSplashDuration(t *testing.T) {
 	s, dir := newStore(t)
-	if err := s.SaveSettings(store.Settings{SplashMillis: 2500}); err != nil {
+	if err := s.SaveSettings(store.Settings{
+		SplashDismiss: splashSkip.setting(),
+		SplashMillis:  2500,
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -387,6 +410,7 @@ func TestSplashTimeRowFollowsTheDismissMode(t *testing.T) {
 	m := newModel(t)
 	openSettings(t, m)
 
+	m.settings.splashMode = splashSkip
 	m.settings.cursor = rowSplashDismiss
 	if !m.settings.enabled(rowSplashTime) {
 		t.Fatal("the length row starts disabled under a timed dismissal")

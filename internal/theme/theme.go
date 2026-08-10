@@ -132,11 +132,11 @@ func (t *Theme) Override(element string) Override {
 	return t.Styles[element]
 }
 
-// Default is the built-in look: "ember dark", a cool near-black ground under a
-// single warm accent. It is the base every loaded theme is overlaid onto, so a
+// Default is the built-in look: "tokyo night", a deep blue ground with a cool
+// blue accent. It is the base every loaded theme is overlaid onto, so a
 // four-line theme file is valid.
 //
-// This palette is duplicated in themes/ember-dark.toml, which is deliberate —
+// This palette is duplicated in themes/tokyo-night.toml, which is deliberate —
 // the bundled file has to be a worked example a user can copy, and this has to
 // stand alone when no file loads at all. Change one and change the other; the
 // theme package's tests compare them.
@@ -144,17 +144,17 @@ func Default() *Theme {
 	t := &Theme{
 		Name: DefaultName,
 		palette: map[string]color.Color{
-			Bg:       mustColor("#0b0c0e"),
-			Text:     mustColor("#c8ccd4"),
-			Accent:   mustColor("#d97757"),
-			Muted:    mustColor("#5c626e"),
-			Error:    mustColor("#d2555f"),
-			Correct:  mustColor("#4f9d69"),
-			Present:  mustColor("#cf9f4a"),
-			Absent:   mustColor("#34373d"),
-			Slot:     mustColor("#4a4f58"),
-			KeyFace:  mustColor("#4a4f58"),
-			KeySpent: mustColor("#17191d"),
+			Bg:       mustColor("#1a1b26"),
+			Text:     mustColor("#c0caf5"),
+			Accent:   mustColor("#7aa2f7"),
+			Muted:    mustColor("#565f89"),
+			Error:    mustColor("#f7768e"),
+			Correct:  mustColor("#9ece6a"),
+			Present:  mustColor("#e0af68"),
+			Absent:   mustColor("#292e42"),
+			Slot:     mustColor("#414868"),
+			KeyFace:  mustColor("#343b58"),
+			KeySpent: mustColor("#16161e"),
 		},
 		Glyphs: Glyphs{
 			Caret:       "_",
