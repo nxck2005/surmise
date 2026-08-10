@@ -3,7 +3,7 @@
 The same game, compiled to WebAssembly and drawn by [xterm.js]. No install, no
 account, no server: the whole thing runs in the tab.
 
-<!-- The live URL goes here once the site is deployed. See the note at the end. -->
+**Play it at <https://surmise.nxck.dev>.**
 
 ## What is different from the terminal build
 
@@ -127,10 +127,32 @@ Bubble Tea has no WebAssembly build upstream. `third_party/bubbletea` is
 v2.0.8 plus two small additive files; see
 [PATCHES.md](../third_party/bubbletea/PATCHES.md).
 
-## Not deployed yet
+## How it is deployed
 
-There is no public URL. Everything above works locally today; hosting is the one
-remaining step. When there is somewhere to put it, add the address at the top of
-this file and in the README.
+<https://surmise.nxck.dev>, on Vercel, from `.github/workflows/deploy-web.yml`.
+
+The build happens in GitHub Actions and the result is uploaded ready-made, with
+`vercel deploy --prebuilt`. That is not a preference: Vercel's build image ships
+Node and no Go, so it cannot compile the wasm at all. For the same reason the
+project has no Git integration — if it had one, Vercel would run its own build
+on every push and fail beside every good deploy.
+
+| what happened | where it goes |
+|---|---|
+| push to `main` | `surmise-staging.vercel.app` |
+| tag `v0.3.0` | production, `surmise.nxck.dev` |
+| tag `v0.3.0-rc1` | staging, by the same `*-*` test that marks a GitHub prerelease |
+
+The staging address needs a Vercel login, because Deployment Protection covers
+everything except production. Production is public.
+
+Caching is set by `web/vercel-output.json`, which is copied to
+`.vercel/output/config.json`. It sets exactly one thing: `surmise.wasm` caches
+for a year, which is safe because `boot.js` requests it as
+`surmise.wasm?v=<hash>` and a new build asks for a URL the browser has never
+seen. Every other file keeps a constant name and stays on Vercel's revalidating
+default. Note that it is written as `routes`, not the `headers` key from
+`vercel.json` — the Build Output API has no `headers` key, and one put there is
+ignored without an error.
 
 [xterm.js]: https://xtermjs.org
