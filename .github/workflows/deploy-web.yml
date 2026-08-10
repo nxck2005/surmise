@@ -4,12 +4,21 @@ name: Deploy web
 # v* tag promotes a build to production, so the live page matches the release
 # people can download rather than whatever main happens to hold.
 #
-# Nothing here touches release.yml: the archives carry no wasm, because the
-# browser build is a deployment and not a download.
+# The archives carry no wasm, because the browser build is a deployment and not
+# a download. What the two share is the version string and the tag that starts
+# them.
+#
+# A tag is deliberately NOT a trigger here. release.yml calls this workflow
+# after its tests pass, so a tag can never promote an untested build to
+# production. Triggering on the tag as well would deploy immediately and beside
+# the release, which is the thing being prevented — and it could not simply call
+# ci.yml instead, because release.yml already does: both callers would compute
+# the concurrency group ci-<tag>, and cancel-in-progress would have one kill the
+# other. See the note at the top of ci.yml.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -24,6 +33,16 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Without this the repo shows no deployment history at all: those records
+    # normally come from Vercel's GitHub App, and this project has no Git
+    # integration on purpose — Vercel's image has no Go and its build would
+    # fail beside every good one. GitHub writes the record itself for a job
+    # that names an environment, which gives the history without the app.
+    environment:
+      # A pre-release tag is not production, by the same *-* test release.yml
+      # uses to decide the GitHub release's prerelease flag.
+      name: ${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') && 'production' || 'staging' }}
+      url: ${{ steps.deploy.outputs.url }}
     env:
       # The CLI reads these from the environment, and they identify the project
       # a prebuilt deploy lands in. Neither is a secret in the usual sense, but
@@ -56,14 +75,23 @@ jobs:
       # already has the toolchain, the pinned xterm.js and the go.work view of
       # the vendored bubbletea copy.
       #
-      # web/vercel-output.json is the Build Output API config, and it carries no
-      # comments because that schema rejects keys it does not know. What it says:
-      # the wasm is served as application/wasm, which instantiateStreaming
-      # insists on, and is the one file cached hard — boot.js appends
-      # ?v=<hash of the wasm>, so each build asks for a URL the browser has never
-      # seen and an immutable year can never go stale. Every other file keeps a
-      # constant name, so caching one of those hard would pin a visitor to an old
-      # build with no way to recover; they revalidate instead, which costs a 304.
+      # web/vercel-output.json is the Build Output API config. It carries no
+      # comments, because it is copied to config.json verbatim, and it is
+      # written as `routes` rather than the `headers` key from vercel.json.
+      # That distinction is not cosmetic and cost two deploys to find: the
+      # Build Output config has no `headers` key at all — vercel.json's is
+      # compiled into routes during Vercel's own build, which a prebuilt deploy
+      # never runs — so a `headers` block here is valid JSON that is silently
+      # ignored. `continue: true` applies the header and then lets the file be
+      # served normally.
+      #
+      # It sets one thing: the wasm caches for a year. boot.js appends
+      # ?v=<hash of the wasm>, so every build asks for a URL the browser has
+      # never seen and an immutable year can never go stale. Everything else
+      # keeps a constant filename and is left on Vercel's default of
+      # `public, max-age=0, must-revalidate`, which is what those files want —
+      # caching one of them hard would pin a visitor to an old build for a year
+      # with no way to recover.
       - name: stage the build output
         run: |
           mkdir -p .vercel/output/static
@@ -75,10 +103,19 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          # A tag goes to production. Everything else stays on a preview URL,
-          # which is what makes main safe to push to.
+          # A release tag goes to production. Everything else stays on a preview
+          # URL, which is what makes main safe to push to.
+          #
+          # A pre-release tag (v0.2.1-rc1) is deliberately not production: it
+          # still deploys, so the exact tagged build can be opened and played
+          # before the real tag promotes it, but it lands on staging. Same *-*
+          # test release.yml uses for the prerelease flag, so one tag cannot be
+          # a prerelease on GitHub and the live site at the same time.
           target=
-          case "$GITHUB_REF" in refs/tags/*) target=--prod ;; esac
+          case "$GITHUB_REF_NAME" in
+            *-*) ;;
+            *) case "$GITHUB_REF" in refs/tags/*) target=--prod ;; esac ;;
+          esac
 
           # The CLI prints the deployment URL on stdout and its progress on
           # stderr, so the URL can be captured without parsing anything.
@@ -90,8 +127,11 @@ jobs:
       # address changes every push and cannot be bookmarked. This is deliberately
       # not fatal: the deploy above already succeeded, and a taken or unavailable
       # alias is not a reason to report the deployment as failed.
+      # Runs for anything that did not go to production, so an rc tag takes the
+      # staging alias over from main. That is the point of an rc: the address
+      # you hand someone to try is the tagged build, until main moves again.
       - name: point the staging alias at it
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/') || contains(github.ref_name, '-') }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |

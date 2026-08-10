@@ -131,3 +131,16 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" \
             --generate-notes $prerelease
+
+  # The browser build ships the same tag to the web. It is called from here
+  # rather than triggered by the tag itself, so the same tests that gate the
+  # archives gate the deployment, and the live site can never run ahead of a
+  # release that failed to publish.
+  #
+  # The called workflow sees this run's github context, so the tag decides
+  # production against staging inside it exactly as a tag push would.
+  # `secrets: inherit` passes the three VERCEL_* secrets it reads.
+  deploy:
+    needs: release
+    uses: ./.github/workflows/deploy-web.yml
+    secrets: inherit
