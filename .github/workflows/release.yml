@@ -57,7 +57,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           # The tag is the version, minus the leading v: `surmise -version` then
-          # prints "surmise 0.1.0 …", the form the README documents.
+          # prints "surmise 1.2.3 …", the form the README documents.
           version="${GITHUB_REF_NAME#v}"
           name=surmise
           if [ "$GOOS" = windows ]; then name=surmise.exe; fi
@@ -119,7 +119,7 @@ jobs:
           # git remote to infer the repository from and needs telling.
           GH_REPO: ${{ github.repository }}
         run: |
-          # A tag with a pre-release suffix (v0.1.0-rc1) must not become the
+          # A tag with a pre-release suffix (v1.2.3-rc1) must not become the
           # "latest" release people are pointed at.
           case "$GITHUB_REF_NAME" in
             *-*) prerelease=--prerelease ;;

@@ -7,10 +7,10 @@
 //
 // It is not a substitute for opening the page — fonts, colour fidelity and
 // hover latency still need eyes. What it covers is everything between the Go
-// program and the terminal, including three failures that a compile cannot see:
-// a js.Func callback that blocks hangs the runtime, a missing colour profile
-// renders the game in monochrome, and non-tty newline mapping leaves fragments
-// of a larger frame behind when the screen shrinks.
+// program, terminal and browser storage, including four failures a compile
+// cannot see: a blocked js.Func hangs the runtime, a missing colour profile
+// renders in monochrome, non-tty newline mapping leaves stale cells, and a
+// localStorage failure silently forgets history on reload.
 import { execSync, spawnSync } from "node:child_process";
 import {
   existsSync,

@@ -106,7 +106,7 @@ jobs:
           # A release tag goes to production. Everything else stays on a preview
           # URL, which is what makes main safe to push to.
           #
-          # A pre-release tag (v0.2.1-rc1) is deliberately not production: it
+          # A pre-release tag (v1.2.3-rc1) is deliberately not production: it
           # still deploys, so the exact tagged build can be opened and played
           # before the real tag promotes it, but it lands on staging. Same *-*
           # test release.yml uses for the prerelease flag, so one tag cannot be

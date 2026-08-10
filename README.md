@@ -140,7 +140,7 @@ saves and settings otherwise live in your user config directory
 the **about** row in the menu shows app info. for getting the version without opening the app:
 
 ```sh
-surmise -version         # surmise 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
+surmise -version         # surmise 1.2.3 (a1b2c3d) go1.26.5 linux/amd64
 ```
 
 ## in a browser

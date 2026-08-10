@@ -1,8 +1,10 @@
-// Package store persists puzzles between runs.
+// Package store persists client puzzle history.
 //
-// Everything is expressed against the Store interface so the local JSON
-// implementation can later sit beside, or behind, a networked one without the
-// UI changing. That is the seam for the eventual global leaderboard.
+// Store is shared by the native JSON and browser KV implementations. It is a
+// client persistence boundary, not an authoritative leaderboard protocol:
+// game.Game contains the plaintext answer and client-authored result data.
+// Future network play needs a purpose-built API, though a sync cache may wrap a
+// Store without changing the UI.
 package store
 
 import (

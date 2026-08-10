@@ -15,10 +15,9 @@ import (
 // because that is the whole of it — the schema is flat, and the project has no
 // non-Charm dependencies to spend.
 //
-// Everything is forgiving on purpose, the way the store recovers from a damaged
-// counter instead of refusing to start: a line it cannot make sense of becomes
-// a Warning naming the line number, and the rest of the theme still loads. Only
-// an unreadable file is an error.
+// Everything is forgiving on purpose: a line the parser cannot make sense of
+// becomes a Warning naming its line number, and the rest of the theme still
+// loads. Only an unreadable file is an error.
 
 // Warning is one thing wrong with a theme file, reported rather than fatal.
 type Warning struct {
