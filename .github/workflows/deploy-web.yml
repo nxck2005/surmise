@@ -4,12 +4,21 @@ name: Deploy web
 # v* tag promotes a build to production, so the live page matches the release
 # people can download rather than whatever main happens to hold.
 #
-# Nothing here touches release.yml: the archives carry no wasm, because the
-# browser build is a deployment and not a download.
+# The archives carry no wasm, because the browser build is a deployment and not
+# a download. What the two share is the version string and the tag that starts
+# them.
+#
+# A tag is deliberately NOT a trigger here. release.yml calls this workflow
+# after its tests pass, so a tag can never promote an untested build to
+# production. Triggering on the tag as well would deploy immediately and beside
+# the release, which is the thing being prevented — and it could not simply call
+# ci.yml instead, because release.yml already does: both callers would compute
+# the concurrency group ci-<tag>, and cancel-in-progress would have one kill the
+# other. See the note at the top of ci.yml.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
