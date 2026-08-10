@@ -143,19 +143,22 @@ surmise -version         # surmise 0.1.0 (a1b2c3d) go1.26.5 linux/amd64
 
 ## in a browser
 
-the same game compiles to webassembly and runs on xterm.js — no install, no
-server. saved puzzles go to `localStorage` instead of a config directory, and
+**play it at [surmise.nxck.dev](https://surmise.nxck.dev)** — the same game
+compiles to webassembly and runs on xterm.js, so there is nothing to install and
+no server. saved puzzles go to `localStorage` instead of a config directory, and
 only the bundled themes come along.
+
+to build and serve it yourself:
 
 ```sh
 scripts/build-web.sh              # writes web/dist
 python3 -m http.server -d web/dist
 ```
 
+<!-- Absolute on purpose: the release archives carry no wasm and so no
+     docs/WEB.md, and a relative link would dangle inside every one. -->
 details, and the query-string equivalents of the flags, in
-[docs/WEB.md](https://github.com/nxck2005/surmise/blob/main/docs/WEB.md). that
-link is absolute on purpose: the release archives carry no wasm, so they carry
-no `docs/WEB.md` either, and a relative link would dangle inside them.
+[docs/WEB.md](https://github.com/nxck2005/surmise/blob/main/docs/WEB.md).
 
 ## development
 
