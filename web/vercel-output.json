@@ -1,16 +1,10 @@
 {
   "version": 3,
-  "headers": [
+  "routes": [
     {
-      "source": "/surmise.wasm",
-      "headers": [
-        { "key": "Content-Type", "value": "application/wasm" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+      "src": "^/surmise\\.wasm$",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" },
+      "continue": true
     }
   ]
 }
