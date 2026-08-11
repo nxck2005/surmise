@@ -30,6 +30,7 @@ type screen int
 const (
 	screenMenu screen = iota
 	screenGame
+	screenResult
 	screenList
 	screenProfile
 	screenThemes
@@ -128,6 +129,7 @@ type Model struct {
 	splash   splashScreen
 	menu     menuScreen
 	game     *gameScreen
+	result   resultScreen
 	list     listScreen
 	profile  profileScreen
 	themes   themeScreen
@@ -232,6 +234,39 @@ func (m *Model) openGame(g *game.Game, saved bool) {
 	m.game = newGameScreen(m.store, g, saved)
 	m.game.resize(m.width, m.height)
 	m.screen = screenGame
+}
+
+// openResult raises the debrief for the finished board. A save error is carried
+// with it: completion still has a useful result, but must not hide that the
+// durable copy failed.
+func (m *Model) openResult() {
+	if m.game == nil || !m.game.g.Status.Done() {
+		return
+	}
+	notice := ""
+	if m.game.message != "" && time.Now().Before(m.game.msgUntil) {
+		notice = m.game.message
+	}
+	m.result.open(m.game.g, notice)
+	m.screen = screenResult
+}
+
+// submitGame is the one submit path for both Enter and the on-screen keycap.
+// The root owns it because a finishing guess changes the active screen.
+func (m *Model) submitGame() tea.Cmd {
+	if m.screen != screenGame || m.game == nil {
+		return nil
+	}
+	if m.game.g.Status.Done() {
+		m.openResult()
+		return nil
+	}
+
+	cmd := m.game.submit()
+	if m.game.g.Status.Done() {
+		m.openResult()
+	}
+	return cmd
 }
 
 // applyStartupTheme resolves which theme to open with: an explicit override
@@ -678,6 +713,14 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		m.commitSettings(a.index)
 		return nil
+	case actResultReview:
+		return m.reviewResult()
+
+	case actResultNext:
+		return m.nextResult()
+
+	case actResultCopy:
+		return m.copyResult()
 	}
 
 	// Everything left belongs to the board.
@@ -692,7 +735,7 @@ func (m *Model) dispatch(a action) tea.Cmd {
 	case actTrim:
 		m.game.trimTo(a.index)
 	case actSubmit:
-		return m.game.submit()
+		return m.submitGame()
 	case actNewPuzzle:
 		// A click is already deliberate, so it needs no tab-then-enter confirm.
 		m.game.confirmNew = false
@@ -707,6 +750,11 @@ func (m *Model) dispatch(a action) tea.Cmd {
 // the menu.
 func (m *Model) back() tea.Cmd {
 	switch {
+	case m.screen == screenResult && m.game != nil:
+		if err := m.game.leave(); err != nil {
+			m.result.notice = fmt.Sprintf("could not save: %v", err)
+			return nil
+		}
 	case m.screen == screenGame && m.game != nil:
 		m.game.exit()
 	case m.screen == screenThemes:
@@ -796,11 +844,19 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case screenMenu:
 		return m.updateMenu(msg)
 	case screenGame:
+		// Enter may finish the puzzle and raise another screen, so the root's
+		// shared keyboard/mouse submit path owns it. An armed tab prompt keeps
+		// Enter inside gameScreen, where it confirms the replacement.
+		if msg.String() == "enter" && !m.game.confirmNew {
+			return m, m.submitGame()
+		}
 		cmd, back := m.game.update(msg)
 		if back {
 			m.screen = screenMenu
 		}
 		return m, cmd
+	case screenResult:
+		return m.updateResult(msg)
 	case screenList:
 		return m.updateList(msg)
 	case screenDaily:
@@ -818,6 +874,21 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+func (m *Model) updateResult(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter", "r":
+		return m, m.reviewResult()
+	case "n":
+		return m, m.nextResult()
+	case "c":
+		return m, m.copyResult()
+	case "esc", "q":
+		return m, m.back()
+	default:
+		return m, nil
+	}
 }
 
 func (m *Model) updateMenu(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -1070,7 +1141,7 @@ func (m *Model) deleteSelected() tea.Cmd {
 // rather than a loss.
 func (m *Model) quit() tea.Cmd {
 	m.quitting = true
-	if m.screen == screenGame && m.game != nil {
+	if (m.screen == screenGame || m.screen == screenResult) && m.game != nil {
 		if err := m.game.leave(); err != nil {
 			m.err = err
 		}
@@ -1152,6 +1223,8 @@ func (m *Model) closeBox(h *hitMap) string {
 // screenTitle is the label shown in the panel's top border.
 func (m *Model) screenTitle() string {
 	switch m.screen {
+	case screenResult:
+		return "result"
 	case screenList:
 		return "puzzles"
 	case screenDaily:
@@ -1175,6 +1248,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.splash.view(h), m.splash.help(h)
 	case screenGame:
 		return m.game.view(h), m.game.help(h)
+	case screenResult:
+		return m.result.view(h), m.result.help(h)
 	case screenList:
 		return m.list.view(h), m.list.help(h)
 	case screenDaily:

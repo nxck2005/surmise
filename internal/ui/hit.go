@@ -56,6 +56,9 @@ const (
 	actTrim                            // index: erase the typed row back to this slot
 	actNewPuzzle                       // tab+enter
 	actCancelNew                       // dismiss the armed new-puzzle prompt
+	actResultReview                    // enter/r: return to the finished board
+	actResultNext                      // n: another random puzzle or the daily list
+	actResultCopy                      // c: copy the spoiler-safe result
 	actBack                            // esc
 	actQuit
 	actDeletePuzzle // index: puzzle list row to delete; arms, then confirms

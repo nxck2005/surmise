@@ -123,8 +123,9 @@ func (m *gameScreen) notify(format string, args ...any) {
 	m.msgUntil = time.Now().Add(messageTTL)
 }
 
-// update handles a key press, returning a command and whether the screen wants
-// to hand control back to the menu.
+// update handles board-local key presses, returning a command and whether the
+// screen wants to hand control back to the menu. The root owns an unarmed Enter
+// because an accepted final guess raises the result screen.
 func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	key := msg.String()
 
@@ -152,8 +153,6 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "backspace":
 		m.deleteLetter()
 
-	case "enter":
-		return m.submit(), false
 	}
 
 	// Letter input. Single printable ASCII letters only; anything else is a
@@ -195,10 +194,6 @@ func (m *gameScreen) trimTo(i int) {
 }
 
 func (m *gameScreen) submit() tea.Cmd {
-	if m.g.Status.Done() {
-		m.notify("puzzle finished — tab then enter for a new one")
-		return nil
-	}
 	if len(m.typing) < m.g.Length {
 		m.notify("needs %d letters", m.g.Length)
 		return nil
@@ -214,6 +209,8 @@ func (m *gameScreen) submit() tea.Cmd {
 	}
 
 	m.typing = ""
+	m.message = ""
+	m.msgUntil = time.Time{}
 
 	// Bank time immediately on the winning or losing guess, so the recorded
 	// duration is the time actually spent solving. The clock can legitimately
@@ -251,6 +248,7 @@ func (m *gameScreen) startNew() tea.Cmd {
 
 	if err := m.leave(); err != nil {
 		m.notify("could not save: %v", err)
+		return nil
 	}
 
 	g, err := newPuzzle(m.store, m.g.Length)
@@ -406,6 +404,13 @@ func (m *gameScreen) statusLine(h *hitMap) string {
 }
 
 func (m *gameScreen) help(h *hitMap) string {
+	if m.g.Status.Done() {
+		return renderHelp(h,
+			helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
+			helpItem{keys: "tab+enter", label: "new puzzle", act: action{kind: actNewPuzzle}},
+			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+		)
+	}
 	return renderHelp(h,
 		helpItem{label: "type a word"},
 		helpItem{keys: "enter", label: "submit", act: action{kind: actSubmit}},

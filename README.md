@@ -44,6 +44,9 @@ it just follow whatever you played last.
 
 **quit whenever.** every guess is saved the moment you make it. come back whenever!
 
+**finish with a result.** every win or loss gets a compact debrief you can copy
+without spoiling the answer, review on the board, or use to start the next game.
+
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode.
 
@@ -62,6 +65,9 @@ nord and a lot more. write your own themes as well.
 | <kbd>enter</kbd> | submit |
 | <kbd>backspace</kbd> | delete a letter |
 | <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle (not on the daily — there's one a day) |
+| <kbd>enter</kbd> / <kbd>r</kbd> | review the board from a result |
+| <kbd>n</kbd> | next puzzle from a result (the daily returns to its mode list) |
+| <kbd>c</kbd> | copy a spoiler-safe result |
 | <kbd>esc</kbd> | back to the menu |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |

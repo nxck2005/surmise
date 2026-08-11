@@ -47,6 +47,34 @@ const paint = (name) => (data) => {
 term.parser.registerOscHandler(10, paint("--surmise-fg"));
 term.parser.registerOscHandler(11, paint("--surmise-bg"));
 
+// Bubble Tea writes clipboard requests as OSC 52. xterm.js deliberately leaves
+// that sequence to its host, so bridge system-clipboard writes to the browser.
+// The game emits this only for an explicit result-screen copy action.
+term.parser.registerOscHandler(52, async (data) => {
+  const match = /^c;([A-Za-z0-9+/]*={0,2})$/.exec(data);
+  if (!match) return false;
+
+  let text;
+  try {
+    const bytes = Uint8Array.from(atob(match[1]), (c) => c.charCodeAt(0));
+    text = new TextDecoder().decode(bytes);
+  } catch (error) {
+    console.warn("ignored malformed clipboard payload", error);
+    return true;
+  }
+
+  if (!navigator.clipboard?.writeText) {
+    console.warn("browser clipboard is unavailable");
+    return true;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (error) {
+    console.warn("could not write browser clipboard", error);
+  }
+  return true;
+});
+
 // Let the browser keep the chords it needs: copy when there is a selection, and
 // paste. Everything else belongs to the game.
 term.attachCustomKeyEventHandler((e) => {

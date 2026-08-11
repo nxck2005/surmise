@@ -95,6 +95,7 @@ jobs:
       - name: wasm smoke test
         run: |
           npm ci --prefix web
+          node --check web/boot.js
           GOOS=js GOARCH=wasm go build -o /tmp/surmise.wasm .
           node scripts/smoke-web.mjs /tmp/surmise.wasm
 
