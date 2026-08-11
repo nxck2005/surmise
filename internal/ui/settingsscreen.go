@@ -37,6 +37,10 @@ type settingsScreen struct {
 	splashMode splashMode
 	splashTime time.Duration
 
+	// motion is how much the board animates. Three values rather than a switch:
+	// off is a real choice, and so is wanting more than the default.
+	motion motion
+
 	cursor int
 }
 
@@ -45,6 +49,9 @@ const (
 	rowLength = iota
 	rowRememberLast
 	rowProfileName
+	// Before the splash block, so the dependent-row logic that block relies on
+	// stays a contiguous run.
+	rowMotion
 	rowSplash
 	rowSplashArt
 	rowSplashDismiss
@@ -83,6 +90,8 @@ func (m *settingsScreen) reload(s store.Settings) {
 	}
 	m.splashMode, _ = parseSplashMode(s.SplashDismiss)
 	m.splashTime, _ = parseSplashDuration(s.SplashMillis)
+
+	m.motion, _ = parseMotion(s.Motion)
 
 	m.cursor = 0
 }
@@ -266,6 +275,8 @@ func (m *settingsScreen) cycle(delta int) {
 	case rowRememberLast:
 		// Two values, so either direction is a toggle.
 		m.rememberLast = !m.rememberLast
+	case rowMotion:
+		m.motion = stepMotion(m.motion, delta)
 	case rowSplash:
 		m.splash = !m.splash
 	case rowSplashArt:
@@ -284,6 +295,16 @@ func (m *settingsScreen) cycle(delta int) {
 func stepArt(current string, delta int) string {
 	choices := append(banner.Names(), splashRandom)
 	return choices[wrap(indexOf(choices, current), delta, len(choices))]
+}
+
+func stepMotion(current motion, delta int) motion {
+	at := 0
+	for i, m := range motionOrder {
+		if m == current {
+			at = i
+		}
+	}
+	return motionOrder[wrap(at, delta, len(motionOrder))]
 }
 
 func stepMode(current splashMode, delta int) splashMode {
@@ -333,6 +354,7 @@ func (m *settingsScreen) view(h *hitMap) string {
 		m.renderRow(h, rowRememberLast, "remember last",
 			onOff(m.rememberLast)),
 		m.renderNameRow(h),
+		m.renderRow(h, rowMotion, "motion", m.motion.label()),
 		m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
 		m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
 		m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
@@ -438,6 +460,7 @@ var notes = struct {
 	splashOn, splashOff                 string
 	art, randomArt, dismiss             string
 	splashTime, untimed                 string
+	motionOff, motionOn, motionLoud     string
 }{
 	length:         "the mode new puzzles start in",
 	remembering:    "playing a mode makes it the default",
@@ -450,6 +473,9 @@ var notes = struct {
 	dismiss:        "how the splash gets out of the way",
 	splashTime:     "how long a timed splash stays up",
 	untimed:        "this dismissal waits, so there is nothing to time",
+	motionOff:      "the board changes at once, with no animation",
+	motionOn:       "tiles turn one at a time, and a win is marked",
+	motionLoud:     "the same feedback, slower and repeated",
 }
 
 func (m *settingsScreen) note() string {
@@ -461,6 +487,15 @@ func (m *settingsScreen) note() string {
 		return notes.notRemembering
 	case rowProfileName:
 		return notes.profileName
+	case rowMotion:
+		switch m.motion {
+		case motionOff:
+			return notes.motionOff
+		case motionPronounced:
+			return notes.motionLoud
+		default:
+			return notes.motionOn
+		}
 	case rowSplash:
 		// With the splash off, the note explains the two dead rows below it —
 		// they are the only thing on screen that has just changed.
@@ -498,7 +533,10 @@ func noteWidth() int {
 		lipgloss.Width(notes.randomArt),
 		lipgloss.Width(notes.dismiss),
 		lipgloss.Width(notes.splashTime),
-		lipgloss.Width(notes.untimed))
+		lipgloss.Width(notes.untimed),
+		lipgloss.Width(notes.motionOff),
+		lipgloss.Width(notes.motionOn),
+		lipgloss.Width(notes.motionLoud))
 }
 
 func onOff(b bool) string {

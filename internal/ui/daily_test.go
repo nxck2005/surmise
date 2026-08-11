@@ -49,6 +49,11 @@ func dailyModel(t *testing.T, opts Options) *Model {
 	if opts.Day == "" {
 		opts.Day = testDay
 	}
+	// Still by default, for the reason newModel is: a finishing guess must
+	// reach the result screen in the same Update, not after a reveal.
+	if opts.Motion == "" {
+		opts.Motion = motionOffName
+	}
 	m := New(s, nil, opts)
 	m.screen = screenMenu
 	return m

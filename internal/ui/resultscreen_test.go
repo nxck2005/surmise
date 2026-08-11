@@ -154,7 +154,7 @@ func TestResultRetriesAFailedCompletionSaveOnExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &failCompletionSaveStore{Store: base}
-	m := New(s, nil, Options{})
+	m := New(s, nil, Options{Motion: motionOffName})
 	m.screen = screenMenu
 	send(t, m, "down", "enter")
 	m.game.g.Answer = "crane"

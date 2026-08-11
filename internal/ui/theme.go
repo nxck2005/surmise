@@ -385,7 +385,12 @@ func bodyBudget(height int) int {
 // Border() so the title can sit inside the top rule. corner is an optional
 // segment inlaid at the right end of that rule — the close box — and may be
 // empty.
-func renderPanel(title, corner, content string) string {
+//
+// border is the style the rule is drawn in. It is a parameter rather than a
+// straight read of st.border because a win accents the whole frame for a
+// moment: same runes, same width, a different colour. Callers with nothing to
+// say pass st.border.
+func renderPanel(title, corner, content string, border lipgloss.Style) string {
 	inner := lipgloss.NewStyle().
 		Padding(st.metric.PanelPadY, st.metric.PanelPadX).
 		Render(content)
@@ -400,21 +405,21 @@ func renderPanel(title, corner, content string) string {
 	if fill < 0 {
 		fill = 0
 	}
-	top := st.border.Render(b.TopLeft+b.Top) +
+	top := border.Render(b.TopLeft+b.Top) +
 		st.panelTitle.Render(label) +
-		st.border.Render(strings.Repeat(b.Top, fill)) +
+		border.Render(strings.Repeat(b.Top, fill)) +
 		corner +
-		st.border.Render(b.TopRight)
+		border.Render(b.TopRight)
 
 	var sb strings.Builder
 	sb.WriteString(top)
 	sb.WriteByte('\n')
 	for _, l := range lines {
-		sb.WriteString(st.border.Render(b.Left))
+		sb.WriteString(border.Render(b.Left))
 		sb.WriteString(l)
-		sb.WriteString(st.border.Render(b.Right))
+		sb.WriteString(border.Render(b.Right))
 		sb.WriteByte('\n')
 	}
-	sb.WriteString(st.border.Render(b.BottomLeft + strings.Repeat(b.Bottom, width) + b.BottomRight))
+	sb.WriteString(border.Render(b.BottomLeft + strings.Repeat(b.Bottom, width) + b.BottomRight))
 	return sb.String()
 }

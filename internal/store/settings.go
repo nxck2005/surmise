@@ -38,6 +38,18 @@ type Settings struct {
 	SplashArt     string `json:"splash_art,omitempty"`
 	SplashDismiss string `json:"splash_dismiss,omitempty"`
 
+	// Motion is how much the board animates: tile reveals, the invalid-word
+	// cue, keycap pulses and the win accent. A string for the same reason the
+	// splash preferences are strings — the default is not the zero value, so a
+	// bool could not tell "never chosen" from "chosen off".
+	//
+	//	Motion  "" (pronounced), "off", "restrained", "pronounced"
+	//
+	// An unset value is also what lets the environment answer instead:
+	// $NO_MOTION natively, prefers-reduced-motion in a browser. Choosing here
+	// is deliberate and overrides both.
+	Motion string `json:"motion,omitempty"`
+
 	// SplashMillis is how long a timed splash stays up. Zero is "nothing
 	// chosen", which the UI reads as its own default — the same rule Length
 	// follows, and the reason this is not a time.Duration: a duration's zero is

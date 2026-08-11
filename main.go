@@ -31,6 +31,7 @@ const (
 	optLength  = "length"
 	optDay     = "day"
 	optSplash  = "splash"
+	optMotion  = "motion"
 	optVersion = "version"
 )
 
@@ -42,6 +43,7 @@ type config struct {
 	theme       string
 	day         string
 	splash      string
+	motion      string
 	length      int
 	listThemes  bool
 	showVersion bool
@@ -77,6 +79,7 @@ func uiOptions(cfg config, dataDir string) ui.Options {
 		Length:     cfg.length,
 		Day:        cfg.day,
 		Splash:     cfg.splash,
+		Motion:     cfg.motion,
 		DailySeeds: daily.Local(),
 		DataDir:    dataDir,
 	}

@@ -148,6 +148,13 @@ word`) has no element of its own: it is drawn with `tile.correct`,
 it does too. Note that a large `tile_width` makes the legend the widest thing on
 the screen — surmise hides it rather than overflow a narrow terminal.
 
+The board's feedback animations likewise name nothing of their own. A submitted
+row turns from `tile.active` into its scored tiles, a refused guess flashes
+`error`, a struck keycap borrows `hover`, and a win accents `border` with
+`accent` — so colouring those colours the animations too, and a theme never has
+to think about them. How much of it happens, or whether it happens at all, is a
+setting rather than part of the theme.
+
 ## When something is wrong
 
 A line the parser cannot read becomes a warning naming its line number; the rest

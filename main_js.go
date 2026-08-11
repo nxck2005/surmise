@@ -23,7 +23,7 @@ import (
 var browserTerm *web.Terminal
 
 // loadConfig reads the same options the flags carry, from the page's query
-// string: ?theme=dracula&length=6&day=2026-08-06&splash=off
+// string: ?theme=dracula&length=6&day=2026-08-06&splash=off&motion=off
 //
 // There is no -data (a browser has no directories), no -themes and no -version:
 // the first has nothing to point at, and the other two print to a stdout that
@@ -53,6 +53,7 @@ func loadConfig() config {
 		theme:  get(optTheme),
 		day:    get(optDay),
 		splash: get(optSplash),
+		motion: get(optMotion),
 	}
 	// An unreadable length is zero, "use whatever was saved" — the same
 	// fallback $SURMISE_LENGTH gets natively.

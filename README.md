@@ -125,15 +125,23 @@ edits apply live — save the file and the colours change under you, no restart.
 ## settings
 
 the settings screen holds an optional local profile name, the mode new puzzles
-start in, whether playing a different mode makes *that* the new default, and the
-splash: whether you get one, which ascii art it draws, how it goes away, and how
-long it stays up when it's timed. a fresh install waits for any key on the
-splash. cycling choices save immediately; the name editor saves on enter.
+start in, whether playing a different mode makes *that* the new default, how
+much the board animates, and the splash: whether you get one, which ascii art it
+draws, how it goes away, and how long it stays up when it's timed. a fresh
+install waits for any key on the splash. cycling choices save immediately; the
+name editor saves on enter.
+
+**motion** is `off`, `restrained` or `pronounced`. tiles turn one at a time, a
+refused guess flashes, keycaps light as you type, and a win accents the frame —
+none of it moves anything, and nothing ever waits on it: type straight through,
+and any key skips to the result. if you've asked your system for less animation
+(`$NO_MOTION`, or *prefers-reduced-motion* in a browser) it starts off.
 
 ```sh
 surmise -length 6        # start in a mode for one run, without saving it
 surmise -splash off      # skip the startup art for one run
 surmise -splash random   # a different banner each launch
+surmise -motion off      # a still board for one run
 surmise -day 2026-08-06  # play another date's daily, without waiting for it
 surmise -data ./scratch  # keep saves and settings somewhere else
 ```

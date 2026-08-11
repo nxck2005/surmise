@@ -33,6 +33,11 @@ func loadConfig() config {
 	// "random", or a banner's name. Like the rest of this family it never writes,
 	// and an unknown name is reported on the UI's error line rather than here.
 	splash := flag.String(optSplash, os.Getenv(brand.Env("SPLASH")), "startup art: off, random, or a banner's name (default: last used)")
+	// -motion sets how much the board animates for one run, which is what makes
+	// a recording or a screenshot reproducible. $NO_MOTION is read separately,
+	// by the UI, and only when nobody has chosen: a variable in a shell profile
+	// is a preference, and a preference must not overrule a choice.
+	motion := flag.String(optMotion, os.Getenv(brand.Env("MOTION")), "board feedback: off, restrained or pronounced (default: last used)")
 	// -version answers "which build is this" without opening the app, where the
 	// same information is on the about screen.
 	showVersion := flag.Bool(optVersion, false, "print version information and exit")
@@ -43,6 +48,7 @@ func loadConfig() config {
 		theme:       *themeName,
 		day:         *day,
 		splash:      *splash,
+		motion:      *motion,
 		length:      *length,
 		listThemes:  *listThemes,
 		showVersion: *showVersion,

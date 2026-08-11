@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -9,16 +10,24 @@ import (
 )
 
 // renderBoard draws every attempt row: guesses already played, the row being
-// typed, then empty rows. reveal shows the answer's letters for a lost game.
-func renderBoard(g *game.Game, typing string, h *hitMap) string {
+// typed, then empty rows.
+//
+// a may be nil, which draws the settled board — every row scored, nothing
+// flashing. That is what a caller with no animation state gets, and it is the
+// frame every layout test compares against.
+func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time) string {
 	rows := make([]string, 0, g.MaxAttempts)
 
 	for i, guess := range g.Guesses {
+		if shown, revealing := a.reveal(now, g.ID, i); revealing {
+			rows = append(rows, renderRevealingRow(guess, g.Marks[i], shown))
+			continue
+		}
 		rows = append(rows, renderScoredRow(guess, g.Marks[i]))
 	}
 
 	if !g.Status.Done() {
-		rows = append(rows, renderTypingRow(typing, g.Length, h))
+		rows = append(rows, renderTypingRow(typing, g.Length, h, a.rejected(now)))
 	}
 
 	for len(rows) < g.MaxAttempts {
@@ -57,7 +66,41 @@ func renderScoredRow(guess string, marks []game.Mark) string {
 	return joinTiles(cells)
 }
 
-func renderTypingRow(typing string, length int, h *hitMap) string {
+// renderRevealingRow draws a scored row part-way through its reveal: the first
+// shown tiles in the colours they scored, the rest still wearing the style they
+// were typed in. Both come from tile(), so both are exactly TileWidth wide — the
+// flip is a repaint, and the row resolves from what you wrote into what it
+// scored without anything moving.
+func renderRevealingRow(guess string, marks []game.Mark, shown int) string {
+	if shown >= len(guess) {
+		return renderScoredRow(guess, marks)
+	}
+	cells := make([]string, len(guess))
+	for i := range guess {
+		letter := strings.ToUpper(string(guess[i]))
+		if i >= shown {
+			cells[i] = st.tileActive.Render(letter)
+			continue
+		}
+		switch marks[i] {
+		case game.Correct:
+			cells[i] = st.tileCorrect.Render(letter)
+		case game.Present:
+			cells[i] = st.tilePresent.Render(letter)
+		default:
+			cells[i] = st.tileAbsent.Render(letter)
+		}
+	}
+	return joinTiles(cells)
+}
+
+// renderTypingRow draws the row being written. rejected flashes it in the error
+// colour: tileActive fills nothing, so this repaints the letters and leaves the
+// row exactly where it was. A positional shake would read better for a moment
+// and cost more than it is worth — the typed tiles are click targets (actTrim
+// below), and a target sliding under a stationary pointer trims to a slot the
+// player was not pointing at.
+func renderTypingRow(typing string, length int, h *hitMap, rejected bool) string {
 	cells := make([]string, length)
 	for i := range cells {
 		if i < len(typing) {
@@ -65,6 +108,9 @@ func renderTypingRow(typing string, length int, h *hitMap) string {
 			// to that slot, which is how a mouse edits a mistake mid-word.
 			trim := action{kind: actTrim, index: i}
 			style := st.tileActive
+			if rejected {
+				style = style.Foreground(st.err.GetForeground())
+			}
 			if h.hovered(trim) {
 				style = st.hover(style)
 			}
@@ -139,19 +185,20 @@ var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 
 // renderKeyboard shows the best-known state of every letter, which is the
 // player's main aid for narrowing down the answer. Every cap is clickable.
-func renderKeyboard(states map[byte]game.Mark, h *hitMap) string {
+func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Time) string {
 	// Width of the widest row, used to centre the shorter ones beneath it.
-	// Measured without the hit map so the throwaway render marks nothing.
-	width := lipgloss.Width(renderKeyboardRow(keyboardRows[0], states, nil))
+	// Measured without the hit map so the throwaway render marks nothing, and
+	// without the animation so a pulsing cap cannot change the measurement.
+	width := lipgloss.Width(renderKeyboardRow(keyboardRows[0], states, nil, nil, now))
 
 	rows := make([]string, len(keyboardRows))
 	for i, letters := range keyboardRows {
-		row := renderKeyboardRow(letters, states, h)
+		row := renderKeyboardRow(letters, states, h, a, now)
 		if i == len(keyboardRows)-1 {
 			row = joinTiles([]string{
-				renderCommandKey(st.glyph.Enter, action{kind: actSubmit}, h),
+				renderCommandKey(st.glyph.Enter, action{kind: actSubmit}, h, a, now),
 				row,
-				renderCommandKey(st.glyph.Delete, action{kind: actBackspace}, h),
+				renderCommandKey(st.glyph.Delete, action{kind: actBackspace}, h, a, now),
 			})
 		}
 		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(row)
@@ -160,15 +207,18 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap) string {
 }
 
 // renderCommandKey draws one of the two non-letter caps.
-func renderCommandKey(label string, a action, h *hitMap) string {
+func renderCommandKey(label string, act action, h *hitMap, a *anims, now time.Time) string {
 	style := st.keyUnused
-	if h.hovered(a) {
+	if h.hovered(act) || a.pressed(now, 0, act.kind) {
 		style = st.hover(style)
 	}
-	return h.mark(a, style.Render(label))
+	return h.mark(act, style.Render(label))
 }
 
-func renderKeyboardRow(letters string, states map[byte]game.Mark, h *hitMap) string {
+// renderKeyboardRow draws one row of caps. A cap just struck wears the hover
+// cue for a moment: the pulse and the pointer say the same thing — "this one" —
+// so they are deliberately the same cue rather than a second one to learn.
+func renderKeyboardRow(letters string, states map[byte]game.Mark, h *hitMap, a *anims, now time.Time) string {
 	cells := make([]string, len(letters))
 	for i := range letters {
 		c := letters[i]
@@ -187,7 +237,7 @@ func renderKeyboardRow(letters string, states map[byte]game.Mark, h *hitMap) str
 		}
 
 		typeIt := action{kind: actLetter, letter: c}
-		if h.hovered(typeIt) {
+		if h.hovered(typeIt) || a.pressed(now, c, actLetter) {
 			style = st.hover(style)
 		}
 		cells[i] = h.mark(typeIt, style.Render(letter))
