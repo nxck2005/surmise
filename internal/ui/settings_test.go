@@ -48,6 +48,11 @@ func reopen(t *testing.T, dir string, opts Options) *Model {
 	if err != nil {
 		t.Fatalf("NewJSON: %v", err)
 	}
+	// Unless the test is about motion, a reopened model is held still for the
+	// same reason newModel is.
+	if opts.Motion == "" {
+		opts.Motion = motionOffName
+	}
 	return New(s, nil, opts)
 }
 
@@ -121,6 +126,7 @@ func TestSettingsScreenPersistsChoices(t *testing.T) {
 		Length: 4, RememberLast: true,
 		Splash: splashOn, SplashArt: banner.Default().Name, SplashDismiss: splashKey.setting(),
 		SplashMillis: int(splashDuration / time.Millisecond),
+		Motion:       motionPronouncedName,
 	}
 	if got := s.Settings(); got != want {
 		t.Fatalf("saved settings = %+v, want %+v", got, want)

@@ -69,6 +69,17 @@ func splashTimer(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return splashDoneMsg{} })
 }
 
+// animMsg asks for a repaint part-way through an effect. It is its own message
+// rather than a faster tickMsg because the two have different lifetimes: the
+// one-second clock runs forever and re-arms unconditionally, this one stops the
+// moment nothing is animating. Neither can starve the other — they are separate
+// timers, and each re-arms only itself.
+type animMsg time.Time
+
+func animFrame() tea.Cmd {
+	return tea.Tick(frameInterval, func(t time.Time) tea.Msg { return animMsg(t) })
+}
+
 // themeWatchInterval is how often the themes directory is looked at. The
 // unchanged path reads one directory and opens no file, so a second buys a
 // live edit-and-look loop for very little.
@@ -144,6 +155,17 @@ type Model struct {
 	hits  *hitMap
 	hover action
 
+	// anim is what the board is animating, and how strongly. It lives on the
+	// root because two screens read it — the board draws the reveal, the panel
+	// draws the win accent — and because a screen change has to be able to
+	// settle everything at once.
+	anim anims
+
+	// pendingResult holds the debrief back while the guess that finished the
+	// puzzle is still revealing. The puzzle is already banked and saved by then;
+	// this only defers which screen is showing. Any input gives up the wait.
+	pendingResult bool
+
 	width, height int
 	err           error
 	quitting      bool
@@ -172,6 +194,10 @@ type Options struct {
 	// saved choice, and it is what the headless tests pass to keep the first
 	// keystroke going where they expect.
 	Splash string
+	// Motion forces the board's feedback animations for one run without saving
+	// the choice: "off", "restrained" or "pronounced". Empty means the saved
+	// choice, and it is what the headless tests pass to hold the board still.
+	Motion string
 	// DataDir is where saves, settings and themes live. It is display data —
 	// the about screen shows it, and the UI's own file access still goes
 	// through the store — so empty simply means "not known", which is what the
@@ -212,6 +238,7 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	m.applyStartupLength(opts.Length)
 	m.applyStartupDay(opts.Day)
 	m.applyStartupSplash(opts.Splash)
+	m.applyStartupMotion(opts.Motion)
 
 	g, err := newPuzzle(s, m.length)
 	if err != nil {
@@ -231,7 +258,13 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 // openGame installs a puzzle as the active screen, handing it the current
 // terminal size: the board is the one screen that trims itself to fit.
 func (m *Model) openGame(g *game.Game, saved bool) {
+	// Nothing animates across a change of board. The reveal is keyed to a
+	// puzzle id as well, which is what covers startNew swapping the game in
+	// place without coming through here.
+	m.anim.clear()
+	m.pendingResult = false
 	m.game = newGameScreen(m.store, g, saved)
+	m.game.anim = &m.anim
 	m.game.resize(m.width, m.height)
 	m.screen = screenGame
 }
@@ -247,8 +280,15 @@ func (m *Model) openResult() {
 	if m.game.message != "" && time.Now().Before(m.game.msgUntil) {
 		notice = m.game.message
 	}
+	m.result.anim = &m.anim
 	m.result.open(m.game.g, notice)
 	m.screen = screenResult
+
+	// The board hurried through a loss to get here; this is what it hurried
+	// for. A win has already had its accent on the way in.
+	if m.game.g.Status == game.Lost {
+		m.anim.beginAnswer()
+	}
 }
 
 // submitGame is the one submit path for both Enter and the on-screen keycap.
@@ -264,9 +304,45 @@ func (m *Model) submitGame() tea.Cmd {
 
 	cmd := m.game.submit()
 	if m.game.g.Status.Done() {
+		// The puzzle is already banked and saved by now — submit does both
+		// before returning, and no animation is ever allowed to sit between an
+		// event and its durable copy. Only which screen is showing waits, and
+		// only for as long as the finishing row takes to reveal.
+		if m.anim.busy(timeNow()) {
+			m.pendingResult = true
+			return cmd
+		}
 		m.openResult()
 	}
 	return cmd
+}
+
+// settlePendingResult raises the debrief once the finishing guess has finished
+// revealing. With motion off nothing is ever busy, so submitGame opens the
+// result in the same frame it always did and this is never reached.
+func (m *Model) settlePendingResult() {
+	if !m.pendingResult || m.anim.busy(timeNow()) {
+		return
+	}
+	m.pendingResult = false
+	m.openResult()
+}
+
+// skipToResult gives up the wait above. Any keystroke or click while the board
+// is finishing settles the animation and shows the result at once, so the pause
+// is never something a fast player has to sit through.
+//
+// The input that skips is consumed rather than acted on, the way the splash
+// swallows the key that dismisses it: a stray "n" should not start a puzzle
+// nobody asked for.
+func (m *Model) skipToResult() bool {
+	if !m.pendingResult {
+		return false
+	}
+	m.anim.clear()
+	m.pendingResult = false
+	m.openResult()
+	return true
 }
 
 // applyStartupTheme resolves which theme to open with: an explicit override
@@ -383,6 +459,41 @@ func (m *Model) applyStartupSplash(override string) {
 	}
 }
 
+// applyStartupMotion resolves how much the board animates: an override first,
+// then what was saved, then the environment, then restrained. The same shape as
+// the theme, the mode and the splash — and, like them, an unreadable value is
+// reported on the error line rather than refused.
+//
+// The environment is consulted only when nobody has chosen: a player who has
+// been to the settings screen has said what they want, and a $NO_MOTION left in
+// a shell profile must not overrule them.
+func (m *Model) applyStartupMotion(override string) {
+	if override != "" {
+		want, ok := parseMotion(override)
+		if !ok {
+			m.err = fmt.Errorf("no motion setting %q — using %s", override, want.setting())
+		}
+		m.anim.motion = want
+		return
+	}
+
+	saved := m.settingsOf().Motion
+	if saved != "" {
+		want, ok := parseMotion(saved)
+		if !ok {
+			m.err = fmt.Errorf("no motion setting %q — using %s", saved, want.setting())
+		}
+		m.anim.motion = want
+		return
+	}
+
+	if prefersReducedMotion() {
+		m.anim.motion = motionOff
+		return
+	}
+	m.anim.motion = motionPronounced
+}
+
 // raiseSplash puts the splash in front of whatever screen is already live,
 // remembering that screen as where dismissing goes. It does nothing when there
 // is no art, or when the terminal is too small to draw it.
@@ -467,7 +578,27 @@ func (m *Model) pushSize() {
 	}
 }
 
+// Update is a thin wrapper so the animation chain is armed in exactly one
+// place. Any handler below may start an effect, and animCmd is idempotent, so
+// no branch can forget to arm one and none can arm a second.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	model, cmd := m.update(msg)
+	// Batch drops nils, the same property Init relies on.
+	return model, tea.Batch(cmd, m.animCmd())
+}
+
+// animCmd arms the next repaint, or nothing when nothing is animating. This is
+// what makes the loop self-cancelling: the chain lives exactly as long as the
+// effects do, and an idle board holds no timer at all.
+func (m *Model) animCmd() tea.Cmd {
+	if m.anim.live || !m.anim.busy(timeNow()) {
+		return nil
+	}
+	m.anim.live = true
+	return animFrame()
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -477,6 +608,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Redraw so the clock advances and expired messages disappear.
 		return m, tick()
+
+	case animMsg:
+		// The chain is re-armed by Update's wrapper, not here: clearing the flag
+		// is all this branch owes it. A frame that arrives after everything has
+		// settled — because a keystroke ended an effect, or the screen changed,
+		// or motion was turned off — therefore re-arms nothing, the same way a
+		// splashDoneMsg for a splash that is no longer timed does nothing.
+		m.anim.live = false
+		m.settlePendingResult()
+		return m, nil
 
 	case themesMsg:
 		if msg.lib != nil {
@@ -512,6 +653,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Only the left button acts; a click on nothing is a no-op. Release is
 		// deliberately ignored, so a target fires the moment it is pressed.
 		if msg.Button != tea.MouseLeft {
+			return m, nil
+		}
+		// Same rule as a keystroke: a click while the board is finishing spends
+		// itself on the skip rather than on whatever it landed on.
+		if m.skipToResult() {
 			return m, nil
 		}
 		if a, ok := m.hits.at(msg.X, msg.Y); ok {
@@ -749,6 +895,10 @@ func (m *Model) dispatch(a action) tea.Cmd {
 // back is what esc does: leave the board, saving on the way out, and return to
 // the menu.
 func (m *Model) back() tea.Cmd {
+	// Whatever was animating belongs to the screen being left.
+	m.anim.clear()
+	m.pendingResult = false
+
 	switch {
 	case m.screen == screenResult && m.game != nil:
 		if err := m.game.leave(); err != nil {
@@ -830,6 +980,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// ctrl+c always exits, and must not lose an in-progress puzzle.
 	if msg.String() == "ctrl+c" {
 		return m, m.quit()
+	}
+
+	// A board still finishing its last guess gives way to the first key pressed,
+	// which is spent on the skip itself.
+	if m.skipToResult() {
+		return m, nil
 	}
 
 	switch m.screen {
@@ -1091,11 +1247,21 @@ func (m *Model) commitSettings(row int) {
 	s.SplashArt = m.settings.splashArt
 	s.SplashDismiss = m.settings.splashMode.setting()
 	s.SplashMillis = int(m.settings.splashTime / time.Millisecond)
+	s.Motion = m.settings.motion.setting()
 	m.saveSettings(s)
 
 	if row == rowLength {
 		// Take effect now rather than at the next launch.
 		m.length = m.settings.length
+	}
+	if row == rowMotion {
+		// Likewise immediate — and turning motion off settles whatever was
+		// running, so the choice is visible in the frame that follows it rather
+		// than after the current effect finishes.
+		m.anim.motion = m.settings.motion
+		if m.anim.motion == motionOff {
+			m.anim.clear()
+		}
 	}
 }
 
@@ -1201,7 +1367,13 @@ func (m *Model) frame(h *hitMap) string {
 	// panel in the terminal. The border hugs the content, not the terminal
 	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
 	// panel is emitted on its own.
-	panel := renderPanel(m.screenTitle(), m.closeBox(h), content)
+	// A solved board accents the whole frame for a moment: the same runes at the
+	// same width, in the colour the theme already uses for emphasis.
+	border := st.border
+	if m.anim.accented(timeNow()) {
+		border = st.accent
+	}
+	panel := renderPanel(m.screenTitle(), m.closeBox(h), content, border)
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center, panel)

@@ -53,13 +53,31 @@ func key(s string) tea.KeyPressMsg {
 // their game explicitly from the menu, so the helper resets there for a clean
 // slate. The resolved splash art is left on the model rather than turned off
 // with Options, so a test that wants the splash can raise it.
+//
+// Motion is off, which is what makes a board a still image: a finishing guess
+// opens the result in the same Update rather than after its reveal, and no
+// frame depends on when it was taken. Tests about the animations themselves use
+// animModel instead — and the two together are the proof that motion off is
+// exactly the behaviour that came before it.
 func newModel(t *testing.T) *Model {
+	t.Helper()
+	return newModelWithMotion(t, motionOffName)
+}
+
+// animModel is newModel with the animations running, for the tests that are
+// about them.
+func animModel(t *testing.T) *Model {
+	t.Helper()
+	return newModelWithMotion(t, motionPronouncedName)
+}
+
+func newModelWithMotion(t *testing.T, motion string) *Model {
 	t.Helper()
 	s, err := store.NewJSON(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewJSON: %v", err)
 	}
-	m := New(s, nil, Options{})
+	m := New(s, nil, Options{Motion: motion})
 	m.screen = screenMenu
 	return m
 }

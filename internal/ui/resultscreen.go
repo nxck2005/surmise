@@ -17,6 +17,10 @@ type resultScreen struct {
 	g             *game.Game
 	notice        string
 	copyRequested bool
+
+	// anim is the root's animation state, shared the way the board shares it.
+	// Nil draws the settled debrief, which is what every frame test compares.
+	anim *anims
 }
 
 func (m *resultScreen) open(g *game.Game, notice string) {
@@ -53,8 +57,15 @@ func (m *resultScreen) view(_ *hitMap) string {
 		stackSpaced(rows),
 	}
 	if g.Status == game.Lost {
+		// The word is what a lost puzzle is opened for, so it is briefly worth
+		// more than the label beside it. The emphasis settles back to st.text,
+		// which is the frame a still debrief has always drawn.
+		word := st.text
+		if m.anim.answering(timeNow()) {
+			word = st.accent
+		}
 		sections = append(sections, "",
-			st.muted.Render("answer ")+st.text.Render(strings.ToUpper(g.Answer)))
+			st.muted.Render("answer ")+word.Render(strings.ToUpper(g.Answer)))
 	}
 	sections = append(sections, "", renderLegend())
 

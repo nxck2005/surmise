@@ -45,6 +45,12 @@ type gameScreen struct {
 	// guess that ends the puzzle so idle time is never counted.
 	sessionStart time.Time
 
+	// anim is the root's animation state, shared rather than owned: the board
+	// starts the effects, and the panel around it draws the win accent. Nil is a
+	// board that does not animate, which is every nil-safe method's job to
+	// handle and what the layout tests render through.
+	anim *anims
+
 	// width and height are the terminal's, pushed down by the root. The board is
 	// the tallest screen in the app, so it is the one that has to decide whether
 	// an optional row — the colour legend — fits. Zero means "not measured yet".
@@ -173,16 +179,26 @@ func (m *gameScreen) typeLetter(c byte) {
 	if !m.g.Status.Done() && len(m.typing) < m.g.Length {
 		// The clock starts here, and only here, so both a keystroke and a click
 		// on the on-screen keyboard start it — a letter is the first thing
-		// either can produce.
+		// either can produce. The cap lights for the same reason and in the same
+		// place: one seam, so a click feels exactly like a keypress.
 		m.startClock()
 		m.typing += string(c)
+		m.anim.beginKey(c, actLetter)
 	}
 }
 
 func (m *gameScreen) deleteLetter() {
 	if len(m.typing) > 0 {
 		m.typing = m.typing[:len(m.typing)-1]
+		m.anim.beginKey(0, actBackspace)
 	}
+}
+
+// reject flashes the row that was refused. It is the whole of the feedback for
+// a guess that cannot be played: the board does not move, so nothing the player
+// is pointing at goes anywhere.
+func (m *gameScreen) reject() {
+	m.anim.beginBoard(animInvalid, m.g.ID, len(m.g.Guesses), m.g.Length)
 }
 
 // trimTo erases the row being typed back to slot i, so clicking the third tile
@@ -194,19 +210,36 @@ func (m *gameScreen) trimTo(i int) {
 }
 
 func (m *gameScreen) submit() tea.Cmd {
+	// The two refusals below flash the row; the third branch does not. A guess
+	// the player can fix is worth a cue, but a save that failed is a sentence,
+	// and notify already writes it.
 	if len(m.typing) < m.g.Length {
 		m.notify("needs %d letters", m.g.Length)
+		m.reject()
 		return nil
 	}
 
 	switch err := m.g.Guess(m.typing); {
 	case errors.Is(err, game.ErrNotAWord):
 		m.notify("not in word list")
+		m.reject()
 		return nil
 	case err != nil:
 		m.notify("%v", err)
 		return nil
 	}
+
+	// The row that was just accepted is the one that reveals. A win reveals and
+	// then accents; a loss reveals faster, because the answer waiting on the
+	// result screen is what the player is actually after.
+	kind := animReveal
+	switch m.g.Status {
+	case game.Won:
+		kind = animWin
+	case game.Lost:
+		kind = animLoss
+	}
+	m.anim.beginBoard(kind, m.g.ID, len(m.g.Guesses)-1, m.g.Length)
 
 	m.typing = ""
 	m.message = ""
@@ -332,12 +365,16 @@ func (m *gameScreen) view(h *hitMap) string {
 			what, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
 	)
 
+	// One clock for the whole frame: two reads a microsecond apart could put the
+	// board and the keyboard on different sides of the same instant.
+	now := timeNow()
+
 	sections := []string{
 		header,
 		"",
-		renderBoard(g, m.typing, h),
+		renderBoard(g, m.typing, h, m.anim, now),
 		"",
-		renderKeyboard(g.LetterStates(), h),
+		renderKeyboard(g.LetterStates(), h, m.anim, now),
 		"",
 		m.statusLine(h),
 	}
