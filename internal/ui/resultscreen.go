@@ -50,7 +50,7 @@ func (m *resultScreen) view(_ *hitMap) string {
 		st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
 		meta,
 		"",
-		lipgloss.JoinVertical(lipgloss.Left, rows...),
+		stackSpaced(rows),
 	}
 	if g.Status == game.Lost {
 		sections = append(sections, "",
