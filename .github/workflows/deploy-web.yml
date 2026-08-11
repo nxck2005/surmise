@@ -55,7 +55,7 @@ jobs:
         with:
           # Follow the toolchain in go.mod, as CI and the release do.
           go-version-file: go.mod
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
