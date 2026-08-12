@@ -38,28 +38,34 @@ const (
 type actionKind int
 
 const (
-	actNone                 actionKind = iota
-	actMenuChoice                      // index: menu row
-	actListRow                         // index: puzzle list row
-	actDailyRow                        // index: daily screen row, one per mode
-	actThemeRow                        // index: theme picker row
-	actThemeReload                     // re-read the themes directory now
-	actSettingNext                     // index: settings row, next value
-	actSettingPrev                     // index: settings row, previous value
-	actSettingNameEdit                 // begin editing the local profile display name
-	actSettingNameDone                 // keep the display-name draft
-	actSettingNameCancel               // discard the display-name draft
-	actSettingNameBackspace            // erase one rune from the display-name draft
-	actLetter                          // letter: on-screen keyboard cap
-	actSubmit                          // enter
-	actBackspace                       // backspace
-	actTrim                            // index: erase the typed row back to this slot
-	actNewPuzzle                       // tab+enter
-	actCancelNew                       // dismiss the armed new-puzzle prompt
-	actResultReview                    // enter/r: return to the finished board
-	actResultNext                      // n: another random puzzle or the daily list
-	actResultCopy                      // c: copy the spoiler-safe result
-	actBack                            // esc
+	actNone        actionKind = iota
+	actMenuChoice             // index: menu row
+	actListRow                // index: puzzle list row
+	actDailyRow               // index: daily screen row, one per mode
+	actThemeRow               // index: theme picker row
+	actThemeReload            // re-read the themes directory now
+	actSettingNext            // index: settings row, next value
+	actSettingPrev            // index: settings row, previous value
+	// The text-field four. index is the row the field sits on, which is all a
+	// screen needs to find its own: dispatch routes them by the active screen
+	// first, so the same four kinds serve every field there is.
+	actFieldEdit      // begin editing the field on this row
+	actFieldDone      // keep the draft
+	actFieldCancel    // discard the draft
+	actFieldBackspace // erase one rune from the draft
+	actCustomNext     // index: custom row, next value
+	actCustomPrev     // index: custom row, previous value
+	actCustomStart    // hand the terminal over and open the board
+	actLetter         // letter: on-screen keyboard cap
+	actSubmit         // enter
+	actBackspace      // backspace
+	actTrim           // index: erase the typed row back to this slot
+	actNewPuzzle      // tab+enter
+	actCancelNew      // dismiss the armed new-puzzle prompt
+	actResultReview   // enter/r: return to the finished board
+	actResultNext     // n: another random puzzle or the daily list
+	actResultCopy     // c: copy the spoiler-safe result
+	actBack           // esc
 	actQuit
 	actDeletePuzzle // index: puzzle list row to delete; arms, then confirms
 	actCancelDelete // dismiss the armed delete prompt

@@ -190,7 +190,7 @@ func TestProfileDisplayNameEditCanBeCancelled(t *testing.T) {
 	m.settings.cursor = rowProfileName
 
 	send(t, m, "enter", "x", "esc")
-	if m.settings.editingName {
+	if m.settings.name.editing {
 		t.Fatal("escape left the name editor open")
 	}
 	if m.screen != screenSettings {
@@ -199,8 +199,8 @@ func TestProfileDisplayNameEditCanBeCancelled(t *testing.T) {
 	if got := s.Settings().DisplayName; got != "nick" {
 		t.Errorf("cancel saved %q, want nick", got)
 	}
-	if m.settings.displayName != "nick" {
-		t.Errorf("cancel left draft %q, want nick", m.settings.displayName)
+	if m.settings.name.value != "nick" {
+		t.Errorf("cancel left draft %q, want nick", m.settings.name.value)
 	}
 }
 

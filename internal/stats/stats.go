@@ -96,6 +96,13 @@ func ComputeAt(games []*game.Game, today daily.Day) Summary {
 	)
 
 	for _, g := range games {
+		// A puzzle whose answer a person chose is history, not performance: it
+		// is saved and listed, but it moves none of these figures. The rule
+		// lives on the game (game.CountsForStats), so this loop and the streak
+		// walk below cannot come to different conclusions.
+		if !g.CountsForStats() {
+			continue
+		}
 		// A deleted puzzle is gone from every figure here; it survives only in
 		// the streak walk below, and only as a break in the sequence.
 		if g.Deleted {
@@ -214,6 +221,14 @@ type accumulator struct {
 func streaks(games []*game.Game) (current, longest int) {
 	finished := make([]*game.Game, 0, len(games))
 	for _, g := range games {
+		// A puzzle left out of the figures is left out of the run as well, win
+		// or lose, alive or tombstoned. A custom loss that broke a streak
+		// would be counting after all — and its tombstone must be skipped for
+		// the same reason, or deleting one would lengthen a run it never
+		// belonged to.
+		if !g.CountsForStats() {
+			continue
+		}
 		if g.Status.Done() {
 			finished = append(finished, g)
 		}

@@ -63,8 +63,13 @@ type tombstoneRecord struct {
 	// tombstone is written exactly as it always was and only a deleted daily
 	// gains a key. See game.Tombstone for why a deleted day has to remember
 	// which day it was.
-	Daily   string `json:"daily,omitempty"`
-	Deleted bool   `json:"deleted"`
+	Daily string `json:"daily,omitempty"`
+	// Custom carries omitempty for the same reason as Daily, and is kept for the
+	// reason game.Tombstone gives: a custom puzzle counts towards nothing, so a
+	// tombstone that forgot it was custom would read as an ordinary loss and
+	// break a streak the puzzle itself never touched.
+	Custom  bool `json:"custom,omitempty"`
+	Deleted bool `json:"deleted"`
 }
 
 // encodeTombstone renders the marker a deleted finished puzzle leaves behind.
@@ -78,6 +83,7 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 		Status:    g.Status,
 		UpdatedAt: g.UpdatedAt,
 		Daily:     g.Daily,
+		Custom:    g.Custom,
 		Deleted:   g.Deleted,
 	}, "", "  ")
 	if err != nil {

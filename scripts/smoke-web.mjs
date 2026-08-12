@@ -190,7 +190,15 @@ if (phase === "read") {
   await wait(300);
   await type("\x1b"); // open the menu
   await wait(400);
-  for (let i = 0; i < 4; i++) await type("j");
+  // Walk down to "puzzles" rather than counting keystrokes to it: the menu has
+  // grown before, and a hard-coded count silently opens whatever moved into
+  // that slot instead of failing on the row it meant.
+  const onPuzzles = () => screen().some((l) => /›\s*puzzles\s*‹/.test(l));
+  for (let i = 0; i < 12 && !onPuzzles(); i++) {
+    await type("j");
+    await wait(60);
+  }
+  check("found the puzzles row on the menu", onPuzzles());
   await type("\r"); // open puzzles
   await wait(400);
 

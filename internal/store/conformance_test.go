@@ -346,3 +346,51 @@ func TestStoresAgreeOnTheirBytes(t *testing.T) {
 		t.Errorf("the two stores encode a puzzle differently:\nkv:   %s\nfile: %s", fromKV, onDisk)
 	}
 }
+
+// TestStoreTombstoneKeepsTheCustomMarker holds both stores to the rule the
+// streak walk depends on. A custom puzzle counts towards nothing, so its
+// tombstone must still say so: one that read as an ordinary loss would break a
+// run the live puzzle never touched, and deleting a puzzle that never counted
+// would move the profile.
+func TestStoreTombstoneKeepsTheCustomMarker(t *testing.T) {
+	eachStore(t, "custom-tombstone", func(t *testing.T, s settingsCapable) {
+		g := wonGame(t)
+		g.Custom = true
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Delete(g.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+
+		games, err := s.All()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(games) != 1 {
+			t.Fatalf("All returned %d records, want the tombstone", len(games))
+		}
+		if got := games[0]; !got.Custom || got.CountsForStats() {
+			t.Errorf("tombstone = %+v, want one that still counts for nothing", got)
+		}
+	})
+}
+
+// TestStoreSummaryCarriesTheCustomMarker: the browse list only ever sees a
+// Summary, so without this it could not say what a puzzle is.
+func TestStoreSummaryCarriesTheCustomMarker(t *testing.T) {
+	eachStore(t, "custom-summary", func(t *testing.T, s settingsCapable) {
+		g := wonGame(t)
+		g.Custom = true
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+		list, err := s.List()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list) != 1 || !list[0].Custom {
+			t.Errorf("List = %+v, want one custom summary", list)
+		}
+	})
+}

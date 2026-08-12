@@ -252,8 +252,11 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 	// width counts invisible escape codes as characters.
 	// Codes are fixed-width, so this column needs no padding to stay aligned.
 	what := fmt.Sprintf("%d letters", s.Length)
-	if s.Daily != "" {
+	switch {
+	case s.Daily != "":
 		what = fmt.Sprintf("daily %s", s.Daily)
+	case s.Custom:
+		what = "custom"
 	}
 	left := fmt.Sprintf("#%s %-16s ", game.Code(s.ID), what)
 	status := fmt.Sprintf("%-14s", statusText)

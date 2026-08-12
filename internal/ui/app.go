@@ -36,6 +36,7 @@ const (
 	screenThemes
 	screenSettings
 	screenDaily
+	screenCustom
 	screenAbout
 	screenSplash
 )
@@ -146,6 +147,7 @@ type Model struct {
 	themes   themeScreen
 	settings settingsScreen
 	daily    dailyScreen
+	custom   customScreen
 	about    aboutScreen
 
 	// hits is where the last frame drew its clickable regions; hover is what the
@@ -706,10 +708,67 @@ func (m *Model) handleMotion(x, y int) {
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
 		m.themes.point(a.index)
-	case actSettingNameEdit, actSettingNameDone:
-		m.settings.point(rowProfileName)
+	case actFieldEdit, actFieldDone:
+		m.pointField(a.index)
 	case actSettingNext, actSettingPrev:
 		m.settings.point(a.index)
+	case actCustomNext, actCustomPrev:
+		m.custom.point(a.index)
+	}
+}
+
+// activeField is the text field the active screen is editing, or nil. It is
+// what lets esc and the help bar treat text input the same way on every screen
+// that has any, rather than each one being special-cased at the root.
+func (m *Model) activeField() *textField {
+	switch m.screen {
+	case screenSettings:
+		if m.settings.name.editing {
+			return &m.settings.name
+		}
+	case screenCustom:
+		if m.custom.secret.editing {
+			return &m.custom.secret
+		}
+	}
+	return nil
+}
+
+// fieldAt is the text field on the active screen's given row, or nil. Clicks
+// carry the row, and the screen is what says which field sits there — so the
+// four field actions serve every screen without one kind each.
+func (m *Model) fieldAt(row int) *textField {
+	switch m.screen {
+	case screenSettings:
+		if row == rowProfileName {
+			return &m.settings.name
+		}
+	case screenCustom:
+		if row == customRowSecret {
+			return &m.custom.secret
+		}
+	}
+	return nil
+}
+
+// pointField moves the active screen's cursor to a field's row, so that
+// clicking a field selects it exactly as arrowing onto it would.
+func (m *Model) pointField(row int) {
+	switch m.screen {
+	case screenSettings:
+		m.settings.point(row)
+	case screenCustom:
+		m.custom.point(row)
+	}
+}
+
+// fieldCommitted is what a screen does when one of its fields has actually
+// changed. A setting is written; a value that lives only for the next screen is
+// not.
+func (m *Model) fieldCommitted(row int) {
+	switch m.screen {
+	case screenSettings:
+		m.commitSettings(row)
 	}
 }
 
@@ -721,8 +780,10 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		return m.quit()
 
 	case actBack:
-		if m.screen == screenSettings && m.settings.editingName {
-			m.settings.finishNameEdit(false)
+		// esc belongs to the editor while one is open: it abandons the draft
+		// rather than the screen.
+		if f := m.activeField(); f != nil {
+			f.finish(false)
 			return nil
 		}
 		return m.back()
@@ -815,39 +876,58 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		// The same method the r key calls, so the two cannot drift.
 		return m.reloadThemes()
 
-	case actSettingNameEdit:
-		if m.screen != screenSettings {
+	// The four field actions route through fieldAt, so a screen gets a working
+	// text editor by naming its field rather than by growing four action kinds
+	// and four arms of its own.
+	case actFieldEdit:
+		if f := m.fieldAt(a.index); f != nil {
+			m.pointField(a.index)
+			f.begin()
+		}
+		return nil
+
+	case actFieldDone:
+		if f := m.fieldAt(a.index); f != nil && f.finish(true) {
+			m.fieldCommitted(a.index)
+		}
+		return nil
+
+	case actFieldCancel:
+		if f := m.fieldAt(a.index); f != nil {
+			f.finish(false)
+		}
+		return nil
+
+	case actFieldBackspace:
+		if f := m.fieldAt(a.index); f != nil {
+			f.deleteRune()
+		}
+		return nil
+
+	case actCustomNext, actCustomPrev:
+		if m.screen != screenCustom || m.custom.secret.editing {
 			return nil
 		}
-		m.settings.beginNameEdit()
+		m.custom.point(a.index)
+		// The same cycle method the arrow keys call.
+		if a.kind == actCustomNext {
+			m.custom.cycle(1)
+		} else {
+			m.custom.cycle(-1)
+		}
 		return nil
 
-	case actSettingNameDone:
-		if m.screen != screenSettings {
+	case actCustomStart:
+		if m.screen != screenCustom {
 			return nil
 		}
-		if m.settings.finishNameEdit(true) {
-			m.commitSettings(rowProfileName)
-		}
-		return nil
-
-	case actSettingNameCancel:
-		if m.screen == screenSettings {
-			m.settings.finishNameEdit(false)
-		}
-		return nil
-
-	case actSettingNameBackspace:
-		if m.screen == screenSettings {
-			m.settings.deleteNameRune()
-		}
-		return nil
+		return m.startCustom()
 
 	case actSettingNext, actSettingPrev:
 		if m.screen != screenSettings {
 			return nil
 		}
-		if m.settings.editingName {
+		if m.settings.name.editing {
 			return nil
 		}
 		m.settings.point(a.index)
@@ -1021,6 +1101,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateThemes(msg)
 	case screenSettings:
 		return m.updateSettings(msg)
+	case screenCustom:
+		return m.updateCustom(msg)
 	// Both are read-only screens with no cursor, so their whole key handling is
 	// "get me out of here".
 	case screenProfile, screenAbout:
@@ -1075,6 +1157,12 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 
 	case choiceDaily:
 		m.openDailyScreen()
+
+	case choiceCustom:
+		// Opened fresh every time: a word left over from the last hand-over is
+		// the one thing this screen must never show.
+		m.custom = newCustomScreen(m.length)
+		m.screen = screenCustom
 
 	case choiceList:
 		m.list.reload(m.store)
@@ -1227,6 +1315,43 @@ func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *Model) updateCustom(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	start, back := m.custom.update(msg)
+	if back {
+		// Leaving forgets the word: it must not be waiting here if the screen is
+		// opened again by somebody else.
+		m.custom.clear()
+		return m, m.back()
+	}
+	if start {
+		return m, m.startCustom()
+	}
+	return m, nil
+}
+
+// startCustom hands the terminal over: it turns the typed word into a board
+// and shows it, having first forgotten the word.
+//
+// The order matters. The screen is cleared before openGame swaps to the board,
+// so no later frame — a resize, a stale hover, coming back for a second round —
+// can redraw what was typed. And because a new puzzle is transient until its
+// first guess, a hand-over nobody plays leaves nothing on disk at all.
+func (m *Model) startCustom() tea.Cmd {
+	if msg := m.custom.check(); msg != "" {
+		m.custom.msg = msg
+		return nil
+	}
+
+	g, err := game.NewCustom(m.custom.secret.value, m.custom.length)
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	m.custom.clear()
+	m.openGame(g, false)
+	return nil
+}
+
 // commitSettings writes what the settings screen now holds. Cycling rows save
 // immediately; the profile-name editor calls this only when its draft is kept,
 // so escape can discard text without making settings generally transactional.
@@ -1237,7 +1362,7 @@ func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) commitSettings(row int) {
 	s := m.settingsOf()
 	s.Length, s.RememberLast = m.settings.length, m.settings.rememberLast
-	s.DisplayName = m.settings.displayName
+	s.DisplayName = m.settings.name.value
 	// Written out rather than left empty for the defaults: a preference someone
 	// has actually visited should read back the same way it looks on screen.
 	s.Splash = splashOff
@@ -1407,6 +1532,8 @@ func (m *Model) screenTitle() string {
 		return "themes"
 	case screenSettings:
 		return "settings"
+	case screenCustom:
+		return "custom"
 	case screenAbout:
 		return "about"
 	default:
@@ -1432,6 +1559,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.themes.view(h), m.themes.help(h)
 	case screenSettings:
 		return m.settings.view(h), m.settings.help(h)
+	case screenCustom:
+		return m.custom.view(h), m.custom.help(h)
 	case screenAbout:
 		return m.about.view(h), m.about.help(h)
 	default:
@@ -1446,6 +1575,7 @@ type choiceKind int
 const (
 	choiceNewGame choiceKind = iota
 	choiceDaily
+	choiceCustom
 	choiceList
 	choiceProfile
 	choiceThemes
@@ -1467,7 +1597,7 @@ type menuScreen struct {
 
 func newMenuScreen() menuScreen {
 	// Word lengths lead the menu; they are the game's difficulty modes.
-	choices := make([]choice, 0, len(words.Lengths)+7)
+	choices := make([]choice, 0, len(words.Lengths)+8)
 	for _, n := range words.Lengths {
 		choices = append(choices, choice{
 			kind:   choiceNewGame,
@@ -1479,6 +1609,9 @@ func newMenuScreen() menuScreen {
 		// The daily sits under the modes rather than among them: it is not a
 		// fourth difficulty, it is those same modes on a shared board.
 		choice{kind: choiceDaily, label: "daily"},
+		// Under the daily for the same reason: another way to get a board,
+		// rather than another difficulty.
+		choice{kind: choiceCustom, label: "custom"},
 		choice{kind: choiceList, label: "puzzles"},
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},
