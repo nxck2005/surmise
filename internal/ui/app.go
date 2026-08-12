@@ -20,6 +20,7 @@ import (
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/stats"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 	"github.com/nxck2005/surmise/internal/words"
@@ -267,6 +268,7 @@ func (m *Model) openGame(g *game.Game, saved bool) {
 	m.pendingResult = false
 	m.game = newGameScreen(m.store, g, saved)
 	m.game.anim = &m.anim
+	m.game.playtime = m.bankPlaytime
 	m.game.resize(m.width, m.height)
 	m.screen = screenGame
 }
@@ -540,6 +542,40 @@ func (m *Model) saveSettings(s store.Settings) {
 	if err := ss.SaveSettings(s); err != nil {
 		m.err = err
 	}
+}
+
+// bankPlaytime adds a played session to the lifetime counter. It is the board's
+// playtime hook, and the only thing that ever increases the figure.
+//
+// Read-modify-write like every other settings write, so a session banked while
+// another preference is being changed cannot lose either one. A store that keeps
+// no settings simply counts nothing.
+func (m *Model) bankPlaytime(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	s := m.settingsOf()
+	s.PlaytimeMS += d.Milliseconds()
+	m.saveSettings(s)
+}
+
+// playtime is the lifetime total as it should be displayed: the counter, floored
+// by what the saved puzzles can still prove. The floor is what an install whose
+// history predates the counter shows, and it is written back the first time it
+// wins, which is the whole of the migration.
+func (m *Model) playtime() time.Duration {
+	saved := time.Duration(m.settingsOf().PlaytimeMS) * time.Millisecond
+	games, err := m.store.All()
+	if err != nil {
+		return saved
+	}
+	total := stats.Playtime(saved, games)
+	if total > saved {
+		s := m.settingsOf()
+		s.PlaytimeMS = total.Milliseconds()
+		m.saveSettings(s)
+	}
+	return total
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -1170,7 +1206,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 
 	case choiceProfile:
 		s := m.settingsOf()
-		m.profile.reload(m.store, m.day, s.DisplayName)
+		m.profile.reload(m.store, m.day, s.DisplayName, m.playtime())
 		m.screen = screenProfile
 
 	case choiceThemes:

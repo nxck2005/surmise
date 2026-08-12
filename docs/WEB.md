@@ -49,9 +49,9 @@ The flags have query-string equivalents, under the same names:
 
 Combine them with `&`: `?theme=nord&length=6`.
 
-There is no `?data=`, no `?themes=` and no `?version=`. The first has nothing to
-point at, and the other two print to a place nobody can see. The version is on
-the about screen.
+There is no `?data=`, `?themes=`, `?version=` or `?playtime=`. The first has
+nothing to point at, and the others print to a place nobody can see. The version
+is on the about screen, and total playtime is on the profile screen.
 
 ## Keys the browser keeps
 

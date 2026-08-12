@@ -95,6 +95,14 @@ averages cover wins only, so a bad day doesn't get to inflate your solve time.
 you can add an optional local display name in settings. it is just a profile
 label, not an account or sign-in.
 
+**playtime** is every minute you've spent on a board — wins, losses, puzzles
+you're halfway through, and custom ones too. it's a counter, so deleting a
+puzzle never takes its time back. want it without opening the app:
+
+```sh
+surmise -playtime        # 12h 04m played
+```
+
 ## themes
 
 ```sh

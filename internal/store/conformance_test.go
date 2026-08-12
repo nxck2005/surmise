@@ -263,6 +263,10 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 		want := Settings{
 			Theme: "nord", Length: 6, DisplayName: "nick",
 			SplashDismiss: "key", SplashMillis: 1200,
+			// The playtime counter rides in the settings, so both stores have to
+			// carry it: a browser that dropped it would forget time played on
+			// every reload.
+			PlaytimeMS: 90_000,
 		}
 		if err := s.SaveSettings(want); err != nil {
 			t.Fatalf("SaveSettings: %v", err)

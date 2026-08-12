@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -23,6 +24,11 @@ type profileScreen struct {
 	err         error
 	displayName string
 
+	// playtime is the lifetime counter, supplied by the root. It is not part of
+	// summary because summary answers a narrower question: it leaves out custom
+	// puzzles and deleted records, and this figure leaves out nothing.
+	playtime time.Duration
+
 	// width and height are the terminal's, pushed down by the root so the
 	// screen can shed what it cannot afford to draw. Zero means unmeasured,
 	// which counts as unbounded.
@@ -35,9 +41,11 @@ func (m *profileScreen) resize(w, h int) { m.width, m.height = w, h }
 // the clock so that -day moves the daily streak the same way it moves the
 // board: the screen and the puzzle it describes agree on what today is. The
 // display name is a local setting supplied by the root, not identity attached
-// to any game.
-func (m *profileScreen) reload(s store.Store, today daily.Day, displayName string) {
+// to any game. Playtime comes from the root for the same reason as the day: it
+// is read from the settings, which this screen does not reach.
+func (m *profileScreen) reload(s store.Store, today daily.Day, displayName string, playtime time.Duration) {
 	m.displayName = sanitizeDisplayName(displayName)
+	m.playtime = playtime
 	games, err := s.All()
 	if err != nil {
 		m.err = err
@@ -69,12 +77,26 @@ func (m *profileScreen) view(h *hitMap) string {
 			{"win rate", formatPercent(s.WinRate)},
 		}),
 		"",
-		renderStatRow([]stat{
-			{"avg attempts", formatFloat(s.AvgAttempts)},
-			{"avg time", formatDuration(s.AvgTime)},
-			{"streak", fmt.Sprintf("%d (max %d)", s.CurrentStreak, s.MaxStreak)},
-		}),
 	)
+
+	timeRow := []stat{
+		{"avg attempts", formatFloat(s.AvgAttempts)},
+		{"avg time", formatDuration(s.AvgTime)},
+		{"streak", fmt.Sprintf("%d (max %d)", s.CurrentStreak, s.MaxStreak)},
+	}
+	playtime := stat{"playtime", stats.FormatPlaytime(m.playtime)}
+
+	// Playtime rides on the time row when there is room for a fourth cell, and
+	// takes a row of its own when there is not. Both are committed: the figure
+	// never sheds. Which way round costs something different — a fourth cell
+	// needs twenty more columns, a row of its own two more lines — and a narrow
+	// terminal is the one that cannot pay in width.
+	if w := bodyWidth(m.width); w == 0 || w >= 4*statWidth {
+		sections = append(sections, renderStatRow(append(timeRow, playtime)))
+	} else {
+		sections = append(sections,
+			renderStatRow(timeRow), "", renderStatRow([]stat{playtime}))
+	}
 
 	if s.InPlay > 0 {
 		sections = append(sections, "",
@@ -131,11 +153,15 @@ func (m *profileScreen) affordable(committed, optional []string) []string {
 
 type stat struct{ label, value string }
 
+// statWidth is one label-over-value cell, in columns. The screen decides how
+// many cells a row can hold from it.
+const statWidth = 20
+
 // renderStatRow lays out stats as label-over-value blocks.
 func renderStatRow(stats []stat) string {
 	blocks := make([]string, len(stats))
 	for i, s := range stats {
-		blocks[i] = lipgloss.NewStyle().Width(20).Render(
+		blocks[i] = lipgloss.NewStyle().Width(statWidth).Render(
 			lipgloss.JoinVertical(lipgloss.Left,
 				st.muted.Render(s.label),
 				st.accent.Bold(true).Render(s.value),

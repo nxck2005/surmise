@@ -197,7 +197,7 @@ func TestCustomIsListedButCountsForNothing(t *testing.T) {
 	}
 
 	// And it moves nothing on the profile.
-	m.profile.reload(m.store, m.day, "")
+	m.profile.reload(m.store, m.day, "", 0)
 	m.screen = screenProfile
 	view := plain(m.View().Content)
 	if strings.Contains(view, "100%") {

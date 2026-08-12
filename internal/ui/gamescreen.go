@@ -45,6 +45,12 @@ type gameScreen struct {
 	// guess that ends the puzzle so idle time is never counted.
 	sessionStart time.Time
 
+	// playtime hands a banked session to the lifetime counter, which the root
+	// owns because it lives in the settings and this screen only writes puzzles.
+	// Nil is a board that counts nothing, which is what a screen built outside
+	// the root — every layout test — gets.
+	playtime func(time.Duration)
+
 	// anim is the root's animation state, shared rather than owned: the board
 	// starts the effects, and the panel around it draws the win accent. Nil is a
 	// board that does not animate, which is every nil-safe method's job to
@@ -84,9 +90,31 @@ func (m *gameScreen) startClock() {
 	}
 }
 
+// bank records a finished session in both places time is kept: on the puzzle,
+// where it becomes the solve the profile averages, and in the lifetime counter.
+// Every site that banks goes through here, so the two can never learn about a
+// session separately.
+//
+// It is the only caller of AddElapsed outside the tests. Nothing that merely
+// reads or aggregates may call that method: it bumps UpdatedAt, which is the
+// order the streaks are walked in.
+func (m *gameScreen) bank(d time.Duration) {
+	m.g.AddElapsed(d)
+	m.countPlaytime(d)
+}
+
+// countPlaytime adds to the lifetime counter alone. Only the discarded-puzzle
+// path in leave wants this without the other half of bank.
+func (m *gameScreen) countPlaytime(d time.Duration) {
+	if m.playtime != nil {
+		m.playtime(d)
+	}
+}
+
 // leave banks the current session's time and saves. Called on every exit path
 // so a puzzle abandoned with ctrl+c still records its time. An unplayed puzzle
-// (no guesses, never persisted) is simply discarded.
+// (no guesses, never persisted) is discarded — but its minutes still reach the
+// lifetime counter, which counts time in the app rather than time on a record.
 //
 // A finished puzzle banks nothing: its time was banked by the guess that ended
 // it, and the seconds after that are spent reviewing, not solving. Counting them
@@ -94,15 +122,18 @@ func (m *gameScreen) startClock() {
 // would also reorder the completion sequence the streaks are read from. This
 // mirrors elapsed(), which stops the clock on the same condition.
 func (m *gameScreen) leave() error {
-	if !m.persisted {
-		m.sessionStart = time.Time{}
-		return nil
-	}
-	if !m.sessionStart.IsZero() {
-		if !m.g.Status.Done() {
-			m.g.AddElapsed(time.Since(m.sessionStart))
+	if !m.sessionStart.IsZero() && !m.g.Status.Done() {
+		d := time.Since(m.sessionStart)
+		if m.persisted {
+			m.bank(d)
+		} else {
+			m.countPlaytime(d)
 		}
-		m.sessionStart = time.Time{}
+	}
+	m.sessionStart = time.Time{}
+
+	if !m.persisted {
+		return nil
 	}
 	return m.store.Save(m.g)
 }
@@ -251,7 +282,7 @@ func (m *gameScreen) submit() tea.Cmd {
 	// last session, say — and a zero sessionStart would otherwise bank every
 	// second since the epoch.
 	if m.g.Status.Done() && !m.sessionStart.IsZero() {
-		m.g.AddElapsed(time.Since(m.sessionStart))
+		m.bank(time.Since(m.sessionStart))
 		m.sessionStart = time.Time{}
 	}
 

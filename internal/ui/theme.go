@@ -380,6 +380,18 @@ func bodyBudget(height int) int {
 	return height - title - help - frame - 2*st.metric.PanelPadY
 }
 
+// bodyWidth is bodyBudget's other axis: how many columns a titled screen's body
+// may take before the panel outgrows the terminal. A screen that can lay itself
+// out more than one way — stacking what will not sit side by side — uses it to
+// choose. Zero is unbounded, as it is there.
+func bodyWidth(width int) int {
+	if width <= 0 {
+		return 0
+	}
+	const frame = 2 // the panel's left and right border
+	return width - frame - 2*st.metric.PanelPadX
+}
+
 // renderPanel draws a rounded border around content with a title inlaid in the
 // top edge, btop-style. The border is built by hand rather than via lipgloss's
 // Border() so the title can sit inside the top rule. corner is an optional
