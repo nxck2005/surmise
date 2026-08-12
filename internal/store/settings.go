@@ -56,6 +56,19 @@ type Settings struct {
 	// a legitimate value (no wait at all) and could not be told apart from an
 	// older settings file that never had the field.
 	SplashMillis int `json:"splash_ms,omitempty"`
+
+	// PlaytimeMS is the lifetime play counter, in milliseconds — the one field
+	// here that is not a preference. It lives with the preferences because both
+	// stores already carry this struct through one codec, so the browser build
+	// needs no extra method to keep it.
+	//
+	// It is a counter and not a figure derived from the saved puzzles, which is
+	// what makes time played permanent: a deleted puzzle leaves a tombstone
+	// with no ElapsedMS, so a total summed from the records would shrink when a
+	// puzzle is deleted. This only ever grows. Zero means nothing played yet,
+	// which is also what an older settings file says, so stats.Playtime floors
+	// it with what the records can still prove.
+	PlaytimeMS int64 `json:"playtime_ms,omitempty"`
 }
 
 const settingsName = "settings.json"

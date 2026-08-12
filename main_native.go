@@ -4,12 +4,15 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/stats"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 )
@@ -41,17 +44,21 @@ func loadConfig() config {
 	// -version answers "which build is this" without opening the app, where the
 	// same information is on the about screen.
 	showVersion := flag.Bool(optVersion, false, "print version information and exit")
+	// -playtime answers "how long have I played" without opening the app, where
+	// the same figure is on the profile screen.
+	showPlaytime := flag.Bool(optPlaytime, false, "print total time played and exit")
 	flag.Parse()
 
 	return config{
-		dataDir:     *dataDir,
-		theme:       *themeName,
-		day:         *day,
-		splash:      *splash,
-		motion:      *motion,
-		length:      *length,
-		listThemes:  *listThemes,
-		showVersion: *showVersion,
+		dataDir:      *dataDir,
+		theme:        *themeName,
+		day:          *day,
+		splash:       *splash,
+		motion:       *motion,
+		length:       *length,
+		listThemes:   *listThemes,
+		showVersion:  *showVersion,
+		showPlaytime: *showPlaytime,
 	}
 }
 
@@ -94,7 +101,31 @@ func run(cfg config) error {
 		return err
 	}
 
+	// The one flag that needs the saved history, so it cannot be answered beside
+	// -version before anything is opened.
+	if cfg.showPlaytime {
+		return printPlaytime(s)
+	}
+
 	return start(s, lib, uiOptions(cfg, dataDir))
+}
+
+// printPlaytime reports the lifetime counter. It only reads: the seeded value an
+// older install resolves to is written back by the app itself, and a command
+// that answers a question should not change what it is answering about.
+func printPlaytime(s *store.JSON) error {
+	games, err := s.All()
+	if err != nil {
+		return err
+	}
+	saved := time.Duration(s.Settings().PlaytimeMS) * time.Millisecond
+	total := stats.Playtime(saved, games)
+	if total <= 0 {
+		fmt.Println("no time played yet")
+		return nil
+	}
+	fmt.Println(stats.FormatPlaytime(total), "played")
+	return nil
 }
 
 // attach has nothing to do here: a terminal reports a resize with SIGWINCH, and

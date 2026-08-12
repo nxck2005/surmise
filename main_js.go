@@ -25,10 +25,11 @@ var browserTerm *web.Terminal
 // loadConfig reads the same options the flags carry, from the page's query
 // string: ?theme=dracula&length=6&day=2026-08-06&splash=off&motion=off
 //
-// There is no -data (a browser has no directories), no -themes and no -version:
-// the first has nothing to point at, and the other two print to a stdout that
-// nobody can see. Their zero values mean "not asked for", which is exactly what
-// config wants.
+// There is no -data (a browser has no directories), and no -themes, -version or
+// -playtime: the first has nothing to point at, and the others print to a stdout
+// that nobody can see — playtime is on the profile screen here, which is where a
+// browser can read it. Their zero values mean "not asked for", which is exactly
+// what config wants.
 func loadConfig() config {
 	get := func(string) string { return "" }
 

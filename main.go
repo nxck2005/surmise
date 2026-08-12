@@ -25,28 +25,30 @@ import (
 // The option names, used by the flags natively and by the URL query string in a
 // browser. One declaration, so `-theme` and `?theme=` cannot diverge.
 const (
-	optData    = "data"
-	optTheme   = "theme"
-	optThemes  = "themes"
-	optLength  = "length"
-	optDay     = "day"
-	optSplash  = "splash"
-	optMotion  = "motion"
-	optVersion = "version"
+	optData     = "data"
+	optTheme    = "theme"
+	optThemes   = "themes"
+	optLength   = "length"
+	optDay      = "day"
+	optSplash   = "splash"
+	optMotion   = "motion"
+	optVersion  = "version"
+	optPlaytime = "playtime"
 )
 
 // config is what the player asked for, however they asked. Every zero value
 // means "nothing chosen", matching store.Settings, so an option that the
 // platform cannot express simply stays zero.
 type config struct {
-	dataDir     string
-	theme       string
-	day         string
-	splash      string
-	motion      string
-	length      int
-	listThemes  bool
-	showVersion bool
+	dataDir      string
+	theme        string
+	day          string
+	splash       string
+	motion       string
+	length       int
+	listThemes   bool
+	showVersion  bool
+	showPlaytime bool
 }
 
 func main() {

@@ -16,7 +16,7 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if got := s.Settings(); got != (Settings{}) {
 		t.Errorf("fresh store has settings %+v, want the zero value", got)
 	}
-	want := Settings{Theme: "nord", Length: 6, RememberLast: true, DisplayName: "nick"}
+	want := Settings{Theme: "nord", Length: 6, RememberLast: true, DisplayName: "nick", PlaytimeMS: 90_000}
 	if err := s.SaveSettings(want); err != nil {
 		t.Fatal(err)
 	}
