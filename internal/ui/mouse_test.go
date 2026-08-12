@@ -277,15 +277,15 @@ func TestProfileDisplayNameEditorHasMouseControls(t *testing.T) {
 	m.screen = screenSettings
 	m.settings.cursor = rowProfileName
 
-	click(t, m, action{kind: actSettingNameEdit})
-	if !m.settings.editingName {
+	click(t, m, action{kind: actFieldEdit, index: rowProfileName})
+	if !m.settings.name.editing {
 		t.Fatal("clicking the profile name did not start editing")
 	}
 	send(t, m, "n", "i", "x")
-	click(t, m, action{kind: actSettingNameBackspace})
-	click(t, m, action{kind: actSettingNameDone})
+	click(t, m, action{kind: actFieldBackspace, index: rowProfileName})
+	click(t, m, action{kind: actFieldDone, index: rowProfileName})
 
-	if m.settings.editingName {
+	if m.settings.name.editing {
 		t.Fatal("clicking save left the name editor open")
 	}
 	s := m.store.(settingsStore)

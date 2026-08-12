@@ -375,3 +375,126 @@ func TestAddElapsedIgnoresNonPositive(t *testing.T) {
 		t.Errorf("Elapsed() = %v after negative add, want 0", g.Elapsed())
 	}
 }
+
+func TestNewCustomTakesAWordOutsideTheList(t *testing.T) {
+	const secret = "nishu" // a name: a real length, and not in any list
+	if words.IsValidGuess(5, secret) {
+		t.Skipf("%q reached the word list; pick another non-word", secret)
+	}
+
+	if _, err := NewFrom("id", secret, 5); err == nil {
+		t.Fatal("NewFrom accepted an off-list answer; it must stay strict")
+	}
+
+	g, err := NewCustom(secret, 5)
+	if err != nil {
+		t.Fatalf("NewCustom: %v", err)
+	}
+	if g.Answer != secret {
+		t.Errorf("Answer = %q, want %q", g.Answer, secret)
+	}
+	if !g.Custom {
+		t.Error("NewCustom did not mark the puzzle custom")
+	}
+	if g.MaxAttempts != attemptsFor(5) {
+		t.Errorf("MaxAttempts = %d, want %d", g.MaxAttempts, attemptsFor(5))
+	}
+}
+
+func TestNewCustomRefusesAWordNoBoardCouldHold(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer string
+		length int
+	}{
+		{"too short", "cran", 5},
+		{"too long", "cranes", 5},
+		{"unsupported length", "no", 2},
+		{"not letters", "cr4ne", 5},
+		{"punctuation", "cr-ne", 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := NewCustom(tc.answer, tc.length); err == nil {
+				t.Errorf("NewCustom(%q, %d) was accepted", tc.answer, tc.length)
+			}
+		})
+	}
+}
+
+func TestAnOffListAnswerCanStillBeTyped(t *testing.T) {
+	const secret = "nishu"
+	if words.IsValidGuess(5, secret) {
+		t.Skipf("%q reached the word list; pick another non-word", secret)
+	}
+	g, err := NewCustom(secret, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every other off-list word is still refused: relaxing the answer must not
+	// turn the board into a free-text field.
+	if err := g.Guess("zzzzz"); !errors.Is(err, ErrNotAWord) {
+		t.Errorf("Guess(zzzzz) = %v, want ErrNotAWord", err)
+	}
+	if g.Attempts() != 0 {
+		t.Errorf("a refused guess cost an attempt: %d", g.Attempts())
+	}
+
+	if err := g.Guess(secret); err != nil {
+		t.Fatalf("Guess(%q) = %v, want the answer to be playable", secret, err)
+	}
+	if g.Status != Won {
+		t.Errorf("Status = %q after guessing the answer, want %q", g.Status, Won)
+	}
+}
+
+func TestCustomPuzzlesAreLeftOutOfTheFigures(t *testing.T) {
+	g := newFixed(t, "crane")
+	if !g.CountsForStats() {
+		t.Error("an ordinary puzzle does not count")
+	}
+	g.Custom = true
+	if g.CountsForStats() {
+		t.Error("a custom puzzle counts")
+	}
+}
+
+func TestCustomIsOmittedFromAnOrdinarySave(t *testing.T) {
+	g := newFixed(t, "about")
+	b, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(b, []byte(`"custom"`)) {
+		t.Errorf("ordinary save carries a custom key: %s", b)
+	}
+
+	g.Custom = true
+	b, err = json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Game
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Custom {
+		t.Error("Custom was lost in a round trip")
+	}
+}
+
+func TestTombstoneKeepsTheCustomMarker(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.Custom = true
+	if err := g.Guess("crane"); err != nil {
+		t.Fatal(err)
+	}
+
+	tomb := g.Tombstone()
+	if !tomb.Custom {
+		t.Error("Tombstone dropped the custom marker: deleting one would move a streak")
+	}
+	if tomb.Answer != "" || len(tomb.Guesses) != 0 {
+		t.Errorf("Tombstone kept the play record: %+v", tomb)
+	}
+}

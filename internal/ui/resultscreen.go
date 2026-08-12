@@ -38,8 +38,11 @@ func (m *resultScreen) view(_ *hitMap) string {
 	}
 
 	what := fmt.Sprintf("%d letters", g.Length)
-	if g.Daily != "" {
+	switch {
+	case g.Daily != "":
 		what = fmt.Sprintf("daily %s · %s", g.Daily, what)
+	case g.Custom:
+		what = fmt.Sprintf("custom · %s", what)
 	}
 	meta := st.muted.Render(fmt.Sprintf("%s · %s · %s",
 		what, resultAttempts(g), formatDuration(g.Elapsed())))
@@ -88,8 +91,14 @@ func (m *resultScreen) help(h *hitMap) string {
 }
 
 func (m *resultScreen) nextLabel() string {
-	if m.g.Daily != "" {
+	switch {
+	case m.g.Daily != "":
 		return "daily"
+	case m.g.Custom:
+		// Another custom board needs somebody to choose a word, so "next"
+		// goes back to the screen that asks for one rather than dealing a random
+		// puzzle the pair did not ask for.
+		return "again"
 	}
 	return "next"
 }
@@ -107,7 +116,10 @@ func resultAttempts(g *game.Game) string {
 func shareResult(g *game.Game) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s #%s %s\n", brand.Name, game.Code(g.ID), resultAttempts(g))
-	if g.Daily != "" {
+	if g.Custom {
+		fmt.Fprintf(&b, "custom · %d letters · %s\n",
+			g.Length, formatDuration(g.Elapsed()))
+	} else if g.Daily != "" {
 		fmt.Fprintf(&b, "daily %s · %d letters · %s\n",
 			g.Daily, g.Length, formatDuration(g.Elapsed()))
 	} else {
@@ -143,9 +155,14 @@ func (m *Model) nextResult() tea.Cmd {
 	if m.screen != screenResult || m.game == nil {
 		return nil
 	}
-	if m.game.g.Daily != "" {
+	if m.game.g.Daily != "" || m.game.g.Custom {
 		if err := m.game.leave(); err != nil {
 			m.result.notice = fmt.Sprintf("could not save: %v", err)
+			return nil
+		}
+		if m.game.g.Custom {
+			m.custom = newCustomScreen(m.game.g.Length)
+			m.screen = screenCustom
 			return nil
 		}
 		m.openDailyScreen()

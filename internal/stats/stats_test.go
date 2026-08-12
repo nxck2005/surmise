@@ -207,3 +207,76 @@ func TestByLength(t *testing.T) {
 		t.Error("ByLength should omit unplayed modes")
 	}
 }
+
+// custom marks a puzzle as custom, which is the whole of being left out.
+func custom(g *game.Game) *game.Game {
+	g.Custom = true
+	return g
+}
+
+func TestCustomPuzzlesMoveNoFigure(t *testing.T) {
+	base := time.Now()
+	drawn := []*game.Game{
+		mk(5, game.Won, 3, 30*time.Second, base),
+		mk(5, game.Lost, 6, 90*time.Second, base.Add(time.Minute)),
+	}
+	want := Compute(drawn)
+
+	// The same history with custom puzzles interleaved: a win that would
+	// lift the win rate and shorten the average, and a loss that would lower it.
+	mixed := []*game.Game{
+		drawn[0],
+		custom(mk(5, game.Won, 1, time.Second, base.Add(10*time.Second))),
+		drawn[1],
+		custom(mk(5, game.Lost, 6, time.Hour, base.Add(2*time.Minute))),
+	}
+	got := Compute(mixed)
+
+	if got.Played != want.Played || got.Won != want.Won || got.Lost != want.Lost {
+		t.Errorf("counts = %d/%d/%d, want %d/%d/%d",
+			got.Played, got.Won, got.Lost, want.Played, want.Won, want.Lost)
+	}
+	if got.WinRate != want.WinRate {
+		t.Errorf("WinRate = %v, want %v", got.WinRate, want.WinRate)
+	}
+	if got.AvgAttempts != want.AvgAttempts || got.AvgTime != want.AvgTime {
+		t.Errorf("averages = %v/%v, want %v/%v",
+			got.AvgAttempts, got.AvgTime, want.AvgAttempts, want.AvgTime)
+	}
+	if got.Distribution[1] != 0 {
+		t.Errorf("a custom win reached the distribution: %v", got.Distribution)
+	}
+	if got.ByLength[5] != want.ByLength[5] {
+		t.Errorf("ByLength[5] = %+v, want %+v", got.ByLength[5], want.ByLength[5])
+	}
+}
+
+func TestACustomLossDoesNotBreakTheStreak(t *testing.T) {
+	base := time.Now()
+	games := []*game.Game{
+		mk(5, game.Won, 3, time.Minute, base),
+		custom(mk(5, game.Lost, 6, time.Minute, base.Add(time.Minute))),
+		mk(5, game.Won, 4, time.Minute, base.Add(2*time.Minute)),
+	}
+	s := Compute(games)
+	if s.CurrentStreak != 2 || s.MaxStreak != 2 {
+		t.Errorf("CurrentStreak/MaxStreak = %d/%d, want 2/2: a puzzle that counts for "+
+			"nothing must not break a run", s.CurrentStreak, s.MaxStreak)
+	}
+}
+
+func TestDeletingACustomLossLeavesTheStreakAlone(t *testing.T) {
+	base := time.Now()
+	lost := custom(mk(5, game.Lost, 6, time.Minute, base.Add(time.Minute)))
+	games := []*game.Game{
+		mk(5, game.Won, 3, time.Minute, base),
+		lost.Tombstone(),
+		mk(5, game.Won, 4, time.Minute, base.Add(2*time.Minute)),
+	}
+	s := Compute(games)
+	// The live loss did not break the run, so its tombstone must not either —
+	// otherwise deleting a puzzle that never counted would shorten a streak.
+	if s.CurrentStreak != 2 || s.MaxStreak != 2 {
+		t.Errorf("CurrentStreak/MaxStreak = %d/%d, want 2/2", s.CurrentStreak, s.MaxStreak)
+	}
+}

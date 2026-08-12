@@ -29,6 +29,10 @@ type Summary struct {
 	// Daily is the date this puzzle is the daily for, or empty. Carried here so
 	// the browse list can label one without loading the whole game.
 	Daily string
+	// Custom reports a custom puzzle, whose answer a person chose. Carried
+	// for the same reason as Daily: the browse list labels one, and Summary is
+	// all the list ever sees.
+	Custom bool
 }
 
 // Store reads and writes puzzles.
@@ -55,5 +59,6 @@ func summarize(g *game.Game) Summary {
 		Elapsed:   g.Elapsed(),
 		UpdatedAt: g.UpdatedAt,
 		Daily:     g.Daily,
+		Custom:    g.Custom,
 	}
 }

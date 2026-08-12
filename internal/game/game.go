@@ -64,7 +64,28 @@ type Game struct {
 	// omitempty keeps it out of every ordinary save, so a real puzzle's file is
 	// unchanged and an older save decodes to false.
 	Deleted bool `json:"deleted,omitempty"`
+
+	// Custom marks a puzzle whose answer a person chose rather than one drawn
+	// from the answer list: a board set by hand, by whoever handed the terminal
+	// over. Like Daily and Deleted it is omitempty, so an ordinary puzzle's file
+	// is unchanged and a save written before custom puzzles existed decodes to
+	// false.
+	//
+	// It is what CountsForStats reads, and it is why a custom answer may sit
+	// outside the guess list — see Guess.
+	Custom bool `json:"custom,omitempty"`
 }
+
+// CountsForStats reports whether a puzzle belongs in the player's figures.
+//
+// A custom answer was chosen by a person rather than drawn, so its
+// attempts, its time and its win or loss say something about the person who set
+// it as much as the person who played it. It is kept and listed like any other
+// puzzle; it simply does not move the numbers.
+//
+// This is the only place that judgement is made: including custom puzzles again
+// is deleting the one condition below.
+func (g *Game) CountsForStats() bool { return !g.Custom }
 
 // Tombstone returns what is left of a puzzle once it is deleted: enough to
 // place it in the sequence of play, and nothing about how it was played. The
@@ -82,6 +103,11 @@ type Game struct {
 // never played — and the runs either side of a deleted daily loss would merge
 // exactly as they used to for an ordinary one. It says which day, never how it
 // went beyond the status.
+//
+// Custom is kept for the mirror of that reason. A custom puzzle is left out of
+// every figure, so a tombstone that forgot it was custom would read as an
+// ordinary loss and break a streak the live puzzle never touched — deleting a
+// puzzle that never counted would lower the longest streak.
 func (g *Game) Tombstone() *Game {
 	return &Game{
 		ID:        g.ID,
@@ -89,6 +115,7 @@ func (g *Game) Tombstone() *Game {
 		Status:    g.Status,
 		UpdatedAt: g.UpdatedAt,
 		Daily:     g.Daily,
+		Custom:    g.Custom,
 		Deleted:   true,
 	}
 }
@@ -136,6 +163,49 @@ func NewFrom(id, answer string, length int) (*Game, error) {
 	// lists; an answer nobody could ever type would make the puzzle unwinnable.
 	if !words.IsValidGuess(length, g.Answer) {
 		return nil, fmt.Errorf("game: answer %q is not a valid word", answer)
+	}
+	return g, nil
+}
+
+// NewCustom starts a puzzle from an answer a person chose: the secret word of a
+// custom puzzle. The id is drawn like any other random puzzle's, because
+// there is nothing deterministic to reproduce here — the word came from a human,
+// not from a seed.
+//
+// Unlike NewFrom it does not require the answer to be in the guess list. That is
+// the whole point of the "ignore word list" choice on the way in: a name or a
+// word the list does not carry is allowed, and Guess accepts it in return (see
+// there). What it still refuses is a word no board could hold — the wrong
+// length, or anything that is not a plain letter — because the tiles and the
+// on-screen keyboard have nowhere to put it.
+//
+// Whether an off-list word is allowed at all is the caller's decision, not this
+// constructor's: the custom screen checks words.IsValidGuess itself unless the
+// player has asked it not to.
+func NewCustom(answer string, length int) (*Game, error) {
+	w := words.Normalize(answer)
+	for i := 0; i < len(w); i++ {
+		if w[i] < 'a' || w[i] > 'z' {
+			return nil, fmt.Errorf("game: answer %q must be letters only", answer)
+		}
+	}
+	id, err := newID()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	g := &Game{
+		ID:          id,
+		Length:      length,
+		Answer:      w,
+		MaxAttempts: attemptsFor(length),
+		Status:      InProgress,
+		StartedAt:   now,
+		UpdatedAt:   now,
+		Custom:      true,
+	}
+	if err := g.Validate(); err != nil {
+		return nil, err
 	}
 	return g, nil
 }
@@ -202,7 +272,13 @@ func (g *Game) Guess(word string) error {
 	if len(w) != g.Length {
 		return ErrWrongLength
 	}
-	if !words.IsValidGuess(g.Length, w) {
+	// The answer is always typeable, whatever the list says. For every drawn
+	// puzzle the second condition is dead weight, because every answer is also a
+	// valid guess; for a custom puzzle set with "any word" on it is
+	// the difference between a puzzle and an unwinnable one. It reveals nothing
+	// that was not already true: an answer has always been a word the player
+	// could type.
+	if !words.IsValidGuess(g.Length, w) && w != g.Answer {
 		return ErrNotAWord
 	}
 

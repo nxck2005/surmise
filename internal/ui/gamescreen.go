@@ -273,9 +273,17 @@ func (m *gameScreen) submit() tea.Cmd {
 // tab means, but there is only one daily a day: replacing it with a random
 // puzzle would look like a reroll of a board that is supposed to be shared, and
 // silently leave the day unplayed.
+//
+// It refuses on a custom board for a nearer reason: somebody else chose
+// that word and handed the terminal over, and tab is close enough to the keys
+// being typed that discarding their puzzle must not be one keystroke away.
 func (m *gameScreen) startNew() tea.Cmd {
 	if m.g.Daily != "" {
 		m.notify("the daily is one puzzle a day — pick a mode from the menu for another")
+		return nil
+	}
+	if m.g.Custom {
+		m.notify("this word was set by hand — start another from the menu")
 		return nil
 	}
 
@@ -356,8 +364,11 @@ func (m *gameScreen) view(h *hitMap) string {
 	// A daily says which day it is, since the board turns over at UTC midnight
 	// and so is not always the date on the player's wall clock.
 	what := fmt.Sprintf("%d letters", g.Length)
-	if g.Daily != "" {
+	switch {
+	case g.Daily != "":
 		what = fmt.Sprintf("daily %s · %s", g.Daily, what)
+	case g.Custom:
+		what = fmt.Sprintf("custom · %s", what)
 	}
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
 		st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),

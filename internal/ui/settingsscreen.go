@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -23,11 +22,9 @@ import (
 // value it is editing rather than reading the store each frame, so rendering
 // stays free of I/O.
 type settingsScreen struct {
-	length         int
-	rememberLast   bool
-	displayName    string
-	nameBeforeEdit string
-	editingName    bool
+	length       int
+	rememberLast bool
+	name         textField
 
 	// The splash's three: whether it appears, which art it draws, and how it
 	// goes away. The last two are meaningless with the first off, and the screen
@@ -76,9 +73,8 @@ func (m *settingsScreen) reload(s store.Settings) {
 		m.length = defaultLength
 	}
 	m.rememberLast = s.RememberLast
-	m.displayName = sanitizeDisplayName(s.DisplayName)
-	m.nameBeforeEdit = ""
-	m.editingName = false
+	m.name = newDisplayNameField()
+	m.name.set(s.DisplayName)
 
 	m.splash = s.Splash != splashOff
 	m.splashArt = s.SplashArt
@@ -104,7 +100,7 @@ func (m *settingsScreen) reload(s store.Settings) {
 // that is actually timed. While the name editor owns text input, every other
 // row is temporarily inert so a typed key cannot change an unrelated setting.
 func (m *settingsScreen) enabled(row int) bool {
-	if m.editingName {
+	if m.name.editing {
 		return row == rowProfileName
 	}
 	switch row {
@@ -121,18 +117,8 @@ func (m *settingsScreen) enabled(row int) bool {
 // values. It reports whether a completed change must be persisted and whether
 // the screen asked to go back.
 func (m *settingsScreen) update(msg tea.KeyPressMsg) (changed, back bool) {
-	if m.editingName {
-		switch msg.String() {
-		case "esc":
-			m.finishNameEdit(false)
-		case "enter":
-			return m.finishNameEdit(true), false
-		case "backspace":
-			m.deleteNameRune()
-		default:
-			m.typeName(msg.Text)
-		}
-		return false, false
+	if m.name.editing {
+		return editField(&m.name, msg), false
 	}
 
 	switch msg.String() {
@@ -159,85 +145,29 @@ func (m *settingsScreen) update(msg tea.KeyPressMsg) (changed, back bool) {
 }
 
 func (m *settingsScreen) beginNameEdit() {
-	if m.editingName {
-		return
-	}
 	m.cursor = rowProfileName
-	m.nameBeforeEdit = m.displayName
-	m.editingName = true
+	m.name.begin()
 }
 
-func (m *settingsScreen) finishNameEdit(save bool) bool {
-	if !m.editingName {
-		return false
-	}
-	m.editingName = false
-	if !save {
-		m.displayName = m.nameBeforeEdit
-		return false
-	}
-	m.displayName = sanitizeDisplayName(m.displayName)
-	return m.displayName != m.nameBeforeEdit
-}
-
-func (m *settingsScreen) deleteNameRune() {
-	if !m.editingName || m.displayName == "" {
-		return
-	}
-	_, size := utf8.DecodeLastRuneInString(m.displayName)
-	m.displayName = m.displayName[:len(m.displayName)-size]
-}
-
-func (m *settingsScreen) typeName(text string) {
-	if !m.editingName || text == "" {
-		return
-	}
-	var b strings.Builder
-	b.Grow(len(m.displayName) + len(text))
-	b.WriteString(m.displayName)
-	width := lipgloss.Width(m.displayName)
-	for _, r := range text {
-		r, ok := displayNameRune(r)
-		if !ok {
-			continue
-		}
-		runeWidth := lipgloss.Width(string(r))
-		if width+runeWidth > displayNameMaxWidth {
-			break
-		}
-		b.WriteRune(r)
-		width += runeWidth
-	}
-	m.displayName = b.String()
-}
-
-// sanitizeDisplayName protects the terminal and the fixed-width settings row
-// from a hand-edited settings file. The result is presentation only; this does
-// not define an account-name or network-identity format.
+// sanitizeDisplayName cleans a name arriving from outside this screen — the
+// profile screen reads the saved value straight from the store, and a settings
+// file can be edited by hand.
 func sanitizeDisplayName(name string) string {
-	var b strings.Builder
-	b.Grow(len(name))
-	width := 0
-	for _, r := range name {
-		r, ok := displayNameRune(r)
-		if !ok {
-			continue
-		}
-		runeWidth := lipgloss.Width(string(r))
-		if width+runeWidth > displayNameMaxWidth {
-			break
-		}
-		b.WriteRune(r)
-		width += runeWidth
-	}
-	return strings.TrimSpace(b.String())
+	f := newDisplayNameField()
+	return f.sanitize(name)
 }
 
-func displayNameRune(r rune) (rune, bool) {
-	if unicode.IsSpace(r) {
-		return ' ', true
-	}
-	return r, unicode.IsPrint(r)
+// newDisplayNameField is the profile name's editor: anything printable, folded
+// spaces, and a width the settings row can actually show. The result is
+// presentation only; it does not define an account-name or network-identity
+// format.
+func newDisplayNameField() textField {
+	return newTextField(displayNameMaxWidth, func(r rune) (rune, bool) {
+		if unicode.IsSpace(r) {
+			return ' ', true
+		}
+		return r, unicode.IsPrint(r)
+	})
 }
 
 // move steps the cursor to the next row it can do anything with, so a disabled
@@ -423,19 +353,28 @@ func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) stri
 }
 
 func (m *settingsScreen) renderNameRow(h *hitMap) string {
-	kind := actSettingNameEdit
-	value := m.displayName
-	if m.editingName {
-		kind = actSettingNameDone
-		value += st.glyph.Caret
-	} else if value == "" {
-		value = "not set"
+	return renderFieldRow(h, rowProfileName, m.cursor == rowProfileName,
+		"profile name", &m.name, "not set")
+}
+
+// renderFieldRow lays out a text field as one of the label-and-value rows, in
+// the same two columns renderRow uses so the two kinds line up under each other.
+// It carries no step arrows — a field is typed, not cycled — but keeps the space
+// they would occupy.
+//
+// The cell is one click target whose meaning follows the edit state: pointing at
+// a settled field offers to edit it, and pointing at one being edited offers to
+// keep it.
+func renderFieldRow(h *hitMap, row int, selected bool, label string, f *textField, placeholder string) string {
+	kind := actFieldEdit
+	if f.editing {
+		kind = actFieldDone
 	}
-	a := action{kind: kind, index: rowProfileName}
+	a := action{kind: kind, index: row}
 
 	prefix := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
 	labelStyle, valueStyle := st.muted, st.muted
-	if m.cursor == rowProfileName {
+	if selected {
 		prefix = st.cursor.Render(st.glyph.Cursor)
 		labelStyle, valueStyle = st.text, st.accent
 	}
@@ -444,9 +383,9 @@ func (m *settingsScreen) renderNameRow(h *hitMap) string {
 	}
 
 	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
-	cell := h.mark(a, valueBox.Render(valueStyle.Render(value)))
+	cell := h.mark(a, valueBox.Render(valueStyle.Render(f.display(placeholder))))
 	return prefix +
-		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, "profile name")) +
+		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
 		strings.Repeat(" ", lipgloss.Width(st.glyph.ValuePrev)) +
 		cell +
 		strings.Repeat(" ", lipgloss.Width(st.glyph.ValueNext))
@@ -547,17 +486,13 @@ func onOff(b bool) string {
 }
 
 func (m *settingsScreen) help(h *hitMap) string {
-	if m.editingName {
-		return renderHelp(h,
-			helpItem{keys: "⌫", label: "erase", act: action{kind: actSettingNameBackspace}},
-			helpItem{keys: "enter", label: "save", act: action{kind: actSettingNameDone}},
-			helpItem{keys: "esc", label: "cancel", act: action{kind: actSettingNameCancel}},
-		)
+	if m.name.editing {
+		return fieldHelp(h, rowProfileName, "save")
 	}
 	if m.cursor == rowProfileName {
 		return renderHelp(h,
 			helpItem{keys: "↑/↓", label: "move"},
-			helpItem{keys: "enter", label: "edit", act: action{kind: actSettingNameEdit}},
+			helpItem{keys: "enter", label: "edit", act: action{kind: actFieldEdit, index: rowProfileName}},
 			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
 		)
 	}
