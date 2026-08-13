@@ -277,16 +277,19 @@ func TestDailyAnswersAreStable(t *testing.T) {
 		length int
 		answer string
 	}{
-		// Last moved when seedVersion and pepper were made brand-neutral during
-		// the rename to surmise — a one-time, pre-release rotation done so that
-		// no product name is ever baked into a hash again. The move before that
-		// was the frequency source changing to hermitdave/FrequencyWords, for
-		// the licensing reasons in internal/words/data/SOURCES.md.
-		{"2026-08-06", 4, "worm"},
-		{"2026-08-06", 5, "teddy"},
-		{"2026-08-06", 6, "bodies"},
-		{"2026-12-25", 5, "tiger"},
-		{"2027-01-01", 5, "blind"},
+		// Last moved when 981 answers that make poor solutions — proper nouns,
+		// -s plurals, crude words, interjections, slang, foreign words, British
+		// spellings — were taken out of the three answer lists. Nothing was
+		// removed from the guess lists, so the words stay typeable. The move
+		// before that was seedVersion and pepper being made brand-neutral during
+		// the rename to surmise, and before that the frequency source changing
+		// to hermitdave/FrequencyWords, for the licensing reasons in
+		// internal/words/data/SOURCES.md.
+		{"2026-08-06", 4, "ally"},
+		{"2026-08-06", 5, "draft"},
+		{"2026-08-06", 6, "breeze"},
+		{"2026-12-25", 5, "worry"},
+		{"2027-01-01", 5, "quest"},
 	}
 	for _, c := range cases {
 		g, err := New(t.Context(), Local(), day(t, c.date), c.length)
