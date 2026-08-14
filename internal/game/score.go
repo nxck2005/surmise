@@ -32,8 +32,9 @@ func (m Mark) String() string {
 // are claimed first, then leftover letters are handed out left to right; once
 // a letter is used up, further occurrences in the guess score Absent.
 //
-// So guessing "allot" against "lotto" marks the first L Absent and the second
-// Present: the answer has one L, and the second position claims it first.
+// So guessing "allot" against "lotto" marks the first L Present and the second
+// Absent: the answer has one L, neither position matches it exactly, and the
+// leftover pass hands it to the earlier of the two.
 func Score(guess, answer string) []Mark {
 	if len(guess) != len(answer) {
 		panic("game: Score called with mismatched lengths")
