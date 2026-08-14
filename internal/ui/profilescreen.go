@@ -175,12 +175,64 @@ func (m *profileScreen) renderDistribution() string {
 	b.WriteString("\n")
 	for _, a := range attempts {
 		n := dist[a]
-		width := max(n*distributionWidth/peak, 1)
-		bar := st.bar.Render(strings.Repeat(st.glyph.Bar, width))
 		fmt.Fprintf(&b, "%s %s %s\n",
-			st.muted.Render(fmt.Sprintf("%2d", a)), bar, st.text.Render(fmt.Sprint(n)))
+			st.muted.Render(fmt.Sprintf("%2d", a)),
+			renderBar(n, peak),
+			st.text.Render(fmt.Sprint(n)))
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// fullBlock is the bar rune the partials below belong to, and eighths are those
+// partials, narrowest first. They let a bar end part-way through a cell, which
+// is what stops two counts a hair apart from drawing the same length.
+//
+// The comparison is against this rune rather than against the default theme's:
+// what matters is that the theme is drawing the block these are fractions of.
+const fullBlock = "█"
+
+var eighths = [...]string{"▏", "▎", "▍", "▌", "▋", "▊", "▉"}
+
+// renderBar draws one histogram bar, shaded along its length from a dimmed bar
+// colour up to the bar colour itself, so a long bar arrives brighter than a
+// short one and the row reads as depth rather than as a block of paint.
+//
+// It shades within the theme's own bar colour rather than toward the accent:
+// the two are the same colour in the default theme, and a ramp that vanished
+// depending on the palette would be worse than none.
+//
+// Sub-cell precision is only used when the theme kept the default bar glyph: a
+// theme that chose its own rune means it, and half of somebody else's glyph is
+// not a smaller version of it.
+func renderBar(n, peak int) string {
+	if peak <= 0 {
+		return ""
+	}
+	whole := max(n*distributionWidth/peak, 1)
+	part := ""
+	if st.glyph.Bar == fullBlock {
+		eighth := n * distributionWidth * 8 / peak
+		whole = eighth / 8
+		if rem := eighth % 8; rem > 0 {
+			part = eighths[rem-1]
+		}
+		if whole == 0 && part == "" {
+			part = eighths[0]
+		}
+	}
+
+	// The ramp spans the whole width, so every bar is shaded on the same scale
+	// and a short one simply stops early rather than being a squashed copy.
+	full := st.bar.GetForeground()
+	ramp := blend(distributionWidth, dim(full, 0.45), full)
+	var b strings.Builder
+	for i := range whole {
+		b.WriteString(st.bar.Foreground(colorAt(ramp, i)).Render(st.glyph.Bar))
+	}
+	if part != "" {
+		b.WriteString(st.bar.Foreground(colorAt(ramp, whole)).Render(part))
+	}
+	return b.String()
 }
 
 // renderByMode breaks the headline figures down per word length, so the modes
