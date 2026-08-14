@@ -127,28 +127,9 @@ func (m *profileScreen) title() string {
 }
 
 // affordable returns the leading run of extras that fits under the terminal's
-// budget, given what is already committed to. An unmeasured height is
-// unbounded, which is what keeps the headless tests drawing the whole screen.
+// budget, given what is already committed to.
 func (m *profileScreen) affordable(committed, optional []string) []string {
-	budget := bodyBudget(m.height)
-	if budget <= 0 {
-		return optional
-	}
-	used := 0
-	for _, s := range committed {
-		used += lipgloss.Height(s)
-	}
-	for i, extra := range optional {
-		if extra == "" {
-			continue
-		}
-		// Each extra costs its own height plus the blank line spacing it off.
-		if used+lipgloss.Height(extra)+1 > budget {
-			return optional[:i]
-		}
-		used += lipgloss.Height(extra) + 1
-	}
-	return optional
+	return affordableSections(committed, optional, bodyBudget(m.height))
 }
 
 type stat struct{ label, value string }

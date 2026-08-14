@@ -137,6 +137,8 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"profile", func() { m.profile.reload(m.store, m.day, "", 0); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
+		{"how to play", func() { m.howTo.reset(); m.screen = screenHowTo }},
+		{"how to play, a middle page", func() { m.howTo.show(1); m.screen = screenHowTo }},
 		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},
 		{"splash", func() { m.raiseSplash(); m.screen = screenSplash }},
 		{"splash waiting for a key", func() {
