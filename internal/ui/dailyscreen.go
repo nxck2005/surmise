@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
@@ -28,6 +29,10 @@ type dailyScreen struct {
 
 	cursor int
 	err    error
+
+	// copyRequested acknowledges a copy of the trio result. Like the debrief's,
+	// it says requested rather than copied, because OSC 52 is never answered.
+	copyRequested bool
 }
 
 type dailyRow struct {
@@ -40,7 +45,19 @@ type dailyRow struct {
 	status   game.Status
 	attempts int
 	spent    bool
+
+	// What the trio card and its shared text are made of. The marks are the
+	// scored rows, never the guesses that earned them and never the answer: the
+	// screen holds nothing it would be a spoiler to paste.
+	maxAttempts int
+	elapsed     time.Duration
+	marks       [][]game.Mark
 }
+
+// done reports whether this mode's daily is finished and still has a record. A
+// deleted one is not: game.Tombstone keeps the status and drops the marks, so a
+// spent day is a day with no board left to show.
+func (row dailyRow) done() bool { return !row.spent && row.status.Done() }
 
 // reload reads what has been played of a day.
 //
@@ -50,6 +67,7 @@ type dailyRow struct {
 func (m *dailyScreen) reload(s store.Store, d daily.Day) {
 	m.day = d
 	m.err = nil
+	m.copyRequested = false
 	m.rows = make([]dailyRow, 0, len(words.Lengths))
 
 	saved, err := s.All()
@@ -65,6 +83,7 @@ func (m *dailyScreen) reload(s store.Store, d daily.Day) {
 		row := dailyRow{length: n, id: daily.ID(d, n)}
 		if g, ok := byID[row.id]; ok {
 			row.status, row.attempts, row.spent = g.Status, g.Attempts(), g.Deleted
+			row.maxAttempts, row.elapsed, row.marks = g.MaxAttempts, g.Elapsed(), g.Marks
 		}
 		m.rows = append(m.rows, row)
 	}
@@ -140,8 +159,96 @@ func (m *dailyScreen) view(h *hitMap) string {
 	}
 	// Squared off first, so the join slides the rows under the heading as one
 	// block instead of centring each on its own.
-	return lipgloss.JoinVertical(lipgloss.Center, heading, "",
-		block(strings.Join(rows, "\n")))
+	sections := []string{heading, "", block(strings.Join(rows, "\n"))}
+	if card := m.renderTrio(); card != "" {
+		sections = append(sections, "", card)
+	}
+	if m.copyRequested {
+		sections = append(sections, "", st.muted.Render("copy requested"))
+	}
+	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+}
+
+// renderTrio is the day as one event: how many of its modes are done, and — once
+// they all are — what the day cost altogether. It is empty until the first mode
+// is finished, because a counter of nothing is not progress.
+//
+// The completed line is accented and nothing more. That is the whole of the
+// feedback: no timer, no reveal, and deliberately not the board's win accent,
+// because a day is not a puzzle.
+func (m *dailyScreen) renderTrio() string {
+	t := m.trio()
+	switch {
+	case t.done == 0:
+		return ""
+	case !t.complete():
+		return st.muted.Render(fmt.Sprintf("trio · %d/%d", t.done, t.of))
+	}
+	return st.accent.Render(fmt.Sprintf("the trio · %d/%d · %d guesses · %s",
+		t.done, t.of, t.guesses, formatDuration(t.elapsed)))
+}
+
+// trioSummary is a day across its modes. It is derived from the rows every time
+// rather than stored: the daily screen already reads every saved game to build
+// them, and a day's set of three is not a thing the store knows about.
+//
+// It is deliberately not a stats figure. internal/stats keeps the modes
+// independent on purpose — missing the six-letter board must not cost a
+// five-letter run — and the trio is a day's presentation, not a fourth streak.
+type trioSummary struct {
+	done, of int
+	guesses  int
+	elapsed  time.Duration
+}
+
+func (t trioSummary) complete() bool { return t.of > 0 && t.done == t.of }
+
+func (m *dailyScreen) trio() trioSummary {
+	t := trioSummary{of: len(m.rows)}
+	for _, row := range m.rows {
+		if !row.done() {
+			continue
+		}
+		t.done++
+		t.guesses += row.attempts
+		t.elapsed += row.elapsed
+	}
+	return t
+}
+
+// shareTrio is the day's result as public text: the three boards under one
+// heading. Like shareResult it carries marks and figures only — no answer, no
+// guess — and the screen it is built from holds nothing else anyway.
+//
+// The date names the day rather than three puzzle codes: everyone playing that
+// date has the same three boards, so the codes would say nothing the date does
+// not.
+func shareTrio(day string, rows []dailyRow) string {
+	var b strings.Builder
+	var guesses int
+	var elapsed time.Duration
+	for _, row := range rows {
+		guesses += row.attempts
+		elapsed += row.elapsed
+	}
+
+	fmt.Fprintf(&b, "%s daily %s · %d/%d\n", brand.Name, day, len(rows), len(rows))
+	fmt.Fprintf(&b, "%d guesses · %s\n", guesses, formatDuration(elapsed))
+	for _, row := range rows {
+		fmt.Fprintf(&b, "\n%d letters %s\n", row.length, row.shareAttempts())
+		b.WriteString(shareGrid(row.marks))
+	}
+	b.WriteString("\n" + shareLegend)
+	return b.String()
+}
+
+// shareAttempts is the row's score, in the debrief's vocabulary: X/max for a
+// loss, so a day with one lost mode reads the same way a lost puzzle does.
+func (row dailyRow) shareAttempts() string {
+	if row.status == game.Lost {
+		return fmt.Sprintf("X/%d", row.maxAttempts)
+	}
+	return fmt.Sprintf("%d/%d", row.attempts, row.maxAttempts)
 }
 
 // renderRow lays out one mode, in the same column shape as the puzzle list: the
@@ -182,12 +289,19 @@ func (row dailyRow) describe() (text string, c color.Color) {
 }
 
 func (m *dailyScreen) help(h *hitMap) string {
-	act := action{kind: actDailyRow, index: m.cursor}
-	return renderHelp(h,
-		helpItem{keys: "↑/↓", label: "mode"},
-		helpItem{keys: "enter", label: "play", act: act},
-		helpItem{keys: "esc", label: "back", act: action{kind: actBack}},
-	)
+	items := []helpItem{
+		{keys: "↑/↓", label: "mode"},
+		{keys: "enter", label: "play", act: action{kind: actDailyRow, index: m.cursor}},
+	}
+	// Offered only once there is a trio to copy — a hint for a key that would do
+	// nothing is a promise the screen does not keep.
+	if m.trio().complete() {
+		items = append(items, helpItem{
+			keys: "c", label: "copy", act: action{kind: actDailyCopy},
+		})
+	}
+	items = append(items, helpItem{keys: "esc", label: "back", act: action{kind: actBack}})
+	return renderHelp(h, items...)
 }
 
 // until is how long is left, rounded to something worth reading. It never
