@@ -38,6 +38,7 @@ const (
 	screenSettings
 	screenDaily
 	screenCustom
+	screenHowTo
 	screenAbout
 	screenSplash
 )
@@ -149,6 +150,7 @@ type Model struct {
 	settings settingsScreen
 	daily    dailyScreen
 	custom   customScreen
+	howTo    howToScreen
 	about    aboutScreen
 
 	// hits is where the last frame drew its clickable regions; hover is what the
@@ -603,6 +605,7 @@ func (m *Model) pushSize() {
 		m.game.resize(m.width, m.height)
 	}
 	m.profile.resize(m.width, m.height)
+	m.howTo.resize(m.width, m.height)
 	m.about.resize(m.width, m.height)
 	m.list.resize(m.height)
 	m.themes.resize(m.height)
@@ -898,6 +901,15 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		return nil
 
+	case actHowToPage:
+		if m.screen != screenHowTo {
+			return nil
+		}
+		// A dot and the help bar's arrows both carry the page they turn to, so
+		// they land in the same method the keys step through.
+		m.howTo.show(a.index)
+		return nil
+
 	case actThemeRow:
 		if m.screen != screenThemes {
 			return nil
@@ -1139,6 +1151,11 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateSettings(msg)
 	case screenCustom:
 		return m.updateCustom(msg)
+	case screenHowTo:
+		if m.howTo.update(msg) {
+			m.screen = screenMenu
+		}
+		return m, nil
 	// Both are read-only screens with no cursor, so their whole key handling is
 	// "get me out of here".
 	case screenProfile, screenAbout:
@@ -1216,6 +1233,13 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 	case choiceSettings:
 		m.settings.reload(m.settingsOf())
 		m.screen = screenSettings
+
+	case choiceHowTo:
+		// Opened at the front every time: the pages are a sequence, and picking
+		// the screen up where it was last left would start a first-time reader
+		// halfway through it.
+		m.howTo.reset()
+		m.screen = screenHowTo
 
 	case choiceAbout:
 		m.about.reload(m.dataDir)
@@ -1570,6 +1594,8 @@ func (m *Model) screenTitle() string {
 		return "settings"
 	case screenCustom:
 		return "custom"
+	case screenHowTo:
+		return "how to play"
 	case screenAbout:
 		return "about"
 	default:
@@ -1597,6 +1623,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.settings.view(h), m.settings.help(h)
 	case screenCustom:
 		return m.custom.view(h), m.custom.help(h)
+	case screenHowTo:
+		return m.howTo.view(h), m.howTo.help(h)
 	case screenAbout:
 		return m.about.view(h), m.about.help(h)
 	default:
@@ -1616,6 +1644,7 @@ const (
 	choiceProfile
 	choiceThemes
 	choiceSettings
+	choiceHowTo
 	choiceAbout
 	choiceQuit
 )
@@ -1633,7 +1662,7 @@ type menuScreen struct {
 
 func newMenuScreen() menuScreen {
 	// Word lengths lead the menu; they are the game's difficulty modes.
-	choices := make([]choice, 0, len(words.Lengths)+8)
+	choices := make([]choice, 0, len(words.Lengths)+9)
 	for _, n := range words.Lengths {
 		choices = append(choices, choice{
 			kind:   choiceNewGame,
@@ -1652,6 +1681,9 @@ func newMenuScreen() menuScreen {
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},
 		choice{kind: choiceSettings, label: "settings"},
+		// The two reference screens sit at the foot, together: one explains the
+		// game, the other explains the build.
+		choice{kind: choiceHowTo, label: "how to play"},
 		choice{kind: choiceAbout, label: "about"},
 		choice{kind: choiceQuit, label: "quit"},
 	)

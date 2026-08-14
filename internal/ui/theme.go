@@ -380,6 +380,34 @@ func bodyBudget(height int) int {
 	return height - title - help - frame - 2*st.metric.PanelPadY
 }
 
+// affordableSections returns the leading run of extras that fits in the budget,
+// given the sections already committed to and a blank line spacing each extra
+// off. A budget of zero — an unmeasured terminal — is unbounded, which is what
+// keeps the headless tests drawing whole screens.
+//
+// It measures by height rather than by row count because a section here is a
+// block: a table, a paragraph or a row of tiles. aboutScreen sheds by counting
+// rows instead, since every one of its rows is exactly one line.
+func affordableSections(committed, optional []string, budget int) []string {
+	if budget <= 0 {
+		return optional
+	}
+	used := 0
+	for _, s := range committed {
+		used += lipgloss.Height(s)
+	}
+	for i, extra := range optional {
+		if extra == "" {
+			continue
+		}
+		if used+lipgloss.Height(extra)+1 > budget {
+			return optional[:i]
+		}
+		used += lipgloss.Height(extra) + 1
+	}
+	return optional
+}
+
 // bodyWidth is bodyBudget's other axis: how many columns a titled screen's body
 // may take before the panel outgrows the terminal. A screen that can lay itself
 // out more than one way — stacking what will not sit side by side — uses it to
