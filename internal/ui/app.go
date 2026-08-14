@@ -853,6 +853,11 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		m.daily.point(a.index)
 		return m.openSelectedDaily()
 
+	case actDailyCopy:
+		// The same method the c key calls; copyTrio itself checks there is a
+		// finished trio to copy.
+		return m.copyTrio()
+
 	case actDeletePuzzle:
 		if m.screen != screenList {
 			return nil
@@ -1252,6 +1257,12 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 }
 
 func (m *Model) updateDaily(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// Copying belongs to the day rather than to the highlighted mode, so it is
+	// answered here rather than in the screen's own key handling — the same
+	// reason the board's enter is answered by the root.
+	if msg.String() == "c" {
+		return m, m.copyTrio()
+	}
 	open, back := m.daily.update(msg)
 	switch {
 	case back:
@@ -1269,6 +1280,17 @@ func (m *Model) updateDaily(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *Model) openDailyScreen() {
 	m.daily.reload(m.store, m.day)
 	m.screen = screenDaily
+}
+
+// copyTrio puts the day's three boards on the clipboard, once all three are
+// finished. It is the one guard both the key and the button pass through, so
+// neither can offer a copy of a day that is not done.
+func (m *Model) copyTrio() tea.Cmd {
+	if m.screen != screenDaily || !m.daily.trio().complete() {
+		return nil
+	}
+	m.daily.copyRequested = true
+	return tea.SetClipboard(shareTrio(m.daily.day.String(), m.daily.rows))
 }
 
 // openSelectedDaily plays — or reviews — the highlighted mode's daily.

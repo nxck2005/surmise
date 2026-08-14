@@ -126,8 +126,27 @@ func shareResult(g *game.Game) string {
 		fmt.Fprintf(&b, "%d letters · %s\n", g.Length, formatDuration(g.Elapsed()))
 	}
 
-	for _, marks := range g.Marks {
-		for _, mark := range marks {
+	b.WriteString(shareGrid(g.Marks))
+	b.WriteString(shareLegend)
+	return b.String()
+}
+
+// shareLegend explains the glyphs shareGrid writes, for a reader whose client
+// renders them as bare squares.
+const shareLegend = "■ correct  □ present  · absent"
+
+// shareGrid is a scored board as public text: one line per played guess, one
+// glyph per mark, with a trailing newline. Every share goes through it, so the
+// glyphs are written once and a board reads the same wherever it is pasted.
+//
+// The glyphs are deliberately fixed rather than themed. A theme dresses this
+// terminal; a shared result is read in somebody else's, and a paste that
+// depended on the sender's palette would arrive as squares nobody could match to
+// a legend.
+func shareGrid(marks [][]game.Mark) string {
+	var b strings.Builder
+	for _, row := range marks {
+		for _, mark := range row {
 			switch mark {
 			case game.Correct:
 				b.WriteRune('■')
@@ -139,7 +158,6 @@ func shareResult(g *game.Game) string {
 		}
 		b.WriteByte('\n')
 	}
-	b.WriteString("■ correct  □ present  · absent")
 	return b.String()
 }
 

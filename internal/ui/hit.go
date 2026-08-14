@@ -42,6 +42,7 @@ const (
 	actMenuChoice             // index: menu row
 	actListRow                // index: puzzle list row
 	actDailyRow               // index: daily screen row, one per mode
+	actDailyCopy              // c: copy the day's trio result
 	actThemeRow               // index: theme picker row
 	actThemeReload            // re-read the themes directory now
 	actSettingNext            // index: settings row, next value

@@ -134,6 +134,18 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			m.list.reload(m.store)
 			m.screen, m.list.confirmDelete = screenList, true
 		}},
+		{"daily", func() { m.daily.reload(m.store, m.day); m.screen = screenDaily }},
+		{"daily with a finished trio", func() {
+			m.daily.reload(m.store, m.day)
+			// A day whose modes are all done, so the card and its copy button
+			// are on screen. The rows are what the screen renders from.
+			for i := range m.daily.rows {
+				m.daily.rows[i].status = game.Won
+				m.daily.rows[i].attempts, m.daily.rows[i].maxAttempts = 3, 6
+				m.daily.rows[i].spent = false
+			}
+			m.screen = screenDaily
+		}},
 		{"profile", func() { m.profile.reload(m.store, m.day, "", 0); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
