@@ -23,6 +23,13 @@ func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time
 			rows = append(rows, renderRevealingRow(guess, g.Marks[i], shown))
 			continue
 		}
+		// A won row is walked once by a light after it has turned. It renders
+		// through the same scored tiles either way, so the settled row is the
+		// row this board always drew.
+		if lit, celebrating := a.celebrating(now, g.ID, i); celebrating {
+			rows = append(rows, renderCelebratingRow(guess, g.Marks[i], lit))
+			continue
+		}
 		rows = append(rows, renderScoredRow(guess, g.Marks[i]))
 	}
 
@@ -53,17 +60,40 @@ func stackSpaced(rows []string) string {
 func renderScoredRow(guess string, marks []game.Mark) string {
 	cells := make([]string, len(guess))
 	for i := range guess {
-		letter := strings.ToUpper(string(guess[i]))
-		switch marks[i] {
-		case game.Correct:
-			cells[i] = st.tileCorrect.Render(letter)
-		case game.Present:
-			cells[i] = st.tilePresent.Render(letter)
-		default:
-			cells[i] = st.tileAbsent.Render(letter)
-		}
+		cells[i] = tileStyle(marks[i]).Render(strings.ToUpper(string(guess[i])))
 	}
 	return joinTiles(cells)
+}
+
+// renderCelebratingRow draws a solved row with one tile lit. The light is the
+// tile's own background lifted, not a colour of its own, so every theme gets
+// the effect without naming an element for it — and a terminal too poor to
+// blend gets the settled row, because lift gives its input back.
+func renderCelebratingRow(guess string, marks []game.Mark, lit int) string {
+	cells := make([]string, len(guess))
+	for i := range guess {
+		letter := strings.ToUpper(string(guess[i]))
+		style := tileStyle(marks[i])
+		if i == lit {
+			style = style.Background(lift(style.GetBackground(), 0.35))
+		}
+		cells[i] = style.Render(letter)
+	}
+	return joinTiles(cells)
+}
+
+// tileStyle is the tile a mark is drawn with. It is the one place the three are
+// chosen, so the board, the reveal, the celebration and the legend cannot
+// disagree about what a mark looks like.
+func tileStyle(mark game.Mark) lipgloss.Style {
+	switch mark {
+	case game.Correct:
+		return st.tileCorrect
+	case game.Present:
+		return st.tilePresent
+	default:
+		return st.tileAbsent
+	}
 }
 
 // renderRevealingRow draws a scored row part-way through its reveal: the first
@@ -82,14 +112,7 @@ func renderRevealingRow(guess string, marks []game.Mark, shown int) string {
 			cells[i] = st.tileActive.Render(letter)
 			continue
 		}
-		switch marks[i] {
-		case game.Correct:
-			cells[i] = st.tileCorrect.Render(letter)
-		case game.Present:
-			cells[i] = st.tilePresent.Render(letter)
-		default:
-			cells[i] = st.tileAbsent.Render(letter)
-		}
+		cells[i] = tileStyle(marks[i]).Render(letter)
 	}
 	return joinTiles(cells)
 }

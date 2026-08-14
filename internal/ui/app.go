@@ -509,7 +509,12 @@ func (m *Model) raiseSplash() {
 		return
 	}
 	m.splash.next = m.screen
+	m.splash.anim = &m.anim
 	m.screen = screenSplash
+	// The sweep starts with the screen. Nothing waits on it: the splash is
+	// dismissible from the first frame, and a dismissal simply leaves the effect
+	// to expire behind whatever came next.
+	m.anim.beginSplash()
 }
 
 // dismissSplash reveals the screen underneath. Both the key path and the click
@@ -583,7 +588,11 @@ func (m *Model) playtime() time.Duration {
 func (m *Model) Init() tea.Cmd {
 	// Batch drops the nils, so neither the splash timer nor the theme watch
 	// needs a condition here: each decides for itself whether it exists.
-	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd())
+	//
+	// animCmd is here as well as in Update's wrapper because the splash sweep is
+	// the one effect that starts before any message arrives: without it the art
+	// would sit still until the first tick a second later.
+	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd(), m.animCmd())
 }
 
 // splashCmd is the timer a timed splash runs on, or nil when there is nothing
@@ -1563,6 +1572,15 @@ func (m *Model) View() tea.View {
 	return v
 }
 
+// How the win accent rises and falls: the number of colours it is mixed from,
+// and the fractions of the moment spent arriving and leaving. The rest is spent
+// at full accent, which is where the effect reads.
+const (
+	winSteps   = 24
+	winRampIn  = 0.25
+	winRampOut = 0.35
+)
+
 // frame composes the whole screen. It is separate from View so a test can
 // compose the same screen with no hit map and prove that marking changes not one
 // cell of the result (TestMarkersDoNotAffectLayout).
@@ -1582,10 +1600,17 @@ func (m *Model) frame(h *hitMap) string {
 	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
 	// panel is emitted on its own.
 	// A solved board accents the whole frame for a moment: the same runes at the
-	// same width, in the colour the theme already uses for emphasis.
+	// same width, in the colour the theme already uses for emphasis. The accent
+	// rises and falls across that moment rather than switching on and off, so
+	// the frame answers a win the way the tiles do — by turning, not by
+	// blinking — and it lands back on the border colour it started from, which
+	// is the settled frame. On a terminal that cannot blend, the run is flat in
+	// the accent and this is the hard swap it always was.
 	border := st.border
-	if m.anim.accented(timeNow()) {
-		border = st.accent
+	if p, winning := m.anim.winning(timeNow()); winning {
+		lit := blend(winSteps, st.border.GetForeground(), st.accent.GetForeground())
+		strength := min(p/winRampIn, (1-p)/winRampOut, 1)
+		border = st.border.Foreground(colorAt(lit, int(max(strength, 0)*float64(winSteps-1))))
 	}
 	panel := renderPanel(m.screenTitle(), m.screenStatus(), m.closeBox(h), content, border)
 	if m.width > 0 && m.height > 0 {

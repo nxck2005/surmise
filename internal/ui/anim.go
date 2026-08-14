@@ -108,6 +108,11 @@ const (
 	// other half of the fast loss reveal: the board hurries so that this is
 	// what the eye lands on.
 	animAnswer
+	// animSplash sweeps a band of light once across the startup art. It is the
+	// only effect that belongs to a screen rather than to the board, and the
+	// only one nobody is waiting on: it plays behind whatever the player does
+	// next and is abandoned the moment they dismiss the splash.
+	animSplash
 )
 
 // frameInterval is how often a running effect repaints. Twenty-five frames a
@@ -164,6 +169,14 @@ func (m motion) hold(kind animKind) time.Duration {
 			return 720 * time.Millisecond
 		}
 		return 360 * time.Millisecond
+	case animSplash:
+		// Slower than anything on the board, because it is the one effect that
+		// is the whole point of the screen it is on rather than feedback for
+		// something the player just did.
+		if pronounced {
+			return 1100 * time.Millisecond
+		}
+		return 600 * time.Millisecond
 	}
 	return 0
 }
@@ -274,6 +287,22 @@ func (a anim) accented(now time.Time, m motion) bool {
 	return a.kind == animWin && a.running(now, m) && a.revealed(now, m) >= a.length
 }
 
+// winTail is how far through the accent tail of a win now is, from 0 to 1, and
+// whether the board is in that tail at all. The reveal comes first: the board
+// finishes saying what the guess scored before it says you won.
+func (a anim) winTail(now time.Time, m motion) (float64, bool) {
+	if !a.accented(now, m) {
+		return 0, false
+	}
+	tail := m.hold(animWin)
+	if tail <= 0 {
+		return 0, false
+	}
+	turned := time.Duration(a.length+1) * m.stagger(a.kind)
+	p := float64(now.Sub(a.startedAt)-turned) / float64(tail)
+	return min(max(p, 0), 1), true
+}
+
 // anims is everything currently animating. Two slots, because a keycap pulse
 // and a board effect are independent — striking a key during a reveal must not
 // cancel either.
@@ -363,6 +392,52 @@ func (a *anims) rejected(now time.Time) bool {
 // accented reports whether the panel border is wearing the win accent.
 func (a *anims) accented(now time.Time) bool {
 	return a.on() && a.board.accented(now, a.motion)
+}
+
+// winning reports how far through a win's tail the board is, for the frame to
+// ease the border into the accent rather than snap to it, and for the solved
+// row to be lit a tile at a time.
+func (a *anims) winning(now time.Time) (float64, bool) {
+	if !a.on() {
+		return 0, false
+	}
+	return a.board.winTail(now, a.motion)
+}
+
+// celebrating reports which tile of a solved row is lit at now: a single bright
+// cell walking the winning word once, left to right, in the same direction the
+// row was read as it turned. It is a repaint of the tile's own colour — lift,
+// not a new hue — so a theme colours it without knowing it exists.
+func (a *anims) celebrating(now time.Time, puzzle string, row int) (int, bool) {
+	p, ok := a.winning(now)
+	if !ok || a.board.puzzle != puzzle || a.board.row != row {
+		return 0, false
+	}
+	// The walk is over by the time the tail is, so the last frames of a win are
+	// the settled row under an accented border rather than a light still moving.
+	const walk = 0.75
+	if p > walk {
+		return 0, false
+	}
+	return min(int(p/walk*float64(a.board.length)), a.board.length-1), true
+}
+
+// beginSplash sweeps the startup art once.
+func (a *anims) beginSplash() {
+	if !a.on() {
+		return
+	}
+	a.board = anim{kind: animSplash, startedAt: timeNow()}
+}
+
+// shimmer reports how far a splash sweep has travelled, from 0 to 1. Off, or
+// once it is over, the art is drawn in its one flat colour — the frame the
+// splash has always had.
+func (a *anims) shimmer(now time.Time) (float64, bool) {
+	if !a.on() || a.board.kind != animSplash || !a.board.running(now, a.motion) {
+		return 0, false
+	}
+	return a.board.phase(now, a.motion), true
 }
 
 // beginAnswer emphasises the answer on the debrief after a loss.
