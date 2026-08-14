@@ -148,6 +148,13 @@ word`) has no element of its own: it is drawn with `tile.correct`,
 it does too. Note that a large `tile_width` makes the legend the widest thing on
 the screen — surmise hides it rather than overflow a narrow terminal.
 
+Some of the frame is **blended** rather than filled: the panel's top and bottom
+rules run from `accent` at the corners into `border` across the middle. Those
+are your colours, mixed — a gradient never introduces a colour the theme did not
+choose, so it needs no key of its own and every theme gets it. On a terminal
+with fewer than 256 colours the blend is dropped and the rule is drawn flat in
+`border`, which is what it always was.
+
 The board's feedback animations likewise name nothing of their own. A submitted
 row turns from `tile.active` into its scored tiles, a refused guess flashes
 `error`, a struck keycap borrows `hover`, and a win accents `border` with
