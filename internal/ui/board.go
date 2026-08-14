@@ -15,33 +15,51 @@ import (
 // a may be nil, which draws the settled board — every row scored, nothing
 // flashing. That is what a caller with no animation state gets, and it is the
 // frame every layout test compares against.
-func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time) string {
+// tall is how many display rows a tile takes when the terminal can afford it,
+// and flat is the one row it takes otherwise. Three is the smallest height with
+// a middle for the letter to sit in.
+const (
+	flatTile = 1
+	tallTile = 3
+)
+
+func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time, tiles int) string {
 	rows := make([]string, 0, g.MaxAttempts)
 
 	for i, guess := range g.Guesses {
 		if shown, revealing := a.reveal(now, g.ID, i); revealing {
-			rows = append(rows, renderRevealingRow(guess, g.Marks[i], shown))
+			rows = append(rows, renderRevealingRow(guess, g.Marks[i], shown, tiles))
 			continue
 		}
 		// A won row is walked once by a light after it has turned. It renders
 		// through the same scored tiles either way, so the settled row is the
 		// row this board always drew.
 		if lit, celebrating := a.celebrating(now, g.ID, i); celebrating {
-			rows = append(rows, renderCelebratingRow(guess, g.Marks[i], lit))
+			rows = append(rows, renderCelebratingRow(guess, g.Marks[i], lit, tiles))
 			continue
 		}
-		rows = append(rows, renderScoredRow(guess, g.Marks[i]))
+		rows = append(rows, renderScoredRowAt(guess, g.Marks[i], tiles))
 	}
 
 	if !g.Status.Done() {
-		rows = append(rows, renderTypingRow(typing, g.Length, h, a.rejected(now)))
+		rows = append(rows, renderTypingRow(typing, g.Length, h, a.rejected(now), tiles))
 	}
 
 	for len(rows) < g.MaxAttempts {
-		rows = append(rows, renderEmptyRow(g.Length))
+		rows = append(rows, renderEmptyRow(g.Length, tiles))
 	}
 
 	return stackSpaced(rows)
+}
+
+// sized gives a tile its height. One row is the style exactly as the theme
+// built it — the frame this board has always drawn — so nothing about a flat
+// board goes through a different path from the one it used before.
+func sized(s lipgloss.Style, rows int) lipgloss.Style {
+	if rows <= flatTile {
+		return s
+	}
+	return s.Height(rows).AlignVertical(lipgloss.Center)
 }
 
 // stackSpaced joins rows vertically with a blank line between each, so guess
@@ -57,10 +75,18 @@ func stackSpaced(rows []string) string {
 	return lipgloss.JoinVertical(lipgloss.Center, spaced...)
 }
 
+// renderScoredRow draws a finished row at one row tall. It is what everything
+// outside the board — the debrief, the how-to-play examples, the theme preview —
+// shows a scored word with, and those never grow: only the board a player is
+// looking at is worth the height.
 func renderScoredRow(guess string, marks []game.Mark) string {
+	return renderScoredRowAt(guess, marks, flatTile)
+}
+
+func renderScoredRowAt(guess string, marks []game.Mark, tiles int) string {
 	cells := make([]string, len(guess))
 	for i := range guess {
-		cells[i] = tileStyle(marks[i]).Render(strings.ToUpper(string(guess[i])))
+		cells[i] = sized(tileStyle(marks[i]), tiles).Render(strings.ToUpper(string(guess[i])))
 	}
 	return joinTiles(cells)
 }
@@ -69,7 +95,7 @@ func renderScoredRow(guess string, marks []game.Mark) string {
 // tile's own background lifted, not a colour of its own, so every theme gets
 // the effect without naming an element for it — and a terminal too poor to
 // blend gets the settled row, because lift gives its input back.
-func renderCelebratingRow(guess string, marks []game.Mark, lit int) string {
+func renderCelebratingRow(guess string, marks []game.Mark, lit, tiles int) string {
 	cells := make([]string, len(guess))
 	for i := range guess {
 		letter := strings.ToUpper(string(guess[i]))
@@ -77,7 +103,7 @@ func renderCelebratingRow(guess string, marks []game.Mark, lit int) string {
 		if i == lit {
 			style = style.Background(lift(style.GetBackground(), 0.35))
 		}
-		cells[i] = style.Render(letter)
+		cells[i] = sized(style, tiles).Render(letter)
 	}
 	return joinTiles(cells)
 }
@@ -101,18 +127,18 @@ func tileStyle(mark game.Mark) lipgloss.Style {
 // were typed in. Both come from tile(), so both are exactly TileWidth wide — the
 // flip is a repaint, and the row resolves from what you wrote into what it
 // scored without anything moving.
-func renderRevealingRow(guess string, marks []game.Mark, shown int) string {
+func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int) string {
 	if shown >= len(guess) {
-		return renderScoredRow(guess, marks)
+		return renderScoredRowAt(guess, marks, tiles)
 	}
 	cells := make([]string, len(guess))
 	for i := range guess {
 		letter := strings.ToUpper(string(guess[i]))
 		if i >= shown {
-			cells[i] = st.tileActive.Render(letter)
+			cells[i] = sized(st.tileActive, tiles).Render(letter)
 			continue
 		}
-		cells[i] = tileStyle(marks[i]).Render(letter)
+		cells[i] = sized(tileStyle(marks[i]), tiles).Render(letter)
 	}
 	return joinTiles(cells)
 }
@@ -123,7 +149,7 @@ func renderRevealingRow(guess string, marks []game.Mark, shown int) string {
 // and cost more than it is worth — the typed tiles are click targets (actTrim
 // below), and a target sliding under a stationary pointer trims to a slot the
 // player was not pointing at.
-func renderTypingRow(typing string, length int, h *hitMap, rejected bool) string {
+func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles int) string {
 	cells := make([]string, length)
 	for i := range cells {
 		if i < len(typing) {
@@ -137,21 +163,23 @@ func renderTypingRow(typing string, length int, h *hitMap, rejected bool) string
 			if h.hovered(trim) {
 				style = st.hover(style)
 			}
-			cells[i] = h.mark(trim, style.Render(strings.ToUpper(string(typing[i]))))
+			// The whole cell is the target, however tall it is: mark records the
+			// atom's height, so a tall tile is clickable across all of it.
+			cells[i] = h.mark(trim, sized(style, tiles).Render(strings.ToUpper(string(typing[i]))))
 		} else if i == len(typing) {
 			// Mark the caret position so the player can see where input lands.
-			cells[i] = st.caret.Render(st.glyph.Caret)
+			cells[i] = sized(st.caret, tiles).Render(st.glyph.Caret)
 		} else {
-			cells[i] = st.tileEmpty.Render(st.glyph.Empty)
+			cells[i] = sized(st.tileEmpty, tiles).Render(st.glyph.Empty)
 		}
 	}
 	return joinTiles(cells)
 }
 
-func renderEmptyRow(length int) string {
+func renderEmptyRow(length, tiles int) string {
 	cells := make([]string, length)
 	for i := range cells {
-		cells[i] = st.tileEmpty.Render(st.glyph.Empty)
+		cells[i] = sized(st.tileEmpty, tiles).Render(st.glyph.Empty)
 	}
 	return joinTiles(cells)
 }

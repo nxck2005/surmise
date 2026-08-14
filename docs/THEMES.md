@@ -99,9 +99,9 @@ close        = "×"        # the panel's close box
 
 ## Metrics
 
-Also layout-changing. The board is one row tall on purpose — the tallest mode
-plus the keyboard already nears a 24-row terminal — so widening tiles is the
-knob to reach for, not heightening them.
+Also layout-changing. Tile *height* is not themeable: the board draws one row
+tall, and grows to three by itself when the terminal has room for the whole
+screen at that size. Width is the knob you have.
 
 ```toml
 [metrics]

@@ -408,7 +408,7 @@ func (m *gameScreen) view(h *hitMap) string {
 	sections := []string{
 		header,
 		"",
-		renderBoard(g, m.typing, h, m.anim, now),
+		renderBoard(g, m.typing, h, m.anim, now, m.tileRows()),
 		"",
 		renderKeyboard(g.LetterStates(), h, m.anim, now),
 		"",
@@ -426,6 +426,35 @@ func (m *gameScreen) view(h *hitMap) string {
 	return lipgloss.JoinVertical(lipgloss.Center, sections...)
 }
 
+// tileRows is how tall a board tile is drawn. The board is one row tall by
+// default and always has been — the tallest mode plus the keyboard already
+// nears a 24-row terminal — but a window with room to spare gets the fuller
+// board, where a letter sits in the middle of its tile instead of being the
+// whole of it.
+//
+// It asks for room for everything, legend included, plus a spare row: a board
+// that grew until it exactly filled the terminal would leave the player nowhere
+// to put an error line, and nothing here truncates.
+func (m *gameScreen) tileRows() int {
+	if m.height <= 0 || m.cost(tallTile)+2+tallSpare > m.height {
+		return flatTile
+	}
+	return tallTile
+}
+
+// tallSpare is how many rows a tall board keeps in hand.
+const tallSpare = 1
+
+// cost is what the screen takes, in rows, for a given tile height: header,
+// blank, board rows with a blank between each, blank, three keyboard rows
+// likewise, blank, status — plus the help bar and its margin, and the panel's
+// padding and border.
+func (m *gameScreen) cost(tiles int) int {
+	body := 1 + 1 + ((tiles+1)*m.g.MaxAttempts - 1) + 1 + 5 + 1 + 1
+	chrome := 2 + 2*st.metric.PanelPadY + 2
+	return body + chrome
+}
+
 // fits reports whether the terminal can afford the legend row. The board plus
 // keyboard already nears a 24-row terminal, and tile_width is themeable, so the
 // legend is the first thing to go when either axis runs short. An unmeasured
@@ -435,13 +464,8 @@ func (m *gameScreen) fits(legend string) bool {
 		return true
 	}
 
-	// What the screen costs without the legend: header, blank, board rows with a
-	// blank between each, blank, three keyboard rows likewise, blank, status.
-	body := 1 + 1 + (2*m.g.MaxAttempts - 1) + 1 + 5 + 1 + 1
-	// Plus the help bar and its margin, and the panel's padding and border.
-	chrome := 2 + 2*st.metric.PanelPadY + 2
 	// The legend costs two rows: itself and the blank that spaces it off.
-	if body+chrome+2 > m.height {
+	if m.cost(m.tileRows())+2 > m.height {
 		return false
 	}
 	return lipgloss.Width(legend)+2*st.metric.PanelPadX+2 <= m.width
