@@ -687,6 +687,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.openGame(msg.g, false)
 		return m, nil
 
+	case tea.ColorProfileMsg:
+		// What the terminal can actually show, reported once at startup. The
+		// gradients are the only thing that reads it, and they fall back to a
+		// flat palette colour when there is not the depth for them.
+		setColorProfile(msg.Profile)
+		return m, nil
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
@@ -1580,7 +1587,7 @@ func (m *Model) frame(h *hitMap) string {
 	if m.anim.accented(timeNow()) {
 		border = st.accent
 	}
-	panel := renderPanel(m.screenTitle(), m.closeBox(h), content, border)
+	panel := renderPanel(m.screenTitle(), m.screenStatus(), m.closeBox(h), content, border)
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center, panel)
@@ -1623,6 +1630,44 @@ func (m *Model) screenTitle() string {
 	default:
 		return brand.Name
 	}
+}
+
+// screenStatus is what the panel's top rule carries at its right end: the one
+// fact about the screen that is worth reading without looking away from what
+// you are doing. It is a label, never a control, and the panel drops it rather
+// than crowd the rule on a narrow terminal.
+//
+// Nothing here may repeat what the screen already says in its own body — the
+// board's mode and score live here *instead* of in its header.
+func (m *Model) screenStatus() string {
+	switch m.screen {
+	case screenGame:
+		if m.game == nil {
+			return ""
+		}
+		g := m.game.g
+		what := fmt.Sprintf("%d letters", g.Length)
+		switch {
+		case g.Daily != "":
+			what = fmt.Sprintf("daily %s · %s", g.Daily, what)
+		case g.Custom:
+			what = fmt.Sprintf("custom · %s", what)
+		}
+		return fmt.Sprintf("%s · %d/%d", what, g.Attempts(), g.MaxAttempts)
+
+	case screenList:
+		if n := len(m.list.items); n > 0 {
+			return fmt.Sprintf("%d saved", n)
+		}
+
+	case screenDaily:
+		// The day's progress, which is the question this screen exists to
+		// answer; the trio line under the rows carries the rest of it.
+		if t := m.daily.trio(); t.done > 0 {
+			return fmt.Sprintf("%d/%d done", t.done, t.of)
+		}
+	}
+	return ""
 }
 
 func (m *Model) activeScreen(h *hitMap) (body, help string) {

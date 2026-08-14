@@ -392,19 +392,13 @@ func takenCodes(s store.Store) (map[string]bool, error) {
 func (m *gameScreen) view(h *hitMap) string {
 	g := m.g
 
-	// A daily says which day it is, since the board turns over at UTC midnight
-	// and so is not always the date on the player's wall clock.
-	what := fmt.Sprintf("%d letters", g.Length)
-	switch {
-	case g.Daily != "":
-		what = fmt.Sprintf("daily %s · %s", g.Daily, what)
-	case g.Custom:
-		what = fmt.Sprintf("custom · %s", what)
-	}
+	// Which mode this is, whether it is a daily and how many guesses are gone
+	// are all on the panel's top rule now (Model.screenStatus), so the header
+	// keeps what is the board's own: which puzzle, and how long you have been
+	// at it.
 	header := lipgloss.JoinHorizontal(lipgloss.Top,
 		st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
-		st.muted.Render(fmt.Sprintf("   %s   %s   %d/%d",
-			what, formatDuration(m.elapsed()), g.Attempts(), g.MaxAttempts)),
+		st.muted.Render("   "+formatDuration(m.elapsed())),
 	)
 
 	// One clock for the whole frame: two reads a microsecond apart could put the
