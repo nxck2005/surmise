@@ -157,9 +157,15 @@ with fewer than 256 colours the blend is dropped and the rule is drawn flat in
 
 The board's feedback animations likewise name nothing of their own. A submitted
 row turns from `tile.active` into its scored tiles, a refused guess flashes
-`error`, a struck keycap borrows `hover`, and a win accents `border` with
-`accent` — so colouring those colours the animations too, and a theme never has
-to think about them. How much of it happens, or whether it happens at all, is a
+`error`, a struck keycap borrows `hover`, and a win eases `border` toward
+`accent` and back — so colouring those colours the animations too, and a theme
+never has to think about them.
+
+Two effects brighten a colour instead of borrowing another one: the band of
+light that crosses the startup art once, and the tile that lights as it walks a
+solved word. Both are `splash` and the scored tiles themselves, lifted — so a
+theme that quietened the art keeps it quiet, and neither can clash with a
+palette it has never seen. How much of it happens, or whether it happens at all, is a
 setting rather than part of the theme.
 
 ## When something is wrong

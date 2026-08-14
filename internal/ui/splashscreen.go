@@ -34,6 +34,11 @@ type splashScreen struct {
 	// menu instead, and the splash must not send that player to an empty board.
 	next screen
 
+	// anim is the root's animation state, shared the way the board and the
+	// debrief share it. Nil draws the settled art, which is what every frame
+	// test compares against.
+	anim *anims
+
 	width, height int
 }
 
@@ -198,8 +203,18 @@ func (m *splashScreen) fits() bool {
 }
 
 func (m *splashScreen) view(h *hitMap) string {
+	// A band of light crosses the art once at startup. It is a repaint of the
+	// splash's own colour — lift, never a second hue — so a theme that quietened
+	// the art keeps it quiet, and a terminal without the depth for the blend
+	// draws the flat frame the splash has always had.
+	sweep, shimmering := m.anim.shimmer(timeNow())
+
 	lines := make([]string, len(m.art.Lines))
 	for i, line := range m.art.Lines {
+		if shimmering {
+			lines[i] = shimmerLine(line, sweep, m.art.Width)
+			continue
+		}
 		lines[i] = st.splash.Render(line)
 	}
 	// Squared off first, so the outer centring moves the drawing as one block
@@ -218,6 +233,35 @@ func (m *splashScreen) view(h *hitMap) string {
 		st.muted.Render(tagline),
 	)
 }
+
+// shimmerBand is how wide the moving highlight is, in cells. Wide enough to
+// read as light crossing the drawing rather than as a cursor running along it.
+const shimmerBand = 14
+
+// shimmerLine colours one line of art by column, brightest where the band is.
+// Every cell keeps its rune and its width — the sweep is a repaint, like every
+// other effect here — and the ramp runs from the lit colour back to the art's
+// own, so a terminal too poor to blend draws the whole line in the art's colour.
+func shimmerLine(line string, sweep float64, width int) string {
+	base := st.splash.GetForeground()
+	ramp := blend(shimmerSteps, lift(base, 0.45), base)
+
+	// The band starts off the left edge and finishes off the right, so the art
+	// is lit from outside rather than the light appearing on top of it.
+	centre := sweep*float64(width+2*shimmerBand) - shimmerBand
+
+	var b strings.Builder
+	for i, r := range []rune(line) {
+		lit := 1 - min(math.Abs(float64(i)-centre)/shimmerBand, 1)
+		c := colorAt(ramp, int((1-lit)*float64(shimmerSteps-1)))
+		b.WriteString(st.splash.Foreground(c).Render(string(r)))
+	}
+	return b.String()
+}
+
+// shimmerSteps is how many colours the band is mixed from. More than the eye
+// can separate at this size, so the edge of the light reads as soft.
+const shimmerSteps = 24
 
 func (m *splashScreen) help(h *hitMap) string {
 	if !m.mode.dismissible() {
