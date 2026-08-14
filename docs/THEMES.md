@@ -93,9 +93,16 @@ jump_first   = "⇱"        # scrolling list: jump to the first row
 jump_last    = "⇲"        # scrolling list: jump to the last row
 enter        = "⏎"
 delete       = "⌫"
-bar          = "█"        # the profile histogram
+bar          = "█"        # the profile histogram (see the note below)
 close        = "×"        # the panel's close box
 ```
+
+The histogram measures in eighths of a cell, ending a bar on `▏▎▍▌▋▊▉` so two
+counts a hair apart do not draw the same length. That only applies while `bar`
+is `█`, since those glyphs are fractions of it — set your own bar rune and the
+histogram goes back to whole cells of it. Each bar is also shaded along its
+length, from a dimmed `bar` up to `bar` itself, so nothing there is a colour you
+did not choose.
 
 ## Metrics
 

@@ -1842,7 +1842,11 @@ func (m *menuScreen) view(h *hitMap) string {
 				st.menuPick.Render(pad(c.label)) +
 				st.cursor.Render(st.glyph.CursorRight)
 		} else {
-			row = blank + st.muted.Render(pad(c.label)) + trail
+			// Two weights, not one: the ways to get a board read brighter than
+			// the ways to get somewhere else. It is the cheapest hierarchy there
+			// is — no rule, no blank row, nothing that costs a line on a
+			// terminal that has none to spare.
+			row = blank + m.weight(c).Render(pad(c.label)) + trail
 		}
 		// Every row is the same width now, so the whole row is the click target
 		// and aiming at it is forgiving. Hovering it moves the cursor, which is
@@ -1855,6 +1859,18 @@ func (m *menuScreen) view(h *hitMap) string {
 	// whole list under the heading rather than re-centring each row.
 	list := block(strings.Join(rows, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Center, heading, "", list)
+}
+
+// weight is how an unselected row is drawn. Playing is what the menu is for, so
+// the modes, the daily and a custom board carry the text colour; everything
+// below them is navigation and stays muted.
+func (m *menuScreen) weight(c choice) lipgloss.Style {
+	switch c.kind {
+	case choiceNewGame, choiceDaily, choiceCustom:
+		return st.text
+	default:
+		return st.muted
+	}
 }
 
 func (m *menuScreen) help(h *hitMap) string {
