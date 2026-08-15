@@ -102,6 +102,12 @@ func TestAnimationRepaintsWithoutMovingAnything(t *testing.T) {
 	startBoard(t, m, "crane")
 	send(t, m, "s", "l", "a", "t", "e", "enter")
 
+	// Stop the header's clock, the way every other frame-comparison test does.
+	// withClock pins the animation's own clock, but the header's elapsed field
+	// reads the wall clock through sessionStart, so a second ticking over
+	// mid-reveal would read as the layout moving.
+	freezeClock(m)
+
 	// The text of every frame across the whole reveal must equal the text of
 	// the settled one. Only the styling may differ — that is what "repaint, not
 	// move" means, and it is what keeps click targets where they were.

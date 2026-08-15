@@ -57,7 +57,7 @@ func (m *resultScreen) view(_ *hitMap) string {
 		st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
 		meta,
 		"",
-		stackSpaced(rows),
+		stackSpaced(rows, 1),
 	}
 	if g.Status == game.Lost {
 		// The word is what a lost puzzle is opened for, so it is briefly worth

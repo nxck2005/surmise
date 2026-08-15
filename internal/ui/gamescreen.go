@@ -58,8 +58,9 @@ type gameScreen struct {
 	anim *anims
 
 	// width and height are the terminal's, pushed down by the root. The board is
-	// the tallest screen in the app, so it is the one that has to decide whether
-	// an optional row — the colour legend — fits. Zero means "not measured yet".
+	// the tallest screen in the app, so it is the one that has to decide how
+	// much of itself it can afford to draw — see boardLayout. Zero means "not
+	// measured yet", which counts as unbounded.
 	width, height int
 }
 
@@ -204,7 +205,7 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 // from key matching so a click on the on-screen keyboard or on a typed tile
 // reaches exactly the same code a keystroke does.
 func (m *gameScreen) typeLetter(c byte) {
-	if c < 'a' || c > 'z' {
+	if c < 'a' || c > 'z' || m.refusing() {
 		return
 	}
 	if !m.g.Status.Done() && len(m.typing) < m.g.Length {
@@ -218,7 +219,15 @@ func (m *gameScreen) typeLetter(c byte) {
 	}
 }
 
+// refusing reports whether the terminal is too short to draw the board at all.
+// Input is turned away while it is, so a board nobody can see is never played
+// blind — the refusal says what to do about it, and esc still leaves.
+func (m *gameScreen) refusing() bool { return m.layout().refuse }
+
 func (m *gameScreen) deleteLetter() {
+	if m.refusing() {
+		return
+	}
 	if len(m.typing) > 0 {
 		m.typing = m.typing[:len(m.typing)-1]
 		m.anim.beginKey(0, actBackspace)
@@ -241,6 +250,9 @@ func (m *gameScreen) trimTo(i int) {
 }
 
 func (m *gameScreen) submit() tea.Cmd {
+	if m.refusing() {
+		return nil
+	}
 	// The two refusals below flash the row; the third branch does not. A guess
 	// the player can fix is worth a cue, but a save that failed is a sentence,
 	// and notify already writes it.
@@ -392,33 +404,46 @@ func takenCodes(s store.Store) (map[string]bool, error) {
 func (m *gameScreen) view(h *hitMap) string {
 	g := m.g
 
-	// Which mode this is, whether it is a daily and how many guesses are gone
-	// are all on the panel's top rule now (Model.screenStatus), so the header
-	// keeps what is the board's own: which puzzle, and how long you have been
-	// at it.
-	header := lipgloss.JoinHorizontal(lipgloss.Top,
-		st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
-		st.muted.Render("   "+formatDuration(m.elapsed())),
-	)
+	// One decision for the whole frame. Everything below reads it rather than
+	// asking the terminal again, so no two sections can disagree about what has
+	// been given up.
+	l := m.layout()
+	if l.refuse {
+		return m.refusal(l)
+	}
 
 	// One clock for the whole frame: two reads a microsecond apart could put the
 	// board and the keyboard on different sides of the same instant.
 	now := timeNow()
 
-	sections := []string{
-		header,
+	sections := make([]string, 0, 9)
+	// Which mode this is, whether it is a daily and how many guesses are gone
+	// are all on the panel's top rule now (Model.screenStatus), so the header
+	// keeps what is the board's own: which puzzle, and how long you have been
+	// at it. It is the first thing given up after the legend — the code is in
+	// the puzzle list and the clock reappears in the status line on a win.
+	if l.header {
+		sections = append(sections,
+			lipgloss.JoinHorizontal(lipgloss.Top,
+				st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
+				st.muted.Render("   "+formatDuration(m.elapsed())),
+			),
+			"",
+		)
+	}
+
+	sections = append(sections,
+		renderBoard(g, m.typing, h, m.anim, now, l.tiles, l.boardGap),
 		"",
-		renderBoard(g, m.typing, h, m.anim, now, m.tileRows()),
-		"",
-		renderKeyboard(g.LetterStates(), h, m.anim, now),
+		renderKeyboard(g.LetterStates(), h, m.anim, now, l.kbdGap),
 		"",
 		m.statusLine(h),
-	}
+	)
 	// Last, under the status line and spaced off it like every other section: a
 	// reference the player consults, not something to read past on the way to
 	// the board.
-	if legend := renderLegend(); m.fits(legend) {
-		sections = append(sections, "", legend)
+	if l.legend {
+		sections = append(sections, "", renderLegend())
 	}
 	// Centre the sections relative to each other so the header and status line
 	// sit under the middle of the board and keyboard rather than hugging the
@@ -426,50 +451,128 @@ func (m *gameScreen) view(h *hitMap) string {
 	return lipgloss.JoinVertical(lipgloss.Center, sections...)
 }
 
+// refusal is what a terminal too short for even the tightest board gets. The
+// alternative is drawing anyway and losing the panel's title rule and its close
+// box off the top of the frame, which is the bug this whole ladder exists for:
+// a board nobody can leave with a mouse is worse than no board.
+//
+// The numbers are measured, not written out, so they cannot drift from the
+// arithmetic that produced them.
+func (m *gameScreen) refusal(l boardLayout) string {
+	return lipgloss.JoinVertical(lipgloss.Center,
+		st.err.Render("this terminal is too short"),
+		"",
+		st.muted.Render(fmt.Sprintf("%d letters needs %d rows · %d here",
+			m.g.Length, l.rows(m.g.MaxAttempts), m.height)),
+	)
+}
+
+// boardLayout is how much of the board screen the terminal can afford. The
+// board is the tallest screen in the app, and nothing in the pipeline
+// truncates: an over-tall frame loses its *top* rows, which are the panel's
+// title rule and its close box. So the screen has smaller forms, and this is
+// which one is being drawn.
+//
+// The rungs are given up in a fixed order, cheapest harm first: the legend, the
+// header, the keyboard's gutters, then the board's. The ladder is only ever
+// descended — a rung is never climbed back to pay for a lower one, or a
+// terminal that had just given up its header would regain the legend.
+//
+// The status line is deliberately not a rung. It carries the transient error,
+// the win and loss result, and the tab-then-enter prompt whose two halves are
+// click targets; none of that is anywhere else, and the panel's rule duplicates
+// only what the header used to say.
+type boardLayout struct {
+	tiles    int  // tile height: flatTile, or tallTile when there is room to spare
+	header   bool // the puzzle code and the running clock
+	legend   bool // the colour key under the board
+	kbdGap   int  // blank rows between the keyboard's three rows
+	boardGap int  // blank rows between the guess rows
+	refuse   bool // even the tightest form overflows; say so instead
+}
+
+// rows is what this form takes, top to bottom: the header and its blank, the
+// board rows with their gutters, a blank, three keyboard rows with theirs, a
+// blank, the status line, then the legend and the blank that spaces it off —
+// plus the help bar and its margin, the panel's padding and its border.
+func (l boardLayout) rows(attempts int) int {
+	body := attempts*l.tiles + (attempts-1)*l.boardGap +
+		1 + (3 + 2*l.kbdGap) + 1 + 1
+	if l.header {
+		body += 2
+	}
+	if l.legend {
+		body += 2
+	}
+	chrome := 2 + 2*st.metric.PanelPadY + 2
+	return body + chrome
+}
+
+// tallSpare is how many rows a tall board keeps in hand: a board that grew
+// until it exactly filled the terminal would leave the player nowhere to put an
+// error line.
+const tallSpare = 1
+
+// layout walks the ladder and returns the first form that fits. An unmeasured
+// size — before the first WindowSizeMsg — counts as unbounded, the same rule
+// affordableSections follows, and it is what keeps the headless tests drawing
+// whole screens.
+func (m *gameScreen) layout() boardLayout {
+	l := boardLayout{tiles: flatTile, header: true, legend: m.legendFitsWidth(), kbdGap: 1, boardGap: 1}
+	if m.width <= 0 || m.height <= 0 {
+		return l
+	}
+
+	attempts := m.g.MaxAttempts
+
+	// The tall board is asked for first, and only from the untightened form: a
+	// window with room to grow is by definition a window with nothing to give
+	// up, so growing and shedding can never combine.
+	if l.legend {
+		if tall := l.withTiles(tallTile); tall.rows(attempts)+tallSpare <= m.height {
+			return tall
+		}
+	}
+
+	for _, give := range []func(*boardLayout){
+		func(l *boardLayout) { l.legend = false },
+		func(l *boardLayout) { l.header = false },
+		func(l *boardLayout) { l.kbdGap = 0 },
+		func(l *boardLayout) { l.boardGap = 0 },
+	} {
+		if l.rows(attempts) <= m.height {
+			return l
+		}
+		give(&l)
+	}
+	if l.rows(attempts) > m.height {
+		l.refuse = true
+	}
+	return l
+}
+
+func (l boardLayout) withTiles(tiles int) boardLayout {
+	l.tiles = tiles
+	return l
+}
+
+// legendFitsWidth is the legend's other axis. tile_width is themeable, so a
+// wide theme can price the legend out of a terminal with rows to spare — and a
+// legend already gone for width buys no rows, so this is a precondition on the
+// top of the ladder rather than a rung of it.
+func (m *gameScreen) legendFitsWidth() bool {
+	if m.width <= 0 {
+		return true
+	}
+	return lipgloss.Width(renderLegend())+2*st.metric.PanelPadX+2 <= m.width
+}
+
 // tileRows is how tall a board tile is drawn. The board is one row tall by
 // default and always has been — the tallest mode plus the keyboard already
 // nears a 24-row terminal — but a window with room to spare gets the fuller
 // board, where a letter sits in the middle of its tile instead of being the
 // whole of it.
-//
-// It asks for room for everything, legend included, plus a spare row: a board
-// that grew until it exactly filled the terminal would leave the player nowhere
-// to put an error line, and nothing here truncates.
-func (m *gameScreen) tileRows() int {
-	if m.height <= 0 || m.cost(tallTile)+2+tallSpare > m.height {
-		return flatTile
-	}
-	return tallTile
-}
-
-// tallSpare is how many rows a tall board keeps in hand.
-const tallSpare = 1
-
-// cost is what the screen takes, in rows, for a given tile height: header,
-// blank, board rows with a blank between each, blank, three keyboard rows
-// likewise, blank, status — plus the help bar and its margin, and the panel's
-// padding and border.
-func (m *gameScreen) cost(tiles int) int {
-	body := 1 + 1 + ((tiles+1)*m.g.MaxAttempts - 1) + 1 + 5 + 1 + 1
-	chrome := 2 + 2*st.metric.PanelPadY + 2
-	return body + chrome
-}
-
-// fits reports whether the terminal can afford the legend row. The board plus
-// keyboard already nears a 24-row terminal, and tile_width is themeable, so the
-// legend is the first thing to go when either axis runs short. An unmeasured
-// size (before the first WindowSizeMsg) counts as unbounded.
-func (m *gameScreen) fits(legend string) bool {
-	if m.width <= 0 || m.height <= 0 {
-		return true
-	}
-
-	// The legend costs two rows: itself and the blank that spaces it off.
-	if m.cost(m.tileRows())+2 > m.height {
-		return false
-	}
-	return lipgloss.Width(legend)+2*st.metric.PanelPadX+2 <= m.width
-}
+func (m *gameScreen) tileRows() int { return m.layout().tiles }
 
 // statusLine carries whichever of the transient message, the end-of-game
 // result, or the restart prompt is most important right now.
@@ -501,6 +604,11 @@ func (m *gameScreen) statusLine(h *hitMap) string {
 }
 
 func (m *gameScreen) help(h *hitMap) string {
+	// A refused board takes no input, so it offers no key that would do
+	// nothing: a hint for a dead key is a promise the screen does not keep.
+	if m.layout().refuse {
+		return renderHelp(h, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
+	}
 	if m.g.Status.Done() {
 		return renderHelp(h,
 			helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
