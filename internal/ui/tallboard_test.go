@@ -35,9 +35,9 @@ func TestBoardGrowsOnlyWhenTheTerminalCanAffordIt(t *testing.T) {
 // Growing must never push the frame past the terminal: nothing here truncates,
 // and an over-tall frame loses its top — panel title, close box and all.
 //
-// Only the grown board is asserted. A board that stayed flat is drawing exactly
-// what it drew before this existed, including the overflow a 24-row terminal has
-// always had with the longer modes.
+// Only the grown board is asserted, because that is what this test is about.
+// Every form of the board, tall and flat, is swept by
+// TestTheBoardAlwaysFitsTheTerminal.
 func TestATallBoardAlwaysFits(t *testing.T) {
 	for _, length := range []int{4, 5, 6} {
 		m := newModel(t)

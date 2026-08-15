@@ -23,7 +23,7 @@ const (
 	tallTile = 3
 )
 
-func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time, tiles int) string {
+func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time, tiles, gap int) string {
 	rows := make([]string, 0, g.MaxAttempts)
 
 	for i, guess := range g.Guesses {
@@ -49,7 +49,7 @@ func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time
 		rows = append(rows, renderEmptyRow(g.Length, tiles))
 	}
 
-	return stackSpaced(rows)
+	return stackSpaced(rows, gap)
 }
 
 // sized gives a tile its height. One row is the style exactly as the theme
@@ -62,13 +62,20 @@ func sized(s lipgloss.Style, rows int) lipgloss.Style {
 	return s.Height(rows).AlignVertical(lipgloss.Center)
 }
 
-// stackSpaced joins rows vertically with a blank line between each, so guess
+// stackSpaced joins rows vertically with gap blank lines between each, so guess
 // rows and keyboard rows breathe instead of stacking flush.
-func stackSpaced(rows []string) string {
-	spaced := make([]string, 0, len(rows)*2-1)
+//
+// A gap of zero is the tightened board a short terminal falls back to, and it
+// is the one place this app lets filled backgrounds touch: see boardLayout in
+// gamescreen.go for what it buys and why the alternative is worse. Everything
+// outside the board being played passes one.
+func stackSpaced(rows []string, gap int) string {
+	spaced := make([]string, 0, len(rows)*(gap+1))
 	for i, r := range rows {
 		if i > 0 {
-			spaced = append(spaced, "")
+			for range gap {
+				spaced = append(spaced, "")
+			}
 		}
 		spaced = append(spaced, r)
 	}
@@ -236,7 +243,7 @@ var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 
 // renderKeyboard shows the best-known state of every letter, which is the
 // player's main aid for narrowing down the answer. Every cap is clickable.
-func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Time) string {
+func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Time, gap int) string {
 	// Width of the widest row, used to centre the shorter ones beneath it.
 	// Measured without the hit map so the throwaway render marks nothing, and
 	// without the animation so a pulsing cap cannot change the measurement.
@@ -254,7 +261,7 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Tim
 		}
 		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(row)
 	}
-	return stackSpaced(rows)
+	return stackSpaced(rows, gap)
 }
 
 // renderCommandKey draws one of the two non-letter caps.
