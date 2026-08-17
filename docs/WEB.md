@@ -53,14 +53,21 @@ There is no `?data=`, `?themes=`, `?version=` or `?playtime=`. The first has
 nothing to point at, and the others print to a place nobody can see. The version
 is on the about screen, and total playtime is on the profile screen.
 
-There is no `?export=` or `?import=` either, and that one is a gap rather than a
-decision: a browser has no paths, and backing up matters *more* here than
-natively — history is origin-local, so clearing site data destroys it and
-nothing can bring it back. The format itself is already platform-free
-(`internal/backup` does no file I/O), so what is missing is a way in on the page
-— a download and a file picker — not the feature. Until then, the way to move a
-history off a browser is the desktop build's `-export`, and the same file
-imports into either.
+There is no `?export=` or `?import=` either, and there does not need to be: the
+**backup** row in the menu does both. Saving downloads one file with every
+puzzle, the settings and — natively — any themes you wrote; loading opens a file
+picker and merges one back, adding only what is missing and replacing nothing.
+
+Back up early. Everything the game saves lives in this origin's `localStorage`,
+so clearing site data erases all of it and nothing can bring it back. The file
+is the same one the desktop build's `-export` writes, so a history moves between
+a browser and a terminal in either direction.
+
+Two browser-shaped details: the download is named
+`surmise-backup-YYYY-MM-DD.json` by the page, and the file picker has to open
+inside the browser's user-activation window — it opens on the keystroke that
+asked for it, so this only matters if a browser is stricter than the standard
+requires.
 
 ## Keys the browser keeps
 

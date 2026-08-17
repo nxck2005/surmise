@@ -16,8 +16,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/backup"
 	"github.com/nxck2005/surmise/internal/banner"
 	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/build"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/stats"
@@ -40,6 +42,7 @@ const (
 	screenCustom
 	screenHowTo
 	screenAbout
+	screenBackup
 	screenSplash
 )
 
@@ -58,6 +61,15 @@ type dailyMsg struct {
 }
 
 type tickMsg time.Time
+
+// backupFileMsg carries a file back from the platform's file picker. Empty
+// bytes with no error mean the player chose nothing, which the screen reports
+// as such rather than as a failure.
+type backupFileMsg struct {
+	b    []byte
+	from string
+	err  error
+}
 
 func tick() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -152,6 +164,12 @@ type Model struct {
 	custom   customScreen
 	howTo    howToScreen
 	about    aboutScreen
+	backup   backupScreen
+
+	// transfer is how a backup file leaves and re-enters this build. Nil means
+	// the platform cannot move files, and the menu then offers no backup row —
+	// which is what the headless tests see.
+	transfer Transfer
 
 	// hits is where the last frame drew its clickable regions; hover is what the
 	// pointer was last over, which the next frame highlights. Both are written
@@ -203,6 +221,11 @@ type Options struct {
 	// the choice: "off", "restrained" or "pronounced". Empty means the saved
 	// choice, and it is what the headless tests pass to hold the board still.
 	Motion string
+	// Transfer is how the platform moves a backup file in and out: a directory
+	// natively, a download and a file picker in a browser. Nil — which is what
+	// the headless tests pass — means this build cannot, and the backup row is
+	// then not offered at all rather than offered and broken.
+	Transfer Transfer
 	// DataDir is where saves, settings and themes live. It is display data —
 	// the about screen shows it, and the UI's own file access still goes
 	// through the store — so empty simply means "not known", which is what the
@@ -232,9 +255,12 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	m := &Model{
 		store:    s,
 		themeLib: lib,
-		menu:     newMenuScreen(),
+		// The menu is built knowing whether this build can move files, because
+		// a backup row that cannot do anything is worse than no row.
+		menu:     newMenuScreen(opts.Transfer != nil),
 		dailySrc: opts.DailySeeds,
 		dataDir:  opts.DataDir,
+		transfer: opts.Transfer,
 	}
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
@@ -696,6 +722,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.openGame(msg.g, false)
 		return m, nil
 
+	case backupFileMsg:
+		// The screen may have been left while the picker was open. Applying it
+		// anyway would write a history nobody is looking at into the store and
+		// report it to a screen that is not showing, so a file that arrives
+		// late is dropped: the player asked from a screen they have since left.
+		if m.screen != screenBackup {
+			return m, nil
+		}
+		m.applyBackup(msg)
+		return m, nil
+
 	case tea.ColorProfileMsg:
 		// What the terminal can actually show, reported once at startup. The
 		// gradients are the only thing that reads it, and they fall back to a
@@ -760,6 +797,10 @@ func (m *Model) handleMotion(x, y int) {
 		m.list.point(a.index)
 	case actDailyRow:
 		m.daily.point(a.index)
+	case actBackupSave:
+		m.backup.point(backupRowSave)
+	case actBackupLoad:
+		m.backup.point(backupRowLoad)
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
 		m.themes.point(a.index)
@@ -842,6 +883,19 @@ func (m *Model) dispatch(a action) tea.Cmd {
 			return nil
 		}
 		return m.back()
+
+	case actBackupSave, actBackupLoad:
+		if m.screen != screenBackup {
+			return nil
+		}
+		row := backupRowSave
+		if a.kind == actBackupLoad {
+			row = backupRowLoad
+		}
+		// Clicking a row also selects it, so the help bar's "enter" keeps
+		// talking about the thing that was last acted on.
+		m.backup.point(row)
+		return m.doBackup(row)
 
 	case actSplashDismiss:
 		// The same method the key path calls; dismissSplash itself checks that
@@ -1177,6 +1231,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenMenu
 		}
 		return m, nil
+	case screenBackup:
+		return m.updateBackup(msg)
 	// Both are read-only screens with no cursor, so their whole key handling is
 	// "get me out of here".
 	case screenProfile, screenAbout:
@@ -1262,6 +1318,13 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.howTo.reset()
 		m.screen = screenHowTo
 
+	case choiceBackup:
+		// Opened fresh every time: a report of what an import did an hour ago
+		// says nothing about what is on the machine now — the same reason the
+		// how-to screen opens on its first page.
+		m.backup.reset()
+		m.screen = screenBackup
+
 	case choiceAbout:
 		m.about.reload(m.dataDir)
 		m.screen = screenAbout
@@ -1270,6 +1333,124 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		return m.quit()
 	}
 	return nil
+}
+
+func (m *Model) updateBackup(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if key := msg.String(); key == "esc" || key == "q" {
+		return m, m.back()
+	}
+	row, act := m.backup.update(msg)
+	if !act {
+		return m, nil
+	}
+	return m, m.doBackup(row)
+}
+
+// doBackup runs one of the screen's two actions. Both the key path and the
+// click path land here, so a row and its button cannot drift apart.
+func (m *Model) doBackup(row int) tea.Cmd {
+	switch row {
+	case backupRowSave:
+		m.saveBackup()
+		return nil
+	case backupRowLoad:
+		return m.loadBackup()
+	}
+	return nil
+}
+
+// saveBackup writes the whole install through the platform's Transfer.
+//
+// The themes come from the library's own directory rather than from a path this
+// package worked out; an empty directory — the browser, which has none — yields
+// nothing to carry, which is exactly right.
+func (m *Model) saveBackup() {
+	if m.transfer == nil {
+		return
+	}
+	themes, err := theme.Files(m.themeLib.Dir())
+	if err != nil {
+		// One unreadable theme directory is not worth losing the puzzles over;
+		// the archive is still worth writing without it.
+		themes = nil
+	}
+	b, err := backup.Build(m.store, m.settingsOf(), themes, build.Get().String(), time.Now())
+	if err != nil {
+		m.backup.refused(err)
+		return
+	}
+	where, err := m.transfer.Save(b)
+	if err != nil {
+		m.backup.refused(err)
+		return
+	}
+	m.backup.saved(where)
+}
+
+// loadBackup asks the platform for a file. Transfer.Load may block for as long
+// as a file picker is open, which is why this is a command and not a call: the
+// app keeps drawing, and the screen says what it is waiting for.
+func (m *Model) loadBackup() tea.Cmd {
+	if m.transfer == nil {
+		return nil
+	}
+	m.backup.waiting = true
+	transfer := m.transfer
+	return func() tea.Msg {
+		b, from, err := transfer.Load()
+		return backupFileMsg{b: b, from: from, err: err}
+	}
+}
+
+// applyBackup merges a file the platform handed back.
+//
+// Everything about the merge itself belongs to internal/backup; what is here is
+// only what the UI owns — writing the preferences back, putting the themes on
+// disk, and applying a theme the archive filled in so the player sees it now
+// rather than after a restart.
+func (m *Model) applyBackup(msg backupFileMsg) {
+	switch {
+	case msg.err != nil:
+		m.backup.refused(msg.err)
+		return
+	case len(msg.b) == 0:
+		// A picker closed without choosing. Not a failure.
+		m.backup.cancelled()
+		return
+	}
+
+	res, err := backup.Apply(msg.b, m.store, m.settingsOf())
+	if err != nil {
+		m.backup.refused(err)
+		return
+	}
+
+	if len(res.SettingsFilled) > 0 || res.PlaytimeAdded > 0 {
+		m.saveSettings(res.Settings)
+	}
+	// A theme the archive named is applied through the picker's own path, so
+	// the restore looks the way the player left it rather than the way this
+	// install happened to be set up.
+	if res.Settings.Theme != "" && res.Settings.Theme != m.themeName {
+		m.themeName = res.Settings.Theme
+		m.restoreTheme()
+	}
+
+	// Themes are written here rather than by Apply, which does no file I/O so
+	// that the browser — with no theme directory at all — can use every other
+	// part of it. An empty directory means there is nowhere to put them.
+	added := 0
+	if dir := m.themeLib.Dir(); dir != "" && len(res.Themes) > 0 {
+		n, _, err := theme.WriteNew(dir, res.Themes)
+		added = n
+		if err != nil {
+			// A refused theme name must not make a restore that moved a whole
+			// history look like it failed, so it goes on the error line while
+			// the report below still reports what landed.
+			m.err = err
+		}
+	}
+	m.backup.loaded(res, added)
 }
 
 func (m *Model) updateDaily(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -1719,6 +1900,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.howTo.view(h), m.howTo.help(h)
 	case screenAbout:
 		return m.about.view(h), m.about.help(h)
+	case screenBackup:
+		return m.backup.view(h), m.backup.help(h)
 	default:
 		return m.menu.view(h), m.menu.help(h)
 	}
@@ -1736,6 +1919,7 @@ const (
 	choiceProfile
 	choiceThemes
 	choiceSettings
+	choiceBackup
 	choiceHowTo
 	choiceAbout
 	choiceQuit
@@ -1752,9 +1936,11 @@ type menuScreen struct {
 	cursor  int
 }
 
-func newMenuScreen() menuScreen {
+// newMenuScreen builds the menu. transfers says whether this build can move a
+// backup file; a build that cannot is offered no backup row at all.
+func newMenuScreen(transfers bool) menuScreen {
 	// Word lengths lead the menu; they are the game's difficulty modes.
-	choices := make([]choice, 0, len(words.Lengths)+9)
+	choices := make([]choice, 0, len(words.Lengths)+10)
 	for _, n := range words.Lengths {
 		choices = append(choices, choice{
 			kind:   choiceNewGame,
@@ -1773,6 +1959,13 @@ func newMenuScreen() menuScreen {
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},
 		choice{kind: choiceSettings, label: "settings"},
+	)
+	// Under settings, above the reference screens: it acts on the whole install
+	// rather than on a puzzle, which is what the rows around it do.
+	if transfers {
+		choices = append(choices, choice{kind: choiceBackup, label: "backup"})
+	}
+	choices = append(choices,
 		// The two reference screens sit at the foot, together: one explains the
 		// game, the other explains the build.
 		choice{kind: choiceHowTo, label: "how to play"},

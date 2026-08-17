@@ -97,8 +97,89 @@ new ResizeObserver(() => {
 // keyboard pointing at the page.
 $("terminal").addEventListener("mousedown", () => term.focus());
 
+// Backup files, in and out.
+//
+// A page cannot write to a path or read one, so this is the browser's whole
+// answer to `-export` and `-import`: a download out, and a file picker in. It
+// matters more here than on a desktop — everything the game saves lives in this
+// origin's storage, and clearing site data destroys it.
+//
+// saveFile returns the name it used, for the game to show. openFile takes a
+// callback rather than returning a promise: the Go side is waiting on a channel
+// that a callback fills, and a promise would have nothing to resolve into.
+function saveFile(text) {
+  const name = `surmise-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  // Firefox only follows a click on an anchor that is in the document.
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // Freed on the next turn, not this one: revoking it while the download is
+  // still starting cancels the download in Safari.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return name;
+}
+
+// openFile asks for one file and answers exactly once: with the file, with
+// nothing (the player closed the picker), or with an error.
+//
+// The picker has to be opened inside the browser's user-activation window,
+// which is why nothing here waits before calling click(): the keystroke that
+// asked for it was a few milliseconds ago.
+function openFile(done) {
+  let answered = false;
+  const answer = (result) => {
+    if (answered) return;
+    answered = true;
+    done(result);
+  };
+
+  const input = document.createElement("input");
+  input.type = "file";
+  // A hint, not a restriction — a backup renamed to .txt should still open.
+  input.accept = "application/json,.json";
+  input.style.display = "none";
+  document.body.append(input);
+
+  const finish = () => input.remove();
+
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) {
+      answer({});
+      finish();
+      return;
+    }
+    try {
+      answer({ name: file.name, text: await file.text() });
+    } catch (error) {
+      answer({ error: `could not read ${file.name}: ${error}` });
+    }
+    finish();
+  });
+
+  // Supported everywhere that matters, and harmless where it is not: the game
+  // gives up on an unanswered picker by itself.
+  input.addEventListener("cancel", () => {
+    answer({});
+    finish();
+  });
+
+  try {
+    input.click();
+  } catch (error) {
+    answer({ error: `the browser refused to open a file picker: ${error}` });
+    finish();
+  }
+}
+
 globalThis.surmise = {
   term,
+  saveFile,
+  openFile,
   onExit() {
     $("exit").hidden = false;
   },
