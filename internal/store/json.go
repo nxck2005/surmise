@@ -53,7 +53,7 @@ func (s *JSON) pathFor(id string) string {
 }
 
 func (s *JSON) Save(g *game.Game) error {
-	b, err := encodeGame(g)
+	b, err := encodeRecord(g)
 	if err != nil {
 		return err
 	}

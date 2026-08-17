@@ -34,6 +34,8 @@ const (
 	optMotion   = "motion"
 	optVersion  = "version"
 	optPlaytime = "playtime"
+	optExport   = "export"
+	optImport   = "import"
 )
 
 // config is what the player asked for, however they asked. Every zero value
@@ -49,6 +51,11 @@ type config struct {
 	listThemes   bool
 	showVersion  bool
 	showPlaytime bool
+	// The two halves of backup and restore: a file to write the whole install
+	// to, and a file to merge back in. Empty means "not asked for", and a
+	// browser leaves both that way — it has no paths (see main_js.go).
+	exportPath string
+	importPath string
 }
 
 func main() {

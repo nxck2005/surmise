@@ -47,6 +47,12 @@ func loadConfig() config {
 	// -playtime answers "how long have I played" without opening the app, where
 	// the same figure is on the profile screen.
 	showPlaytime := flag.Bool(optPlaytime, false, "print total time played and exit")
+	// -export writes the whole install — puzzles, preferences and any themes the
+	// player wrote — to one file, and -import merges one back. Both take "-" for
+	// standard output or input, so a backup can be piped somewhere else without
+	// ever touching a disk.
+	exportPath := flag.String(optExport, "", "write a backup of everything to a file (- for stdout) and exit")
+	importPath := flag.String(optImport, "", "merge a backup file into this install (- for stdin) and exit")
 	flag.Parse()
 
 	return config{
@@ -59,6 +65,8 @@ func loadConfig() config {
 		listThemes:   *listThemes,
 		showVersion:  *showVersion,
 		showPlaytime: *showPlaytime,
+		exportPath:   *exportPath,
+		importPath:   *importPath,
 	}
 }
 
@@ -101,8 +109,21 @@ func run(cfg config) error {
 		return err
 	}
 
-	// The one flag that needs the saved history, so it cannot be answered beside
-	// -version before anything is opened.
+	// The flags that need the saved history, so they cannot be answered beside
+	// -version before anything is opened. Export before import: asked for both
+	// at once, "write down what I have, then merge this in" is the only order
+	// that is ever what somebody meant.
+	if cfg.exportPath != "" || cfg.importPath != "" {
+		if cfg.exportPath != "" {
+			if err := exportBackup(s, themeDir, cfg.exportPath); err != nil {
+				return err
+			}
+		}
+		if cfg.importPath != "" {
+			return importBackup(s, themeDir, cfg.importPath)
+		}
+		return nil
+	}
 	if cfg.showPlaytime {
 		return printPlaytime(s)
 	}

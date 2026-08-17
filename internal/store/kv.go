@@ -60,7 +60,7 @@ var (
 func kvPuzzleKey(id string) string { return kvPuzzlePrefix + id }
 
 func (s *KVStore) Save(g *game.Game) error {
-	b, err := encodeGame(g)
+	b, err := encodeRecord(g)
 	if err != nil {
 		return err
 	}
