@@ -152,6 +152,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"how to play", func() { m.howTo.reset(); m.screen = screenHowTo }},
 		{"how to play, a middle page", func() { m.howTo.show(1); m.screen = screenHowTo }},
 		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},
+		{"backup", func() { m.backup.reset(); m.screen = screenBackup }},
 		{"splash", func() { m.raiseSplash(); m.screen = screenSplash }},
 		{"splash waiting for a key", func() {
 			m.splash.mode = splashKey

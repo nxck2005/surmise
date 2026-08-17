@@ -123,7 +123,28 @@ term.onTitleChange((t) => (title = t));
 
 let exited = false;
 globalThis.document = { title: "" };
-globalThis.surmise = { term, onExit: () => (exited = true) };
+
+// The page's file half, stubbed. It is the same contract boot.js publishes —
+// saveFile returns the name it used, openFile answers a callback exactly once —
+// so the Go side runs its real path: a js.Func callback dropping an answer into
+// a channel that a bubbletea command is blocked on. That hand-off is the one
+// this file exists to prove cannot deadlock (see the resize check at the foot).
+const files = { saved: null, offer: null };
+globalThis.surmise = {
+  term,
+  onExit: () => (exited = true),
+  saveFile(text) {
+    files.saved = text;
+    return "surmise-backup-smoke.json";
+  },
+  openFile(done) {
+    // Answered on a later turn of the event loop, as a real picker would be:
+    // answering inline would prove nothing about the wait.
+    setTimeout(() => {
+      done(files.offer ? { name: "surmise-backup-smoke.json", text: files.offer } : {});
+    }, 20);
+  },
+};
 
 const go = new Go();
 const { instance } = await WebAssembly.instantiate(
@@ -257,6 +278,51 @@ check(
   edges.size === 1,
   `content starts at columns ${[...edges].sort((a, b) => a - b).join(", ")}`,
 );
+
+// Backing up, which in a browser is the only way a history ever leaves this
+// origin. Both directions go through a js.Func callback, so a mistake here does
+// not fail — it hangs the runtime, and every check after this one times out.
+const onRow = (name) => screen().some((l) => new RegExp(`›\\s*${name}\\s*‹`).test(l));
+for (let i = 0; i < 14 && !onRow("backup"); i++) {
+  await type("j");
+  await wait(60);
+}
+check("found the backup row on the menu", onRow("backup"));
+await type("\r");
+await wait(300);
+
+await type("\r"); // the cursor opens on "save a backup"
+await wait(400);
+let archive = null;
+try {
+  archive = files.saved ? JSON.parse(files.saved) : null;
+} catch (err) {
+  archive = null;
+}
+check(
+  "saving offered the page a backup file",
+  archive?.format === "surmise.backup" && archive?.puzzles?.length === 1,
+  `page received ${JSON.stringify(files.saved)?.slice(0, 120)}`,
+);
+check(
+  "the screen says where the backup went",
+  screen().some((l) => l.includes("saved to")),
+);
+
+// And back in. The same file, so nothing is new — which is the promise the
+// screen makes before the button is pressed.
+files.offer = files.saved;
+await type("j");
+await type("\r");
+await wait(600);
+check(
+  "loading a backup reaches the page and comes back",
+  screen().some((l) => l.includes("nothing new")),
+  "the load did not report",
+);
+
+await type("\x1b"); // back to the menu
+await wait(300);
 
 // A resize arrives on a callback and is delivered by a goroutine. If that
 // hand-off ever blocks, the runtime hangs here instead of redrawing.

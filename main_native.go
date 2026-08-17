@@ -128,7 +128,10 @@ func run(cfg config) error {
 		return printPlaytime(s)
 	}
 
-	return start(s, lib, uiOptions(cfg, dataDir))
+	// The backup screen writes into the data directory, so it follows -data like
+	// everything else: a scratch install backs itself up to its own scratch
+	// directory.
+	return start(s, lib, uiOptions(cfg, dataDir, fileTransfer{dir: dataDir}))
 }
 
 // printPlaytime reports the lifetime counter. It only reads: the seeded value an

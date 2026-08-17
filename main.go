@@ -79,7 +79,10 @@ func main() {
 //
 // dataDir is display-only — the about screen shows it and nothing reads through
 // it — which is why the browser can pass a description rather than a path.
-func uiOptions(cfg config, dataDir string) ui.Options {
+//
+// transfer is how a backup file leaves and re-enters this build; nil means the
+// platform cannot move files, and the UI then offers no backup row.
+func uiOptions(cfg config, dataDir string, transfer ui.Transfer) ui.Options {
 	// The daily's seeds come from here, which is the one place a future remote
 	// source would be chosen; ui.Options carries it in so nothing below has to
 	// know which one it got.
@@ -91,6 +94,7 @@ func uiOptions(cfg config, dataDir string) ui.Options {
 		Motion:     cfg.motion,
 		DailySeeds: daily.Local(),
 		DataDir:    dataDir,
+		Transfer:   transfer,
 	}
 }
 

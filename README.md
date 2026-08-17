@@ -161,7 +161,16 @@ saves and settings otherwise live in your user config directory
 
 everything you've played is on this machine, in one copy. one file takes all of
 it — puzzles, settings and any themes you wrote — somewhere safe, or onto
-another machine:
+another machine.
+
+the **backup** row in the menu is the whole thing: *save a backup* writes one,
+*load a backup* merges one back. in the terminal the file goes in
+`~/.config/surmise/backups`, dated, and the screen tells you the path. in the
+browser it's an ordinary download and an ordinary file picker — which is the way
+to get your history out of a browser at all, since clearing site data takes it
+with it.
+
+from the command line:
 
 ```sh
 surmise -export mine.backup.json   # write the lot to a file
@@ -197,6 +206,10 @@ surmise -version         # surmise 1.2.3 (a1b2c3d) go1.26.5 linux/amd64
 compiles to webassembly and runs on xterm.js, so there is nothing to install and
 no server. saved puzzles go to `localStorage` instead of a config directory, and
 only the bundled themes come along.
+
+that storage belongs to the origin, so clearing site data erases everything and
+nothing can bring it back — the **backup** row downloads the lot as one file,
+and loads it again on any machine.
 
 to build and serve it yourself:
 

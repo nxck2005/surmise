@@ -14,6 +14,7 @@ import (
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
+	"github.com/nxck2005/surmise/internal/ui"
 	"github.com/nxck2005/surmise/internal/web"
 )
 
@@ -31,11 +32,10 @@ var browserTerm *web.Terminal
 // browser can read it. Their zero values mean "not asked for", which is exactly
 // what config wants.
 //
-// -export and -import are absent for the first reason (there is no path to name)
-// but, unlike the rest, they are a gap and not a decision: backing up matters
-// most here, where clearing site data destroys everything. internal/backup does
-// no file I/O precisely so that a page-side download and file picker can call
-// Build and Apply unchanged. See docs/WEB.md.
+// -export and -import are absent for the first reason — there is no path to
+// name — and they are not missed: the backup row in the menu does both, through
+// a download and a file picker (see internal/web/transfer_js.go). It matters
+// most here, where clearing site data destroys everything.
 func loadConfig() config {
 	get := func(string) string { return "" }
 
@@ -91,7 +91,18 @@ func run(cfg config) error {
 
 	cols, rows := term.Size()
 
-	err = start(store.NewKV(kv), lib, uiOptions(cfg, browserDataDir),
+	// A page that cannot offer a download or a file picker — the Node smoke
+	// test, or a stale boot.js — runs with no backup row rather than with one
+	// that fails when it is pressed. The reason reaches the console, which is
+	// the only place a browser has for it.
+	var transfer ui.Transfer
+	if t, err := web.NewTransfer(); err != nil {
+		fmt.Println(err)
+	} else {
+		transfer = t
+	}
+
+	err = start(store.NewKV(kv), lib, uiOptions(cfg, browserDataDir, transfer),
 		// Mandatory, not optional: without an input bubbletea falls through to
 		// os.Stdin and OpenTTY, and there is neither.
 		tea.WithInput(term.Reader()),

@@ -73,6 +73,8 @@ const (
 	actJumpTop      // home: first row of a scrolling list
 	actJumpBottom   // end: last row of a scrolling list
 	actHowToPage    // index: page of the how-to-play screen to turn to
+	actBackupSave   // write the whole install to a backup file
+	actBackupLoad   // ask for a backup file and merge it in
 	actSplashDismiss
 )
 
