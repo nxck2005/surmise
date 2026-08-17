@@ -157,6 +157,32 @@ surmise -data ./scratch  # keep saves and settings somewhere else
 saves and settings otherwise live in your user config directory
 (`~/.config/surmise` on linux).
 
+## backing it up
+
+everything you've played is on this machine, in one copy. one file takes all of
+it — puzzles, settings and any themes you wrote — somewhere safe, or onto
+another machine:
+
+```sh
+surmise -export mine.backup.json   # write the lot to a file
+surmise -import mine.backup.json   # merge one back in
+```
+
+an import **only ever adds**. a puzzle you already have is left exactly as it
+is, a setting you've already chosen is never overwritten, and your playtime only
+ever goes up. so importing the wrong file costs you nothing, and importing the
+same one twice does nothing the second time.
+
+both take `-` for stdout and stdin, so a backup can be piped straight somewhere
+else:
+
+```sh
+surmise -export - | gpg -e -r me > mine.backup.json.gpg
+```
+
+`-export` won't write over a file that's already there — back up to a new name
+rather than over an old one.
+
 ## about
 
 the **about** row in the menu shows app info. for getting the version without opening the app:

@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -224,6 +225,61 @@ func TestStoreDeleteFinishedLeavesTombstone(t *testing.T) {
 			t.Errorf("Delete of a tombstone = %v, want ErrNotFound", err)
 		}
 	})
+}
+
+// Saving a tombstone writes the marker, not a Game spelled out in full. Delete
+// is not the only way one reaches a store any more: restoring a backup carries
+// tombstones, because stats depend on them, and it puts them back through Save.
+// Without the routing in encodeRecord that path writes "answer": "" and
+// "guesses": null, which codec.go's own rule calls a corrupt puzzle rather than
+// a deliberate marker.
+// This has to compare the stored bytes, not the decoded record: both encodings
+// read back as a Game with Deleted true and everything else zero, so a decode
+// would normalise away the very difference under test. The memory KV is the one
+// store whose raw values a test can see, and the codec is shared, so proving it
+// there proves it for the files as well — that is what TestStoresAgreeOnTheirBytes
+// establishes.
+func TestStoreSaveOfATombstoneWritesTheMarker(t *testing.T) {
+	g := wonGame(t)
+
+	// The bytes Delete produces are the reference.
+	kv := NewMemoryKV()
+	s := NewKV(kv)
+	if err := s.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete(g.ID); err != nil {
+		t.Fatal(err)
+	}
+	want, ok := kv.Get(kvPuzzleKey(g.ID))
+	if !ok {
+		t.Fatal("Delete left no tombstone")
+	}
+
+	tombstones, err := s.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tombstones) != 1 {
+		t.Fatalf("All returned %d records, want the tombstone", len(tombstones))
+	}
+
+	// The same record, put back through Save the way a restore would.
+	fresh := NewMemoryKV()
+	if err := NewKV(fresh).Save(tombstones[0]); err != nil {
+		t.Fatalf("Save of a tombstone: %v", err)
+	}
+	got, ok := fresh.Get(kvPuzzleKey(g.ID))
+	if !ok {
+		t.Fatal("Save of a tombstone stored nothing")
+	}
+
+	if got != want {
+		t.Errorf("Save writes a tombstone differently from Delete:\n got: %s\nwant: %s", got, want)
+	}
+	if strings.Contains(got, `"answer"`) || strings.Contains(got, `"guesses"`) {
+		t.Errorf("a saved tombstone spells out the play record it no longer has:\n%s", got)
+	}
 }
 
 // A deleted daily keeps its date. The daily streak walks the calendar and

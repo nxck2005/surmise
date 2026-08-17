@@ -53,6 +53,15 @@ There is no `?data=`, `?themes=`, `?version=` or `?playtime=`. The first has
 nothing to point at, and the others print to a place nobody can see. The version
 is on the about screen, and total playtime is on the profile screen.
 
+There is no `?export=` or `?import=` either, and that one is a gap rather than a
+decision: a browser has no paths, and backing up matters *more* here than
+natively — history is origin-local, so clearing site data destroys it and
+nothing can bring it back. The format itself is already platform-free
+(`internal/backup` does no file I/O), so what is missing is a way in on the page
+— a download and a file picker — not the feature. Until then, the way to move a
+history off a browser is the desktop build's `-export`, and the same file
+imports into either.
+
 ## Keys the browser keeps
 
 Everything reaches the game except the chords the browser will not give up:

@@ -30,6 +30,12 @@ var browserTerm *web.Terminal
 // that nobody can see — playtime is on the profile screen here, which is where a
 // browser can read it. Their zero values mean "not asked for", which is exactly
 // what config wants.
+//
+// -export and -import are absent for the first reason (there is no path to name)
+// but, unlike the rest, they are a gap and not a decision: backing up matters
+// most here, where clearing site data destroys everything. internal/backup does
+// no file I/O precisely so that a page-side download and file picker can call
+// Build and Apply unchanged. See docs/WEB.md.
 func loadConfig() config {
 	get := func(string) string { return "" }
 

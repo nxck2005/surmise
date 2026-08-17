@@ -22,7 +22,20 @@ import (
 // Sharing the codec has a second effect worth keeping: both stores hold the
 // same bytes under a different key, so moving a history between them is a copy.
 
-// encodeGame renders a puzzle for storage.
+// encodeRecord renders whatever a store was handed: a puzzle, or the marker a
+// deleted one leaves behind. Routing here rather than at the call site is what
+// makes Save total — a caller that holds a tombstone (importing a backup is the
+// first) writes the same bytes Delete would, instead of a Game spelled out in
+// full, which codec's own rule below says reads as corruption.
+func encodeRecord(g *game.Game) ([]byte, error) {
+	if g.Deleted {
+		return encodeTombstone(g)
+	}
+	return encodeGame(g)
+}
+
+// encodeGame renders a puzzle for storage. It is the live-puzzle half of
+// encodeRecord; anything that might hold a tombstone wants that instead.
 func encodeGame(g *game.Game) ([]byte, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
@@ -37,15 +50,32 @@ func encodeGame(g *game.Game) ([]byte, error) {
 // decodeGame reads whatever was stored, tombstones included. Callers that must
 // not resume a deletion check Deleted themselves; only Delete and All see one.
 func decodeGame(id string, b []byte) (*game.Game, error) {
+	return decodeRecord("puzzle "+id, b)
+}
+
+// decodeRecord is decodeGame with the caller's own name for what it is reading,
+// so a record that came out of a backup file reports as a record rather than as
+// a puzzle the store was asked for.
+func decodeRecord(label string, b []byte) (*game.Game, error) {
 	var g game.Game
 	if err := json.Unmarshal(b, &g); err != nil {
-		return nil, fmt.Errorf("store: decode puzzle %s: %w", id, err)
+		return nil, fmt.Errorf("store: decode %s: %w", label, err)
 	}
 	if err := g.Validate(); err != nil {
-		return nil, fmt.Errorf("store: puzzle %s: %w", id, err)
+		return nil, fmt.Errorf("store: %s: %w", label, err)
 	}
 	return &g, nil
 }
+
+// EncodeRecord and DecodeRecord are the codec, for a caller outside this
+// package that has to hold the same bytes a store does. internal/backup is the
+// one: an archive carries records, tombstones included, and the whole claim
+// that a backup moves between the two stores rests on there being exactly one
+// set of rules about what a record looks like. Do not add a second.
+func EncodeRecord(g *game.Game) ([]byte, error) { return encodeRecord(g) }
+
+// DecodeRecord reads one back. label names what is being read, for the error.
+func DecodeRecord(label string, b []byte) (*game.Game, error) { return decodeRecord(label, b) }
 
 // tombstoneRecord is how a deleted puzzle is written: the fields game.Tombstone
 // keeps, and no others. Encoding the *game.Game itself would spell out every
