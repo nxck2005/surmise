@@ -5,8 +5,8 @@
 #
 # The binary lands in $SURMISE_INSTALL_DIR (default: ~/.local/bin). A specific
 # version can be pinned with SURMISE_VERSION=v0.5.1. Windows is not handled
-# here — take an archive from https://github.com/nxck2005/surmise/releases
-# (a Scoop manifest is planned; until then that page is the whole story).
+# here: use Scoop — https://github.com/nxck2005/scoop-bucket has the manifest,
+# and the releases page still carries the raw zips.
 set -eu
 
 REPO=nxck2005/surmise
@@ -45,8 +45,10 @@ case "$(uname -s)" in
 Linux) os=linux ;;
 Darwin) os=darwin ;;
 MINGW* | MSYS* | CYGWIN*)
-    echo "install.sh: no windows installer yet — take a zip from" >&2
-    echo "  https://github.com/$REPO/releases/latest" >&2
+    echo "install.sh: windows goes through Scoop, not this script:" >&2
+    echo "  scoop bucket add nxck2005 https://github.com/nxck2005/scoop-bucket" >&2
+    echo "  scoop install surmise" >&2
+    echo "or take a zip from https://github.com/$REPO/releases/latest" >&2
     exit 1
 ;;
 *)
