@@ -79,9 +79,9 @@ type sprintSession struct {
 	dealt     int
 	solved    int
 	missed    int
-	attempts  int             // guesses spent, wins only — averages cover wins only
-	solveTime time.Duration   // across every finished board
-	lastID    string          // guard: each board is recorded once
+	attempts  int           // guesses spent, wins only — averages cover wins only
+	solveTime time.Duration // across every finished board
+	lastID    string        // guard: each board is recorded once
 }
 
 func (s *sprintSession) begin(now time.Time) { s.deadline = now.Add(s.duration) }
