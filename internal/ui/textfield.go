@@ -144,10 +144,6 @@ func fieldHelp(h *hitMap, row int, keep string) string {
 	)
 }
 
-// full reports whether the field has reached its width, which is what lets a
-// screen with a fixed-length value offer to confirm as soon as it is typeable.
-func (f *textField) full() bool { return lipgloss.Width(f.value) >= f.max }
-
 // sanitize is what protects the terminal and a fixed-width row from text that
 // did not come from typeText — a hand-edited settings file, most of all.
 func (f *textField) sanitize(s string) string {
