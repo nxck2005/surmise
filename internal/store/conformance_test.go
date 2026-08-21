@@ -327,6 +327,8 @@ func TestStoreSettingsRoundTrip(t *testing.T) {
 		if err := s.SaveSettings(want); err != nil {
 			t.Fatalf("SaveSettings: %v", err)
 		}
+		// SaveSettings stamps the format tag on the way out, in both stores.
+		want.Schema = schemaVersion
 		if got := s.Settings(); got != want {
 			t.Errorf("Settings = %+v, want %+v", got, want)
 		}
