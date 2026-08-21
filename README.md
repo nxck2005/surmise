@@ -192,6 +192,26 @@ surmise -export - | gpg -e -r me > mine.backup.json.gpg
 `-export` won't write over a file that's already there — back up to a new name
 rather than over an old one.
 
+## where your data lives
+
+everything surmise keeps is on this machine, in one folder — `~/.config/surmise`
+on linux, `~/Library/Application Support/surmise` on macos, `%AppData%\surmise`
+on windows. inside it:
+
+- `puzzles/` — one small json file per puzzle you've played
+- `settings.json` — your preferences, plus the playtime counter
+- `themes/` — themes you wrote
+- `backups/` — backups written from the menu
+
+nothing leaves the machine: no account, no telemetry, no network at all. the
+browser build keeps the same things in the site's storage instead — see
+[in a browser](#in-a-browser). either way, every save file now carries a schema
+number, so an upgrade can never quietly misread your history.
+
+to uninstall completely, delete the binary and that folder — nothing is
+installed anywhere else. in a browser, clearing the site's data is the whole
+uninstall.
+
 ## about
 
 the **about** row in the menu shows app info. for getting the version without opening the app:
