@@ -22,7 +22,15 @@ echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc && source ~/.bashrc
 fish_add_path (go env GOPATH)/bin                                                 # fish
 ```
 
-no go toolchain? every release carries a prebuilt binary:
+no go toolchain? install the latest prebuilt binary in one line:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nxck2005/surmise/main/install.sh | sh
+```
+
+it verifies the checksum, installs to `~/.local/bin` (override with
+`SURMISE_INSTALL_DIR`), and never needs sudo. pin a version with
+`SURMISE_VERSION=v0.5.1`, or grab an archive by hand — every release carries one:
 
 | platform | file |
 | --- | --- |
