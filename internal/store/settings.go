@@ -10,6 +10,12 @@ import (
 // codec under its browser settings key. It is small, rewritten rarely and safe
 // to lose: every field has a working zero value.
 type Settings struct {
+	// Schema is the save-format version this blob was written with, the same
+	// tag every puzzle record carries. Zero means "written before the tag
+	// existed" and stays valid; anything above what this build knows degrades
+	// to the defaults rather than erroring — see codec.go.
+	Schema int `json:"schema"`
+
 	Theme string `json:"theme,omitempty"`
 	// DisplayName is local presentation on the profile screen. It is not an
 	// account ID, puzzle owner, authentication claim, or uniqueness promise;

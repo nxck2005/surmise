@@ -74,6 +74,13 @@ type Game struct {
 	// It is what CountsForStats reads, and it is why a custom answer may sit
 	// outside the guess list — see Guess.
 	Custom bool `json:"custom,omitempty"`
+
+	// Schema is the version of the save format this record was written with.
+	// The store stamps it on every write and refuses to read a number it does
+	// not know, so a breaking change to the format can never silently misread
+	// an older or newer file. Zero means "written before the tag existed" and
+	// stays valid forever; see docs/UPGRADING.md for the compatibility rule.
+	Schema int `json:"schema"`
 }
 
 // CountsForStats reports whether a puzzle belongs in the player's figures.

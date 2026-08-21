@@ -22,6 +22,15 @@ import (
 // Sharing the codec has a second effect worth keeping: both stores hold the
 // same bytes under a different key, so moving a history between them is a copy.
 
+// schemaVersion is the save-format version stamped into every record and into
+// settings as they are written. A reader accepts its own version and 0 — 0 is
+// every file written before the tag existed, and it stays valid forever — and
+// refuses anything else: a number it does not know means either a file from a
+// newer app or a corrupt one, and misreading either silently is exactly what
+// the tag exists to prevent. Bump it only for a breaking change to the format;
+// adding a field never is one. The rule lives in docs/UPGRADING.md.
+const schemaVersion = 1
+
 // encodeRecord renders whatever a store was handed: a puzzle, or the marker a
 // deleted one leaves behind. Routing here rather than at the call site is what
 // makes Save total — a caller that holds a tombstone (importing a backup is the
@@ -36,9 +45,17 @@ func encodeRecord(g *game.Game) ([]byte, error) {
 
 // encodeGame renders a puzzle for storage. It is the live-puzzle half of
 // encodeRecord; anything that might hold a tombstone wants that instead.
+//
+// Stamping happens here rather than at every constructor so no call site can
+// forget: a record leaves this package saying what format it is in. Callers may
+// hold a Schema they read off an older file; overwriting only a zero keeps such
+// a value honest through a load-modify-save cycle.
 func encodeGame(g *game.Game) ([]byte, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
+	}
+	if g.Schema == 0 {
+		g.Schema = schemaVersion
 	}
 	b, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
@@ -56,10 +73,16 @@ func decodeGame(id string, b []byte) (*game.Game, error) {
 // decodeRecord is decodeGame with the caller's own name for what it is reading,
 // so a record that came out of a backup file reports as a record rather than as
 // a puzzle the store was asked for.
+//
+// The schema check is the whole promise: 0 is every pre-tag file and this
+// version's own, anything else is refused rather than half-understood.
 func decodeRecord(label string, b []byte) (*game.Game, error) {
 	var g game.Game
 	if err := json.Unmarshal(b, &g); err != nil {
 		return nil, fmt.Errorf("store: decode %s: %w", label, err)
+	}
+	if g.Schema != 0 && g.Schema != schemaVersion {
+		return nil, fmt.Errorf("store: %s: schema version mismatch", label)
 	}
 	if err := g.Validate(); err != nil {
 		return nil, fmt.Errorf("store: %s: %w", label, err)
@@ -85,6 +108,9 @@ func DecodeRecord(label string, b []byte) (*game.Game, error) { return decodeRec
 // written exactly as it always was. The keys match Game's, so reading a
 // tombstone is just decoding a Game.
 type tombstoneRecord struct {
+	// Schema carries the same format tag every record does; a tombstone is a
+	// record, not an exception to the rule.
+	Schema    int         `json:"schema"`
 	ID        string      `json:"id"`
 	Length    int         `json:"length"`
 	Status    game.Status `json:"status"`
@@ -108,6 +134,7 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 		return nil, err
 	}
 	b, err := json.MarshalIndent(tombstoneRecord{
+		Schema:    schemaVersion,
 		ID:        g.ID,
 		Length:    g.Length,
 		Status:    g.Status,
@@ -125,7 +152,14 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 // encodeSettings and decodeSettings keep preferences in one shape too. A
 // missing or damaged blob yields the defaults rather than an error: every field
 // has a working zero value, and a bad settings file must never cost a puzzle.
+//
+// Settings carry the same schema tag records do, stamped on write and checked
+// on read — but a mismatch here degrades to the defaults rather than an error,
+// because losing a preference is acceptable and losing a puzzle is not.
 func encodeSettings(v Settings) ([]byte, error) {
+	if v.Schema == 0 {
+		v.Schema = schemaVersion
+	}
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("store: encode settings: %w", err)
@@ -135,7 +169,7 @@ func encodeSettings(v Settings) ([]byte, error) {
 
 func decodeSettings(b []byte) Settings {
 	var out Settings
-	if err := json.Unmarshal(b, &out); err != nil {
+	if err := json.Unmarshal(b, &out); err != nil || (out.Schema != 0 && out.Schema != schemaVersion) {
 		return Settings{}
 	}
 	return out

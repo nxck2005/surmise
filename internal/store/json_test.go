@@ -218,7 +218,7 @@ func TestDeleteFinishedLeavesTombstone(t *testing.T) {
 	if err := json.Unmarshal(b, &raw); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"id", "length", "status", "updatedAt", "deleted"}
+	want := []string{"id", "length", "status", "updatedAt", "deleted", "schema"}
 	if len(raw) != len(want) {
 		t.Errorf("tombstone file has %d fields (%v), want exactly %v", len(raw), raw, want)
 	}

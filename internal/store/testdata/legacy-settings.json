@@ -1,0 +1,9 @@
+{
+  "theme": "nord",
+  "display_name": "nick",
+  "length": 6,
+  "remember_last": true,
+  "splash_dismiss": "key",
+  "splash_ms": 1200,
+  "playtime_ms": 90000
+}

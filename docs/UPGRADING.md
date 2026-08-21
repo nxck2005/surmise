@@ -5,6 +5,26 @@ settings, themes and stats carry forward untouched, and nothing here needs
 reading. This file records the exceptions — the releases where something you can
 see changed meaning — newest first.
 
+## The save-format promise
+
+Every puzzle record, every tombstone and the settings file carry a `schema`
+number saying what format they were written in. The rules that keep your history
+safe across upgrades:
+
+- **A record with no `schema` (or `"schema": 0`) is valid forever.** That is
+  every file written before the tag existed, and it will always read.
+- **Adding a field is never a breaking change.** New fields appear; old readers
+  ignore them, new readers take their zero value as "unset".
+- **A field is never renamed or repurposed.** A meaning that changes gets a new
+  name, and the old one stays put.
+- **`schema` moves only for a breaking change**, and a reader that meets a
+  number it does not know refuses the record with `schema version mismatch`
+  rather than guessing. A mismatch means either a file from a newer app or a
+  corrupt one — both deserve an error, not a wrong answer.
+
+The fixtures under `internal/store/testdata/` and the tests beside them pin all
+of this.
+
 ## v0.3.1 → v0.3.2: every daily answer moved
 
 **What changed.** 981 words were taken out of the three answer lists: proper

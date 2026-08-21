@@ -121,8 +121,10 @@ func TestSettingsScreenPersistsChoices(t *testing.T) {
 	send(t, m, "down", "right")
 
 	// The splash's three are written out as well: every save is the whole file,
-	// and a visited preference reads back as what the screen shows.
+	// and a visited preference reads back as what the screen shows. Schema is
+	// the save-format tag the store stamps on every write.
 	want := store.Settings{
+		Schema: 1,
 		Length: 4, RememberLast: true,
 		Splash: splashOn, SplashArt: banner.Default().Name, SplashDismiss: splashKey.setting(),
 		SplashMillis: int(splashDuration / time.Millisecond),
@@ -318,7 +320,7 @@ func TestRememberLastKeepsTheSavedTheme(t *testing.T) {
 	m.screen = screenMenu
 	chooseMode(t, m, 4)
 
-	want := store.Settings{Theme: "dracula", Length: 4, RememberLast: true}
+	want := store.Settings{Schema: 1, Theme: "dracula", Length: 4, RememberLast: true}
 	if got := s.Settings(); got != want {
 		t.Errorf("saved settings = %+v, want %+v", got, want)
 	}

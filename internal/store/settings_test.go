@@ -20,6 +20,8 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if err := s.SaveSettings(want); err != nil {
 		t.Fatal(err)
 	}
+	// SaveSettings stamps the format tag on the way out.
+	want.Schema = schemaVersion
 
 	// Read through a new store, so the test proves it reached the disk.
 	reopened, err := NewJSON(dir)
