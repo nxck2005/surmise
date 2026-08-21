@@ -52,10 +52,16 @@ type gameScreen struct {
 	playtime func(time.Duration)
 
 	// anim is the root's animation state, shared rather than owned: the board
-	// starts the effects, and the panel around it draws the win accent. Nil is a
-	// board that does not animate, which is every nil-safe method's job to
+	// starts the effects, and the panel around it draws the win accent. Nil is
+	// a board that does not animate, which is every nil-safe method's job to
 	// handle and what the layout tests render through.
 	anim *anims
+
+	// sprint is the timed run this board belongs to, or nil. The root owns the
+	// session; the pointer is all the board needs, to show the clock in its
+	// status line and to stand down its own restart affordances — a run deals
+	// its boards itself.
+	sprint *sprintSession
 
 	// width and height are the terminal's, pushed down by the root. The board is
 	// the tallest screen in the app, so it is the one that has to decide how
@@ -185,7 +191,12 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 
 	case "tab":
-		m.confirmNew = true
+		// During a run, restarting is not on offer: the run deals its own
+		// boards, and a confirm prompt for one it is about to deal anyway
+		// would be noise. The help bar drops the hint to match.
+		if m.sprint == nil {
+			m.confirmNew = true
+		}
 		return nil, false
 
 	case "backspace":
@@ -599,7 +610,15 @@ func (m *gameScreen) statusLine(h *hitMap) string {
 		return st.err.Render("out of guesses — ") +
 			st.text.Render(strings.ToUpper(m.g.Answer))
 	default:
-		return st.muted.Render(fmt.Sprintf("%d guesses left", m.g.Remaining()))
+		line := st.muted.Render(fmt.Sprintf("%d guesses left", m.g.Remaining()))
+		if m.sprint != nil && m.sprint.running() {
+			// The run's clock leads the line: it is the one thing a sprint
+			// player reads mid-board, and the solved count rides with it.
+			line = st.accent.Render(sprintClock(m.sprint.left())) +
+				st.muted.Render(fmt.Sprintf(" · %d solved · ", m.sprint.solved)) +
+				line
+		}
+		return line
 	}
 }
 
@@ -608,6 +627,18 @@ func (m *gameScreen) help(h *hitMap) string {
 	// nothing: a hint for a dead key is a promise the screen does not keep.
 	if m.layout().refuse {
 		return renderHelp(h, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
+	}
+	if m.sprint != nil {
+		// A timed run owns its board supply, so there is no restart to offer;
+		// and esc ends the run rather than leaving for the menu.
+		items := []helpItem{{
+			keys: "enter", label: "submit", act: action{kind: actSubmit}},
+		}
+		if !m.g.Status.Done() {
+			items = append([]helpItem{{label: "type a word"}}, items...)
+		}
+		return renderHelp(h, append(items,
+			helpItem{keys: "esc", label: "end sprint", act: action{kind: actBack}})...)
 	}
 	if m.g.Status.Done() {
 		return renderHelp(h,

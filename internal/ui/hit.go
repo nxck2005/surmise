@@ -57,6 +57,10 @@ const (
 	actCustomNext     // index: custom row, next value
 	actCustomPrev     // index: custom row, previous value
 	actCustomStart    // hand the terminal over and open the board
+	actSprintNext     // index: sprint row, next value
+	actSprintPrev     // index: sprint row, previous value
+	actSprintStart    // deal the first board and start the clock
+	actSprintAgain    // run another session on the same settings
 	actLetter         // letter: on-screen keyboard cap
 	actSubmit         // enter
 	actBackspace      // backspace

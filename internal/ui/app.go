@@ -40,6 +40,7 @@ const (
 	screenSettings
 	screenDaily
 	screenCustom
+	screenSprint
 	screenHowTo
 	screenAbout
 	screenBackup
@@ -162,9 +163,19 @@ type Model struct {
 	settings settingsScreen
 	daily    dailyScreen
 	custom   customScreen
+	sprints  sprintScreen
 	howTo    howToScreen
 	about    aboutScreen
 	backup   backupScreen
+
+	// sprint is the live session, or the one the summary is showing. Nil
+	// means no session has been begun; the board holds the same pointer while
+	// it runs, which is how the countdown reaches its status line.
+	sprint *sprintSession
+
+	// pendingDeal defers the next dealt board until a finishing guess has
+	// revealed — the sprint's counterpart of pendingResult.
+	pendingDeal bool
 
 	// transfer is how a backup file leaves and re-enters this build. Nil means
 	// the platform cannot move files, and the menu then offers no backup row —
@@ -330,6 +341,12 @@ func (m *Model) submitGame() tea.Cmd {
 		return nil
 	}
 	if m.game.g.Status.Done() {
+		// A finished board during a run has already been counted; enter here
+		// means "deal", exactly what the reveal would have settled into.
+		if m.sprinting() {
+			m.dealNext()
+			return nil
+		}
 		m.openResult()
 		return nil
 	}
@@ -340,6 +357,19 @@ func (m *Model) submitGame() tea.Cmd {
 		// before returning, and no animation is ever allowed to sit between an
 		// event and its durable copy. Only which screen is showing waits, and
 		// only for as long as the finishing row takes to reveal.
+		//
+		// On a timed run the wait is for the next board instead of the
+		// debrief; the tally is written first, so the summary can never
+		// disagree with what was revealed.
+		if m.sprinting() {
+			m.recordSprint(m.game.g)
+			if m.anim.busy(timeNow()) {
+				m.pendingDeal = true
+				return cmd
+			}
+			m.dealNext()
+			return cmd
+		}
 		if m.anim.busy(timeNow()) {
 			m.pendingResult = true
 			return cmd
@@ -360,19 +390,141 @@ func (m *Model) settlePendingResult() {
 	m.openResult()
 }
 
+// settlePendingDeal is that path's sprint counterpart: the reveal ends, and
+// what settles is the next board rather than a debrief.
+func (m *Model) settlePendingDeal() {
+	if !m.pendingDeal || m.anim.busy(timeNow()) {
+		return
+	}
+	m.dealNext()
+}
+
+// --- sprint ---
+
+// sprinting reports whether a session's clock is live right now.
+func (m *Model) sprinting() bool {
+	return m.sprint != nil && m.sprint.running()
+}
+
+// sprintExpired reports that a begun session is over while its board is still
+// showing — the one state in which input must reach nobody until the summary
+// is up.
+func (m *Model) sprintExpired() bool {
+	return m.screen == screenGame && m.sprint != nil &&
+		!m.sprint.deadline.IsZero() && !m.sprint.running()
+}
+
+// updateSprint answers a key on the setup/summary screen.
+func (m *Model) updateSprint(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	start, again, back := m.sprints.update(msg)
+	switch {
+	case back:
+		return m, m.back()
+	case start, again:
+		return m, m.startSprint()
+	}
+	return m, nil
+}
+
+// startSprint deals the first board and starts the clock. The clock runs from
+// here, not from the first keystroke: unlike a puzzle's own timer, the run is
+// short enough that staring at board one is time bought for nothing else.
+func (m *Model) startSprint() tea.Cmd {
+	g, err := newPuzzle(m.store, m.sprints.length)
+	if err != nil {
+		m.err = err
+		return nil
+	}
+	m.length = m.sprints.length
+	s := &sprintSession{length: m.sprints.length, duration: m.sprints.duration}
+	s.begin(timeNow())
+	m.sprint = s
+
+	m.openGame(g, false)
+	m.game.sprint = s
+	return nil
+}
+
+// recordSprint banks a finished board into the tally at submit time — before
+// any effect runs, matching the rule that nothing waits on an animation.
+func (m *Model) recordSprint(g *game.Game) {
+	if m.sprinting() {
+		m.sprint.record(g)
+	}
+}
+
+// dealNext replaces the finished board with a fresh one of the session's
+// length. It is the sprint's counterpart of openResult, reached by the same
+// two roads: settled after the reveal, or handed straight down when the player
+// skipped past it.
+//
+// The swap deliberately does not go through startNew: that path saves the old
+// board again and refuses dailies and customs, none of which can apply here —
+// submit already banked and saved what just ended, and every board a run deals
+// is its own random draw. The session pointer rides on the same gameScreen, so
+// the countdown follows without another word.
+func (m *Model) dealNext() {
+	m.pendingDeal = false
+	if !m.sprinting() || m.game == nil {
+		// The clock ran out during the reveal: the run is over, not paused.
+		m.endSprint()
+		return
+	}
+	g, err := newPuzzle(m.store, m.sprint.length)
+	if err != nil {
+		// A run that cannot deal is over; say why where errors are said.
+		m.err = err
+		m.endSprint()
+		return
+	}
+	m.anim.clear()
+	gs := m.game
+	gs.g = g
+	gs.persisted = false
+	gs.typing = ""
+	gs.message = ""
+	gs.msgUntil = time.Time{}
+	gs.confirmNew = false
+	gs.enter()
+}
+
+// endSprint stops a run and raises its summary. The open board goes out the
+// way any abandoned board does — banked and saved — so a puzzle the clock
+// caught mid-flight stays resumable from the list like any other.
+func (m *Model) endSprint() {
+	m.pendingDeal = false
+	m.pendingResult = false
+	if m.screen == screenGame && m.game != nil {
+		if err := m.game.leave(); err != nil {
+			m.err = err
+		}
+	}
+	m.anim.clear()
+	if m.sprint != nil {
+		m.sprints.session = m.sprint
+		m.sprints.phase = sprintSummary
+	}
+	m.screen = screenSprint
+}
+
 // skipToResult gives up the wait above. Any keystroke or click while the board
 // is finishing settles the animation and shows the result at once, so the pause
-// is never something a fast player has to sit through.
+// is never something a fast player has to sit through. On a timed run the same
+// skip deals the next board instead of raising a debrief.
 //
 // The input that skips is consumed rather than acted on, the way the splash
 // swallows the key that dismisses it: a stray "n" should not start a puzzle
 // nobody asked for.
 func (m *Model) skipToResult() bool {
-	if !m.pendingResult {
+	if !m.pendingResult && !m.pendingDeal {
 		return false
 	}
 	m.anim.clear()
 	m.pendingResult = false
+	if m.pendingDeal {
+		m.dealNext()
+		return true
+	}
 	m.openResult()
 	return true
 }
@@ -682,6 +834,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
+		// A run the clock has ended is closed here as well as at the input
+		// paths, so the summary appears even while nothing is being typed.
+		if m.sprintExpired() {
+			m.endSprint()
+		}
 		// Redraw so the clock advances and expired messages disappear.
 		return m, tick()
 
@@ -693,6 +850,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// splashDoneMsg for a splash that is no longer timed does nothing.
 		m.anim.live = false
 		m.settlePendingResult()
+		m.settlePendingDeal()
 		return m, nil
 
 	case themesMsg:
@@ -747,6 +905,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Only the left button acts; a click on nothing is a no-op. Release is
 		// deliberately ignored, so a target fires the moment it is pressed.
 		if msg.Button != tea.MouseLeft {
+			return m, nil
+		}
+		// The clock ending spends the click too: like a keystroke below, the
+		// input arrived for a screen that has just been replaced.
+		if m.sprintExpired() {
+			m.endSprint()
 			return m, nil
 		}
 		// Same rule as a keystroke: a click while the board is finishing spends
@@ -810,6 +974,8 @@ func (m *Model) handleMotion(x, y int) {
 		m.settings.point(a.index)
 	case actCustomNext, actCustomPrev:
 		m.custom.point(a.index)
+	case actSprintNext, actSprintPrev:
+		m.sprints.point(a.index)
 	}
 }
 
@@ -1046,6 +1212,31 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		return m.startCustom()
 
+	case actSprintNext, actSprintPrev:
+		if m.screen != screenSprint {
+			return nil
+		}
+		m.sprints.point(a.index)
+		// The same cycle method the arrow keys call.
+		if a.kind == actSprintNext {
+			m.sprints.cycle(1)
+		} else {
+			m.sprints.cycle(-1)
+		}
+		return nil
+
+	case actSprintStart:
+		if m.screen != screenSprint {
+			return nil
+		}
+		return m.startSprint()
+
+	case actSprintAgain:
+		if m.screen != screenSprint || m.sprints.session == nil {
+			return nil
+		}
+		return m.startSprint()
+
 	case actSettingNext, actSettingPrev:
 		if m.screen != screenSettings {
 			return nil
@@ -1087,8 +1278,12 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		return m.submitGame()
 	case actNewPuzzle:
 		// A click is already deliberate, so it needs no tab-then-enter confirm.
-		m.game.confirmNew = false
-		return m.game.startNew()
+		// During a timed run there is nothing to restart into: the run deals
+		// its own boards.
+		if !m.sprinting() {
+			m.game.confirmNew = false
+			return m.game.startNew()
+		}
 	case actCancelNew:
 		m.game.confirmNew = false
 	}
@@ -1109,7 +1304,18 @@ func (m *Model) back() tea.Cmd {
 			return nil
 		}
 	case m.screen == screenGame && m.game != nil:
+		// On a timed run, leaving the board ends the session: the clock is the
+		// whole point of it, so there is no "pause" to return to. The summary
+		// is what esc raises.
+		if m.sprinting() {
+			m.endSprint()
+			return nil
+		}
 		m.game.exit()
+	case m.screen == screenSprint:
+		// Leaving the summary retires the run with it; "again" builds a fresh
+		// one instead of resurrecting this.
+		m.sprint = nil
 	case m.screen == screenThemes:
 		// Leaving the picker without choosing puts back the saved theme, so a
 		// preview is never accidentally permanent.
@@ -1194,6 +1400,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.quit()
 	}
 
+	// A run whose clock has run out ends before any key is read: whatever this
+	// keystroke was meant for, it lands on the summary instead of a board that
+	// is no longer part of the session.
+	if m.sprintExpired() {
+		m.endSprint()
+		return m, nil
+	}
+
 	// A board still finishing its last guess gives way to the first key pressed,
 	// which is spent on the skip itself.
 	if m.skipToResult() {
@@ -1220,6 +1434,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		cmd, back := m.game.update(msg)
 		if back {
+			// On a timed run, esc ends the run: the summary is where the
+			// player lands, and the board is banked and saved on the way.
+			if m.sprinting() {
+				m.endSprint()
+				return m, cmd
+			}
 			m.openMenu()
 		}
 		return m, cmd
@@ -1235,6 +1455,8 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateSettings(msg)
 	case screenCustom:
 		return m.updateCustom(msg)
+	case screenSprint:
+		return m.updateSprint(msg)
 	case screenHowTo:
 		if m.howTo.update(msg) {
 			m.openMenu()
@@ -1302,6 +1524,12 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		// the one thing this screen must never show.
 		m.custom = newCustomScreen(m.length)
 		m.screen = screenCustom
+
+	case choiceSprint:
+		// Opened fresh every time, for the same reason as custom: the setup
+		// rows and the summary are this visit's business.
+		m.sprints = newSprintScreen(m.length)
+		m.screen = screenSprint
 
 	case choiceList:
 		m.list.reload(m.store)
@@ -1838,6 +2066,8 @@ func (m *Model) screenTitle() string {
 		return "settings"
 	case screenCustom:
 		return "custom"
+	case screenSprint:
+		return "sprint"
 	case screenHowTo:
 		return "how to play"
 	case screenAbout:
@@ -1905,6 +2135,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.settings.view(h), m.settings.help(h)
 	case screenCustom:
 		return m.custom.view(h), m.custom.help(h)
+	case screenSprint:
+		return m.sprints.view(h), m.sprints.help(h)
 	case screenHowTo:
 		return m.howTo.view(h), m.howTo.help(h)
 	case screenAbout:
@@ -1924,6 +2156,7 @@ const (
 	choiceNewGame choiceKind = iota
 	choiceDaily
 	choiceCustom
+	choiceSprint
 	choiceList
 	choiceProfile
 	choiceThemes
@@ -2008,6 +2241,8 @@ func newMenuScreen(transfers bool) menuScreen {
 		// Under the daily for the same reason: another way to get a board,
 		// rather than another difficulty.
 		choice{kind: choiceCustom, label: "custom"},
+		// Sprint is the last of the ways to get a board: a timed run of them.
+		choice{kind: choiceSprint, label: "sprint"},
 		choice{kind: choiceList, label: "puzzles"},
 		choice{kind: choiceProfile, label: "profile"},
 		choice{kind: choiceThemes, label: "themes"},
@@ -2121,7 +2356,7 @@ func (m *menuScreen) view(h *hitMap) string {
 // below them is navigation and stays muted.
 func (m *menuScreen) weight(c choice) lipgloss.Style {
 	switch c.kind {
-	case choiceNewGame, choiceDaily, choiceCustom:
+	case choiceNewGame, choiceDaily, choiceCustom, choiceSprint:
 		return st.text
 	default:
 		return st.muted
