@@ -55,6 +55,9 @@ it just follow whatever you played last.
 **finish with a result.** every win or loss gets a compact debrief you can copy
 without spoiling the answer, review on the board, or use to start the next game.
 
+**sprint.** solve as many boards as the clock allows — 10 seconds to 10
+minutes, your pick of length. one setup, no pauses, a summary at the end.
+
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode.
 
@@ -76,7 +79,7 @@ nord and a lot more. write your own themes as well.
 | <kbd>enter</kbd> / <kbd>r</kbd> | review the board from a result |
 | <kbd>n</kbd> | next puzzle from a result (the daily returns to its mode list) |
 | <kbd>c</kbd> | copy a spoiler-safe result |
-| <kbd>esc</kbd> | back to the menu |
+| <kbd>esc</kbd> | back to the menu (in a sprint: ends the run and shows the summary) |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
 | <kbd>r</kbd> | re-read the themes directory (in the theme picker) |
@@ -87,6 +90,14 @@ nord and a lot more. write your own themes as well.
 ![Dailies Screenshot](assets/demo/2.png)
 
 one puzzle a day in each mode, the same board for everyone.
+
+## sprint
+
+a timed run: pick a length and how long the clock runs (10s to 10m), then solve
+as many boards as it lets you. boards deal themselves — no result screen, no
+pauses — and every puzzle counts on your profile like any other. when the clock
+ends you get one summary; the board it caught mid-flight is saved like any
+other puzzle. <kbd>esc</kbd> ends a run early.
 
 ## your puzzles
 

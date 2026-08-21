@@ -277,6 +277,11 @@ func howToControls() (required, optional []string) {
 			"the row back to itself, the hints along the",
 			"bottom are buttons, and the × quits.",
 		),
+		aside(
+			"in a sprint there is no restart to ask for:",
+			"the run deals its own boards, and esc ends",
+			"it at once — the summary follows.",
+		),
 	}
 }
 
