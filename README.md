@@ -32,6 +32,13 @@ it verifies the checksum, installs to `~/.local/bin` (override with
 `SURMISE_INSTALL_DIR`), and never needs sudo. pin a version with
 `SURMISE_VERSION=v0.5.1`, or grab an archive by hand — every release carries one:
 
+on windows, use [scoop](https://scoop.sh) instead of either:
+
+```sh
+scoop bucket add nxck2005 https://github.com/nxck2005/scoop-bucket
+scoop install surmise
+```
+
 | platform | file |
 | --- | --- |
 | linux | `surmise_<version>_linux_amd64.tar.gz` · `..._linux_arm64.tar.gz` |
