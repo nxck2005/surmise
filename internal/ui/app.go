@@ -274,7 +274,7 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	g, err := newPuzzle(s, m.length)
 	if err != nil {
 		m.err = err
-		m.screen = screenMenu
+		m.openMenu()
 	} else {
 		m.openGame(g, false)
 	}
@@ -1118,8 +1118,17 @@ func (m *Model) back() tea.Cmd {
 		// An armed prompt must not be waiting when the list is next opened.
 		m.list.confirmDelete = false
 	}
-	m.screen = screenMenu
+	m.openMenu()
 	return nil
+}
+
+// openMenu raises the menu, deriving the status line first. What it says is
+// read off the saves, so it has to be recomputed every time the menu comes up
+// — a puzzle finished, a mode of the day played, a puzzle deleted since the
+// last visit would all otherwise be missed.
+func (m *Model) openMenu() {
+	m.menu.reload(m.store, m.day)
+	m.screen = screenMenu
 }
 
 // commitTheme keeps whatever the picker is currently previewing and writes it
@@ -1137,7 +1146,7 @@ func (m *Model) commitTheme() tea.Cmd {
 	s.Theme = e.Name
 	m.saveSettings(s)
 
-	m.screen = screenMenu
+	m.openMenu()
 	return nil
 }
 
@@ -1211,7 +1220,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		cmd, back := m.game.update(msg)
 		if back {
-			m.screen = screenMenu
+			m.openMenu()
 		}
 		return m, cmd
 	case screenResult:
@@ -1228,7 +1237,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateCustom(msg)
 	case screenHowTo:
 		if m.howTo.update(msg) {
-			m.screen = screenMenu
+			m.openMenu()
 		}
 		return m, nil
 	case screenBackup:
@@ -1237,7 +1246,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// "get me out of here".
 	case screenProfile, screenAbout:
 		if key := msg.String(); key == "esc" || key == "q" {
-			m.screen = screenMenu
+			m.openMenu()
 		}
 		return m, nil
 	}
@@ -1463,7 +1472,7 @@ func (m *Model) updateDaily(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	open, back := m.daily.update(msg)
 	switch {
 	case back:
-		m.screen = screenMenu
+		m.openMenu()
 	case open:
 		return m, m.openSelectedDaily()
 	}
@@ -1561,7 +1570,7 @@ func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case back:
 		m.list.confirmDelete = false
-		m.screen = screenMenu
+		m.openMenu()
 	case open:
 		return m, m.openSelected()
 	case del:
@@ -1934,6 +1943,50 @@ type choice struct {
 type menuScreen struct {
 	choices []choice
 	cursor  int
+
+	// What the status line under the title is made of: how many of the day's
+	// modes are finished, and the player's current win streak. Derived by
+	// reload from the saved games every time the menu is raised — never
+	// stored, never carried over from the last visit.
+	modesDone int
+	modesOf   int
+	streak    int
+}
+
+// reload derives the status line from what is on disk. One pass over the saves
+// feeds both halves, the same bargain the daily screen's trio makes; a read
+// error leaves it empty rather than half-said.
+func (m *menuScreen) reload(s store.Store, day daily.Day) {
+	m.modesDone, m.modesOf, m.streak = 0, len(words.Lengths), 0
+
+	games, err := s.All()
+	if err != nil {
+		return
+	}
+	byID := make(map[string]*game.Game, len(games))
+	for _, g := range games {
+		byID[g.ID] = g
+	}
+	for _, n := range words.Lengths {
+		if g, ok := byID[daily.ID(day, n)]; ok && !g.Deleted && g.Status.Done() {
+			m.modesDone++
+		}
+	}
+	m.streak = stats.ComputeAt(games, day).CurrentStreak
+}
+
+// status is the line itself, or "" when there is nothing to say: no mode of
+// the day finished and no streak running renders the menu exactly as it was
+// before the line existed.
+func (m *menuScreen) status() string {
+	var parts []string
+	if m.modesDone > 0 {
+		parts = append(parts, fmt.Sprintf("daily %d/%d", m.modesDone, m.modesOf))
+	}
+	if m.streak > 0 {
+		parts = append(parts, fmt.Sprintf("streak %d", m.streak))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // newMenuScreen builds the menu. transfers says whether this build can move a
@@ -2000,9 +2053,18 @@ func (m *menuScreen) view(h *hitMap) string {
 	// The tagline sits under the title rather than beside it. On one line it was
 	// the widest thing on the screen, and centring the list against it put the
 	// choices well to the right of the word they belong under.
+	//
+	// Once there is something to say, the day's progress says it instead: a
+	// returning player reads their status where a new one reads the tagline.
+	// The two swap places rather than stack, so the menu never grows a row —
+	// it has no height budget, and a short terminal loses its top.
+	under := tagline
+	if s := m.status(); s != "" {
+		under = s
+	}
 	heading := lipgloss.JoinVertical(lipgloss.Center,
 		st.title.Render(brand.Name),
-		st.muted.Render(tagline),
+		st.muted.Render(under),
 	)
 
 	// Labels are centred inside a column as wide as the longest, with the
