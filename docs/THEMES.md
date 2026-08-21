@@ -210,7 +210,22 @@ designed the colours and how their licence notice stays attached to them — see
 `tokyo night` (the default), `ember dark`, `ember light`, `dracula`, `nord`,
 `gruvbox dark`, `catppuccin mocha`, `rose pine`, `solarized dark`,
 `everforest dark`, `high contrast` (a colour-blind-friendly orange/blue scheme),
+`deuteranopia` (a blue/amber scheme designed for red-green colour blindness),
 `terminal` (built entirely from ANSI numbers, so it follows
 your terminal's own palette) and `matrix`. They live in
 `internal/theme/themes/*.toml` and are written in exactly this format — every
 one of them is a worked example.
+
+## Accessibility
+
+The board's whole language is three tile colours, so two bundled themes exist
+for players who read those colours differently. `high contrast` pairs orange
+with blue at maximum contrast, which serves most forms of colour-blindness;
+`deuteranopia` is tuned for red-green colour blindness specifically — its
+"right place" and "wrong place" tiles are blue and amber, separated by hue *and*
+by lightness, so the distinction holds up even where the hue does not. Both set
+their accent to the "right place" colour, so a win reads in the same colour as
+the row that earned it. Beyond colour, glyphs and metrics are themeable too:
+wider tiles (`[metrics]`), a different empty-cell rune (`[glyphs]`), or bolder
+tile letters (`[style.tile.*]`) all help a low-vision player, and none of them
+can move a click target out from under the mouse.

@@ -8,7 +8,7 @@
 [![go reference](https://pkg.go.dev/badge/github.com/nxck2005/surmise.svg)](https://pkg.go.dev/github.com/nxck2005/surmise)
 ![go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)
 [![built with bubble tea](https://img.shields.io/badge/built%20with-bubble%20tea-ff69b4)](https://charm.land)
-![themes](https://img.shields.io/badge/themes-13-e2b714)
+![themes](https://img.shields.io/badge/themes-14-e2b714)
 ![Surmise main Screenshot](assets/demo/1.png)
 </div>
 
@@ -118,7 +118,7 @@ surmise -themes          # list what's installed, and where the directory is
 surmise -theme dracula   # play with a theme without changing your saved choice
 ```
 
-bundled: `tokyo-night` (the default), `ember-dark`, `ember-light`,
+bundled: `tokyo-night` (the default), `deuteranopia`, `ember-dark`, `ember-light`,
 `catppuccin-mocha`, `dracula`, `everforest-dark`, `gruvbox-dark`,
 `high-contrast`, `matrix`, `nord`, `rose-pine`, `solarized-dark`, `terminal`.
 

@@ -1,0 +1,33 @@
+name = "deuteranopia"
+
+# Designed for red-green colour blindness (deuteranopia and protanopia), where
+# green and yellow collapse into one another. The two board states that matter
+# never rely on either: "right letter, right place" is blue and "right letter,
+# wrong place" is amber, separated by hue *and* lightness so the distinction
+# survives even a fully desaturated terminal. The accent rides with the blue,
+# as the high-contrast theme's does with its orange, so a win reads in the same
+# colour the solved row does. Everything else stays quiet and dark.
+
+[colors]
+bg     = "#10141a"
+text   = "#dce3ed"
+accent = "#5ab0fc"
+muted  = "#66738a"
+error  = "#ff8578"
+
+correct = "#5ab0fc"
+present = "#ffb454"
+absent  = "#242b36"
+
+slot     = "#39434f"
+key_face = "#2e3947"
+key_spent = "#171d26"
+
+correct_text = "#0c1117"
+present_text = "#14100a"
+
+[style.title]
+bold = true
+
+[style.tile.empty]
+faint = false

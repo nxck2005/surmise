@@ -38,7 +38,7 @@ here under that project's licence.
 | ` + "`solarized-dark`" + ` | [Solarized](https://github.com/altercation/solarized) | MIT |
 | ` + "`tokyo-night`" + ` | [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme) | MIT |
 
-` + "`ember-dark`" + `, ` + "`ember-light`" + `, ` + "`high-contrast`" + `, ` + "`matrix`" + ` and ` + "`terminal`" + ` are original to
+` + "`deuteranopia`" + `, ` + "`ember-dark`" + `, ` + "`ember-light`" + `, ` + "`high-contrast`" + `, ` + "`matrix`" + ` and ` + "`terminal`" + ` are original to
 this project and are covered by the root ` + "`LICENSE`" + `.
 
 The visual design of the interface is inspired by
