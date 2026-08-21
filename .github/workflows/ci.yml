@@ -43,7 +43,7 @@ jobs:
       - run: go test -race ./...
 
   # Hygiene: cheap, platform-independent, one job. Kept separate from the matrix
-  # so a linter can be added here later without touching the test job.
+  # so formatter and linter drift fails fast without paying for three OS runs.
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -66,6 +66,15 @@ jobs:
 
       - name: vet
         run: go vet ./...
+
+      # The one linter, deliberately: staticcheck alone rather than a meta-linter
+      # bundling a fleet of rules nobody asked to tune. Pinned so CI is
+      # reproducible; bump the pin by hand when a release matters. The install is
+      # outside the module, so it neither touches go.mod nor sees the workspace.
+      - name: staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          staticcheck ./...
 
       # The dependency set is deliberately Charm-only; this keeps an unused
       # module from drifting back into go.mod unnoticed.
