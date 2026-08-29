@@ -234,6 +234,8 @@ func (m *listScreen) deletePrompt(h *hitMap) string {
 	question := fmt.Sprintf("delete #%s? ", game.Code(s.ID))
 	if s.Daily != "" {
 		question = fmt.Sprintf("delete the %s daily? it cannot be played again ", s.Daily)
+	} else if s.Challenge {
+		question = "delete this challenge? this code cannot be played again here "
 	}
 	return st.muted.Render(question) +
 		h.mark(confirm, st.accent.Render("d")) +
@@ -257,6 +259,8 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 		what = fmt.Sprintf("daily %s", s.Daily)
 	case s.Custom:
 		what = "custom"
+	case s.Challenge:
+		what = "challenge"
 	}
 	left := fmt.Sprintf("#%s %-16s ", game.Code(s.ID), what)
 	status := fmt.Sprintf("%-14s", statusText)

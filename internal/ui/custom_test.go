@@ -21,8 +21,8 @@ func plain(frame string) string { return sgr.ReplaceAllString(frame, "") }
 func openCustom(t *testing.T, m *Model) {
 	t.Helper()
 	m.screen = screenMenu
-	m.menu.cursor = menuIndex(t, m, choiceCustom, 0)
-	send(t, m, "enter")
+	m.menu.cursor = menuIndex(t, m, choiceSocial, 0)
+	send(t, m, "enter", "down", "down", "enter")
 	if m.screen != screenCustom {
 		t.Fatalf("screen = %v after choosing custom, want screenCustom", m.screen)
 	}
@@ -220,7 +220,9 @@ func TestCustomByClickingOnly(t *testing.T) {
 	m := newModel(t)
 	draw(t, m)
 	m.screen = screenMenu
-	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceCustom, 0)})
+	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceSocial, 0)})
+	draw(t, m)
+	click(t, m, action{kind: actSocialChoice, index: socialCustom})
 	if m.screen != screenCustom {
 		t.Fatalf("clicking the menu entry did not open the screen: %v", m.screen)
 	}

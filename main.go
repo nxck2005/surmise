@@ -25,17 +25,18 @@ import (
 // The option names, used by the flags natively and by the URL query string in a
 // browser. One declaration, so `-theme` and `?theme=` cannot diverge.
 const (
-	optData     = "data"
-	optTheme    = "theme"
-	optThemes   = "themes"
-	optLength   = "length"
-	optDay      = "day"
-	optSplash   = "splash"
-	optMotion   = "motion"
-	optVersion  = "version"
-	optPlaytime = "playtime"
-	optExport   = "export"
-	optImport   = "import"
+	optData      = "data"
+	optTheme     = "theme"
+	optThemes    = "themes"
+	optLength    = "length"
+	optDay       = "day"
+	optSplash    = "splash"
+	optMotion    = "motion"
+	optChallenge = "challenge"
+	optVersion   = "version"
+	optPlaytime  = "playtime"
+	optExport    = "export"
+	optImport    = "import"
 )
 
 // config is what the player asked for, however they asked. Every zero value
@@ -47,6 +48,7 @@ type config struct {
 	day          string
 	splash       string
 	motion       string
+	challenge    string
 	length       int
 	listThemes   bool
 	showVersion  bool
@@ -92,6 +94,7 @@ func uiOptions(cfg config, dataDir string, transfer ui.Transfer) ui.Options {
 		Day:        cfg.day,
 		Splash:     cfg.splash,
 		Motion:     cfg.motion,
+		Challenge:  cfg.challenge,
 		DailySeeds: daily.Local(),
 		DataDir:    dataDir,
 		Transfer:   transfer,

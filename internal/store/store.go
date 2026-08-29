@@ -33,6 +33,9 @@ type Summary struct {
 	// for the same reason as Daily: the browse list labels one, and Summary is
 	// all the list ever sees.
 	Custom bool
+	// Challenge reports a reproducible social challenge. The list needs only
+	// the origin label; the full canonical code stays on the Game.
+	Challenge bool
 }
 
 // Store reads and writes puzzles.
@@ -60,5 +63,6 @@ func summarize(g *game.Game) Summary {
 		UpdatedAt: g.UpdatedAt,
 		Daily:     g.Daily,
 		Custom:    g.Custom,
+		Challenge: g.Challenge != nil,
 	}
 }

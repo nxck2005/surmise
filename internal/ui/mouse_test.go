@@ -149,6 +149,19 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 		{"profile", func() { m.profile.reload(m.store, m.day, "", 0); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
+		{"social play", func() { m.social = socialScreen{}; m.screen = screenSocial }},
+		{"new challenge", func() {
+			var err error
+			m.challenge, err = newChallengeCreate(5)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.screen = screenChallenge
+		}},
+		{"enter challenge", func() {
+			m.challenge = newChallengeJoin(testChallenge)
+			m.screen = screenChallenge
+		}},
 		{"how to play", func() { m.howTo.reset(); m.screen = screenHowTo }},
 		{"how to play, a middle page", func() { m.howTo.show(1); m.screen = screenHowTo }},
 		{"about", func() { m.about.reload(m.dataDir); m.screen = screenAbout }},

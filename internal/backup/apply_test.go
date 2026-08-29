@@ -4,10 +4,38 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nxck2005/surmise/internal/challenge"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 )
+
+func TestApplyRestoresChallengeMetadata(t *testing.T) {
+	c, err := challenge.Parse("4500-820C-20A1-G73J")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := c.NewGame()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Guess(g.Answer); err != nil {
+		t.Fatal(err)
+	}
+	from := newStore(t)
+	if err := from.Save(g); err != nil {
+		t.Fatal(err)
+	}
+
+	to := newStore(t)
+	if _, err := Apply(buildFrom(t, from, store.Settings{}, nil), to, store.Settings{}); err != nil {
+		t.Fatal(err)
+	}
+	got := ids(t, to)[g.ID]
+	if got == nil || got.Challenge == nil || got.Challenge.Code != c.String() {
+		t.Errorf("restored challenge = %+v, want code %q", got, c.String())
+	}
+}
 
 // ids returns what a store holds, tombstones included, as a set.
 func ids(t *testing.T, s store.Store) map[string]*game.Game {

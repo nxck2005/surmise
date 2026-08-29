@@ -252,6 +252,10 @@ func howToSaving() (required, optional []string) {
 				"custom puzzles are saved too, and count for",
 				"nothing on your profile.",
 			),
+			aside(
+				"challenge codes reproduce one shared board. they",
+				"are saved and count like ordinary puzzles.",
+			),
 		}
 }
 
@@ -281,6 +285,10 @@ func howToControls() (required, optional []string) {
 			"in a sprint there is no restart to ask for:",
 			"the run deals its own boards, and esc ends",
 			"it at once — the summary follows.",
+		),
+		aside(
+			"daily, challenge and custom boards do not reroll:",
+			"open another from their menu instead.",
 		),
 	}
 }

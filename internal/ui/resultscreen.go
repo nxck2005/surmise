@@ -43,6 +43,8 @@ func (m *resultScreen) view(_ *hitMap) string {
 		what = fmt.Sprintf("daily %s · %s", g.Daily, what)
 	case g.Custom:
 		what = fmt.Sprintf("custom · %s", what)
+	case g.Challenge != nil:
+		what = fmt.Sprintf("challenge · %s", what)
 	}
 	meta := st.muted.Render(fmt.Sprintf("%s · %s · %s",
 		what, resultAttempts(g), formatDuration(g.Elapsed())))
@@ -99,6 +101,8 @@ func (m *resultScreen) nextLabel() string {
 		// goes back to the screen that asks for one rather than dealing a random
 		// puzzle the pair did not ask for.
 		return "again"
+	case m.g.Challenge != nil:
+		return "social"
 	}
 	return "next"
 }
@@ -122,6 +126,9 @@ func shareResult(g *game.Game) string {
 	} else if g.Daily != "" {
 		fmt.Fprintf(&b, "daily %s · %d letters · %s\n",
 			g.Daily, g.Length, formatDuration(g.Elapsed()))
+	} else if g.Challenge != nil {
+		fmt.Fprintf(&b, "challenge %s · %d letters · %s\n",
+			g.Challenge.Code, g.Length, formatDuration(g.Elapsed()))
 	} else {
 		fmt.Fprintf(&b, "%d letters · %s\n", g.Length, formatDuration(g.Elapsed()))
 	}
@@ -173,7 +180,7 @@ func (m *Model) nextResult() tea.Cmd {
 	if m.screen != screenResult || m.game == nil {
 		return nil
 	}
-	if m.game.g.Daily != "" || m.game.g.Custom {
+	if m.game.g.Daily != "" || m.game.g.Custom || m.game.g.Challenge != nil {
 		if err := m.game.leave(); err != nil {
 			m.result.notice = fmt.Sprintf("could not save: %v", err)
 			return nil
@@ -181,6 +188,10 @@ func (m *Model) nextResult() tea.Cmd {
 		if m.game.g.Custom {
 			m.custom = newCustomScreen(m.game.g.Length)
 			m.screen = screenCustom
+			return nil
+		}
+		if m.game.g.Challenge != nil {
+			m.openSocialScreen()
 			return nil
 		}
 		m.openDailyScreen()

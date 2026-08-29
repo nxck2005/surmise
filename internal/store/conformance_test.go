@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nxck2005/surmise/internal/challenge"
 	"github.com/nxck2005/surmise/internal/game"
 )
 
@@ -453,6 +454,67 @@ func TestStoreSummaryCarriesTheCustomMarker(t *testing.T) {
 		}
 		if len(list) != 1 || !list[0].Custom {
 			t.Errorf("List = %+v, want one custom summary", list)
+		}
+	})
+}
+
+func TestStoreCarriesChallengeOriginWithoutKeepingADeletedCode(t *testing.T) {
+	eachStore(t, "challenge-origin", func(t *testing.T, s settingsCapable) {
+		c, err := challenge.Parse("4500-820C-20A1-G73J")
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := c.NewGame()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := g.Guess(g.Answer); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+		list, err := s.List()
+		if err != nil || len(list) != 1 || !list[0].Challenge {
+			t.Fatalf("List = %+v, %v; want one challenge summary", list, err)
+		}
+		if err := s.Delete(g.ID); err != nil {
+			t.Fatal(err)
+		}
+		games, err := s.All()
+		if err != nil || len(games) != 1 {
+			t.Fatalf("All = %+v, %v; want one tombstone", games, err)
+		}
+		if games[0].Challenge == nil || games[0].Challenge.Code != "" {
+			t.Errorf("challenge tombstone = %+v, want marker without code", games[0])
+		}
+
+		// Save is also the backup restore path. Even a hand-built tombstone with
+		// a code must be reduced to the marker rather than preserving the answer.
+		games[0].Challenge.Code = "must-not-survive"
+		if err := s.Save(games[0]); err != nil {
+			t.Fatal(err)
+		}
+		games, err = s.All()
+		if err != nil || games[0].Challenge.Code != "" {
+			t.Errorf("saved challenge tombstone retained its code: %+v, %v", games, err)
+		}
+	})
+}
+
+func TestStoreRejectsMismatchedChallengeMetadata(t *testing.T) {
+	eachStore(t, "challenge-mismatch", func(t *testing.T, s settingsCapable) {
+		c, err := challenge.Parse("4500-820C-20A1-G73J")
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := c.NewGame()
+		if err != nil {
+			t.Fatal(err)
+		}
+		g.Challenge.Code = "4400-0000-0000-00QW"
+		if err := s.Save(g); err == nil {
+			t.Error("Save accepted challenge metadata for another board")
 		}
 	})
 }

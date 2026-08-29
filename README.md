@@ -65,6 +65,9 @@ without spoiling the answer, review on the board, or use to start the next game.
 **sprint.** solve as many boards as the clock allows — 10 seconds to 10
 minutes, your pick of length. one setup, no pauses, a summary at the end.
 
+**challenge somebody.** generate a compact code and send it anywhere. another
+install gets the same board, with no account or server involved.
+
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode.
 
@@ -82,7 +85,7 @@ nord and a lot more. write your own themes as well.
 | letters | type a guess |
 | <kbd>enter</kbd> | submit |
 | <kbd>backspace</kbd> | delete a letter |
-| <kbd>tab</kbd> then <kbd>enter</kbd> | new puzzle (not on the daily — there's one a day) |
+| <kbd>tab</kbd> then <kbd>enter</kbd> | new random puzzle (not on daily, challenge, custom or sprint boards) |
 | <kbd>enter</kbd> / <kbd>r</kbd> | review the board from a result |
 | <kbd>n</kbd> | next puzzle from a result (the daily returns to its mode list) |
 | <kbd>c</kbd> | copy a spoiler-safe result |
@@ -97,6 +100,23 @@ nord and a lot more. write your own themes as well.
 ![Dailies Screenshot](assets/demo/2.png)
 
 one puzzle a day in each mode, the same board for everyone.
+
+## social play
+
+Open **social play** to generate a challenge code, enter one you received, or
+set a custom pass-and-play word. Challenge codes look like
+`4500-820C-20A1-G73J`: they are case-insensitive, easy to copy, and reproduce
+the same answer and puzzle identity on another installation. Challenge games
+are saved and count on your profile like ordinary random games.
+
+Open one directly from a terminal:
+
+```sh
+surmise -challenge 4500-820C-20A1-G73J
+```
+
+Codes are honor-system sharing, not encryption or proof of a result. Anyone
+with the code and the app can reproduce the board.
 
 ## sprint
 
@@ -177,6 +197,7 @@ surmise -splash off      # skip the startup art for one run
 surmise -splash random   # a different banner each launch
 surmise -motion off      # a still board for one run
 surmise -day 2026-08-06  # play another date's daily, without waiting for it
+surmise -challenge CODE  # open a shared challenge directly
 surmise -data ./scratch  # keep saves and settings somewhere else
 ```
 

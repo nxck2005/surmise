@@ -498,3 +498,47 @@ func TestTombstoneKeepsTheCustomMarker(t *testing.T) {
 		t.Errorf("Tombstone kept the play record: %+v", tomb)
 	}
 }
+
+func TestChallengeMetadataAndTombstone(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.Challenge = &ChallengeInfo{Code: "4500-820C-20A1-G73J"}
+	if !g.CountsForStats() {
+		t.Error("challenge does not count for stats")
+	}
+	b, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back Game
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Challenge == nil || back.Challenge.Code != g.Challenge.Code {
+		t.Errorf("Challenge = %+v after round trip, want %+v", back.Challenge, g.Challenge)
+	}
+
+	tomb := g.Tombstone()
+	if tomb.Challenge == nil {
+		t.Fatal("challenge tombstone lost its origin marker")
+	}
+	if tomb.Challenge.Code != "" {
+		t.Errorf("challenge tombstone retained code %q", tomb.Challenge.Code)
+	}
+	if err := tomb.Validate(); err != nil {
+		t.Fatalf("Validate(tombstone): %v", err)
+	}
+}
+
+func TestValidateRejectsInvalidChallengeMetadata(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.Challenge = &ChallengeInfo{}
+	if err := g.Validate(); err == nil {
+		t.Error("Validate accepted a live challenge with no code")
+	}
+
+	g.Challenge.Code = "code"
+	g.Custom = true
+	if err := g.Validate(); err == nil {
+		t.Error("Validate accepted a challenge that was also custom")
+	}
+}
