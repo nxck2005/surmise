@@ -1,6 +1,7 @@
 package words
 
 import (
+	"bytes"
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
@@ -25,6 +26,7 @@ func TestAnswerVersionOneIsFrozen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
 		if got := fmt.Sprintf("%x", sha256.Sum256(b)); got != expected.sum {
 			t.Errorf("length %d version 1 hash = %s, want %s", n, got, expected.sum)
 		}
