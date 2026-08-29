@@ -21,6 +21,11 @@ var data embed.FS
 // difficulty modes.
 var Lengths = []int{4, 5, 6}
 
+// CurrentAnswerVersion identifies the ordered answer snapshot used for new
+// deterministic challenges. A challenge code carries this number so a future
+// list can be added without changing what an older code means.
+const CurrentAnswerVersion = 1
+
 type lists struct {
 	answers []string            // sorted, for indexed random selection
 	guesses map[string]struct{} // membership only
@@ -103,6 +108,16 @@ func Random(n int) (string, error) {
 // what lets a caller choose an answer from a seed rather than at random, which
 // is how the daily puzzle draws.
 func AnswerCount(n int) (int, error) {
+	return AnswerCountAt(CurrentAnswerVersion, n)
+}
+
+// AnswerCountAt is the size of one versioned answer pool. Version 1 is the
+// original shipped ordering; future versions are additive snapshots rather
+// than replacements for it.
+func AnswerCountAt(version, n int) (int, error) {
+	if version != 1 {
+		return 0, fmt.Errorf("words: unsupported answer version %d", version)
+	}
 	l, err := get(n)
 	if err != nil {
 		return 0, err
@@ -117,6 +132,14 @@ func AnswerCount(n int) (int, error) {
 // of a daily answer stays in one place; an index out of range is a bug there
 // rather than something to wrap around silently.
 func AnswerAt(n, i int) (string, error) {
+	return AnswerAtVersion(CurrentAnswerVersion, n, i)
+}
+
+// AnswerAtVersion returns an answer from a frozen ordered snapshot.
+func AnswerAtVersion(version, n, i int) (string, error) {
+	if version != 1 {
+		return "", fmt.Errorf("words: unsupported answer version %d", version)
+	}
 	l, err := get(n)
 	if err != nil {
 		return "", err

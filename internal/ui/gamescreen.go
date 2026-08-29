@@ -194,7 +194,7 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		// During a run, restarting is not on offer: the run deals its own
 		// boards, and a confirm prompt for one it is about to deal anyway
 		// would be noise. The help bar drops the hint to match.
-		if m.sprint == nil {
+		if m.sprint == nil && m.g.Challenge == nil {
 			m.confirmNew = true
 		}
 		return nil, false
@@ -338,6 +338,10 @@ func (m *gameScreen) startNew() tea.Cmd {
 	}
 	if m.g.Custom {
 		m.notify("this word was set by hand — start another from the menu")
+		return nil
+	}
+	if m.g.Challenge != nil {
+		m.notify("this challenge has one board — enter another code from social play")
 		return nil
 	}
 
@@ -639,6 +643,19 @@ func (m *gameScreen) help(h *hitMap) string {
 		}
 		return renderHelp(h, append(items,
 			helpItem{keys: "esc", label: "end sprint", act: action{kind: actBack}})...)
+	}
+	if m.g.Challenge != nil {
+		if m.g.Status.Done() {
+			return renderHelp(h,
+				helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
+				helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+			)
+		}
+		return renderHelp(h,
+			helpItem{label: "type a word"},
+			helpItem{keys: "enter", label: "submit", act: action{kind: actSubmit}},
+			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+		)
 	}
 	if m.g.Status.Done() {
 		return renderHelp(h,

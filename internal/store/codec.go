@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/nxck2005/surmise/internal/challenge"
 	"github.com/nxck2005/surmise/internal/game"
 )
 
@@ -54,6 +55,9 @@ func encodeGame(g *game.Game) ([]byte, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
 	}
+	if err := challenge.ValidateGame(g); err != nil {
+		return nil, err
+	}
 	if g.Schema == 0 {
 		g.Schema = schemaVersion
 	}
@@ -85,6 +89,9 @@ func decodeRecord(label string, b []byte) (*game.Game, error) {
 		return nil, fmt.Errorf("store: %s: schema version mismatch", label)
 	}
 	if err := g.Validate(); err != nil {
+		return nil, fmt.Errorf("store: %s: %w", label, err)
+	}
+	if err := challenge.ValidateGame(&g); err != nil {
 		return nil, fmt.Errorf("store: %s: %w", label, err)
 	}
 	return &g, nil
@@ -124,14 +131,21 @@ type tombstoneRecord struct {
 	// reason game.Tombstone gives: a custom puzzle counts towards nothing, so a
 	// tombstone that forgot it was custom would read as an ordinary loss and
 	// break a streak the puzzle itself never touched.
-	Custom  bool `json:"custom,omitempty"`
-	Deleted bool `json:"deleted"`
+	Custom bool `json:"custom,omitempty"`
+	// Challenge keeps only the origin marker. Its empty object matches Game's
+	// field shape while omitting the reproducible code and therefore the answer.
+	Challenge *game.ChallengeInfo `json:"challenge,omitempty"`
+	Deleted   bool                `json:"deleted"`
 }
 
 // encodeTombstone renders the marker a deleted finished puzzle leaves behind.
 func encodeTombstone(g *game.Game) ([]byte, error) {
 	if err := g.Validate(); err != nil {
 		return nil, err
+	}
+	var challenge *game.ChallengeInfo
+	if g.Challenge != nil {
+		challenge = &game.ChallengeInfo{}
 	}
 	b, err := json.MarshalIndent(tombstoneRecord{
 		Schema:    schemaVersion,
@@ -141,6 +155,7 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 		UpdatedAt: g.UpdatedAt,
 		Daily:     g.Daily,
 		Custom:    g.Custom,
+		Challenge: challenge,
 		Deleted:   g.Deleted,
 	}, "", "  ")
 	if err != nil {

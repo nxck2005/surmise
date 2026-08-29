@@ -41,6 +41,7 @@ func loadConfig() config {
 	// by the UI, and only when nobody has chosen: a variable in a shell profile
 	// is a preference, and a preference must not overrule a choice.
 	motion := flag.String(optMotion, os.Getenv(brand.Env("MOTION")), "board feedback: off, restrained or pronounced (default: last used)")
+	challengeCode := flag.String(optChallenge, os.Getenv(brand.Env("CHALLENGE")), "challenge code to open")
 	// -version answers "which build is this" without opening the app, where the
 	// same information is on the about screen.
 	showVersion := flag.Bool(optVersion, false, "print version information and exit")
@@ -61,6 +62,7 @@ func loadConfig() config {
 		day:          *day,
 		splash:       *splash,
 		motion:       *motion,
+		challenge:    *challengeCode,
 		length:       *length,
 		listThemes:   *listThemes,
 		showVersion:  *showVersion,

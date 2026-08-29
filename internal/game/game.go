@@ -75,12 +75,25 @@ type Game struct {
 	// outside the guess list — see Guess.
 	Custom bool `json:"custom,omitempty"`
 
+	// Challenge identifies a board reproduced from a shareable challenge code.
+	// A live game keeps the canonical code so it can be copied after a resume.
+	// A tombstone keeps an empty ChallengeInfo as an origin marker while dropping
+	// the code, since the code can be used to recover the deleted answer.
+	Challenge *ChallengeInfo `json:"challenge,omitempty"`
+
 	// Schema is the version of the save format this record was written with.
 	// The store stamps it on every write and refuses to read a number it does
 	// not know, so a breaking change to the format can never silently misread
 	// an older or newer file. Zero means "written before the tag existed" and
 	// stays valid forever; see docs/UPGRADING.md for the compatibility rule.
 	Schema int `json:"schema"`
+}
+
+// ChallengeInfo is persisted challenge metadata. The pointer itself is the
+// origin marker; Code is omitted on a tombstone so deleting a puzzle does not
+// retain a reproducible form of its answer.
+type ChallengeInfo struct {
+	Code string `json:"code,omitempty"`
 }
 
 // CountsForStats reports whether a puzzle belongs in the player's figures.
@@ -123,8 +136,16 @@ func (g *Game) Tombstone() *Game {
 		UpdatedAt: g.UpdatedAt,
 		Daily:     g.Daily,
 		Custom:    g.Custom,
+		Challenge: challengeTombstone(g.Challenge),
 		Deleted:   true,
 	}
+}
+
+func challengeTombstone(info *ChallengeInfo) *ChallengeInfo {
+	if info == nil {
+		return nil
+	}
+	return &ChallengeInfo{}
 }
 
 // attemptsFor returns how many guesses a word of length n allows. The genre
@@ -353,6 +374,12 @@ func (g *Game) Validate() error {
 			return fmt.Errorf("game: unsupported length %d", g.Length)
 		}
 		return nil
+	}
+	if g.Challenge != nil && g.Challenge.Code == "" {
+		return errors.New("game: challenge code is empty")
+	}
+	if g.Challenge != nil && (g.Custom || g.Daily != "") {
+		return errors.New("game: challenge has another puzzle origin")
 	}
 
 	switch {

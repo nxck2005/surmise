@@ -14,7 +14,7 @@ func TestMenuReadsInTwoWeights(t *testing.T) {
 	m := newModel(t)
 
 	play := map[choiceKind]bool{
-		choiceNewGame: true, choiceDaily: true, choiceCustom: true, choiceSprint: true,
+		choiceNewGame: true, choiceDaily: true, choiceSocial: true, choiceSprint: true,
 	}
 	for _, c := range m.menu.choices {
 		want := st.muted

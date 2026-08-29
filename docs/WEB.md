@@ -46,8 +46,10 @@ The flags have query-string equivalents, under the same names:
 | `?length=6` | `-length 6` |
 | `?day=2026-08-06` | `-day 2026-08-06` |
 | `?splash=off` | `-splash off` |
+| `?challenge=4500-820C-20A1-G73J` | `-challenge 4500-820C-20A1-G73J` |
 
-Combine them with `&`: `?theme=nord&length=6`.
+Combine them with `&`: `?theme=nord&challenge=4500-820C-20A1-G73J`. A
+challenge carries its own length, so it wins over `length`.
 
 There is no `?data=`, `?themes=`, `?version=` or `?playtime=`. The first has
 nothing to point at, and the others print to a place nobody can see. The version
@@ -76,6 +78,10 @@ Everything reaches the game except the chords the browser will not give up:
 paste stay native to the browser: `Ctrl`/`Cmd`+`C` copies a selection and
 `Ctrl`/`Cmd`+`V` pastes. On a result screen, plain `c` asks the game to copy its
 spoiler-safe summary through the browser Clipboard API.
+
+Challenge codes are deliberately safe to put in a URL: they are reproducible
+honor-system puzzles, not secrets or credentials. The query may therefore
+appear in browser history and hosting logs.
 
 The mouse works exactly as it does in a terminal, because xterm.js sends the
 same sequences a terminal would.

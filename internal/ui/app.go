@@ -20,6 +20,7 @@ import (
 	"github.com/nxck2005/surmise/internal/banner"
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/build"
+	"github.com/nxck2005/surmise/internal/challenge"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/stats"
@@ -40,6 +41,8 @@ const (
 	screenSettings
 	screenDaily
 	screenCustom
+	screenSocial
+	screenChallenge
 	screenSprint
 	screenHowTo
 	screenAbout
@@ -152,21 +155,23 @@ type Model struct {
 	// reads or writes through it; that is the store's job.
 	dataDir string
 
-	screen   screen
-	splash   splashScreen
-	menu     menuScreen
-	game     *gameScreen
-	result   resultScreen
-	list     listScreen
-	profile  profileScreen
-	themes   themeScreen
-	settings settingsScreen
-	daily    dailyScreen
-	custom   customScreen
-	sprints  sprintScreen
-	howTo    howToScreen
-	about    aboutScreen
-	backup   backupScreen
+	screen    screen
+	splash    splashScreen
+	menu      menuScreen
+	game      *gameScreen
+	result    resultScreen
+	list      listScreen
+	profile   profileScreen
+	themes    themeScreen
+	settings  settingsScreen
+	daily     dailyScreen
+	custom    customScreen
+	social    socialScreen
+	challenge challengeScreen
+	sprints   sprintScreen
+	howTo     howToScreen
+	about     aboutScreen
+	backup    backupScreen
 
 	// sprint is the live session, or the one the summary is showing. Nil
 	// means no session has been begun; the board holds the same pointer while
@@ -232,6 +237,9 @@ type Options struct {
 	// the choice: "off", "restrained" or "pronounced". Empty means the saved
 	// choice, and it is what the headless tests pass to hold the board still.
 	Motion string
+	// Challenge opens one reproducible social board for this run. It takes its
+	// length from the code and never changes a saved preference.
+	Challenge string
 	// Transfer is how the platform moves a backup file in and out: a directory
 	// natively, a download and a file picker in a browser. Nil — which is what
 	// the headless tests pass — means this build cannot, and the backup row is
@@ -282,12 +290,23 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	m.applyStartupSplash(opts.Splash)
 	m.applyStartupMotion(opts.Motion)
 
-	g, err := newPuzzle(s, m.length)
-	if err != nil {
-		m.err = err
-		m.openMenu()
+	if opts.Challenge != "" {
+		m.challenge = newChallengeJoin(opts.Challenge)
+		m.screen = screenChallenge
+		if c, err := challenge.Parse(opts.Challenge); err != nil {
+			m.challenge.msg = challengeError(err)
+		} else {
+			m.challenge.entry.finish(true)
+			m.openChallenge(c)
+		}
 	} else {
-		m.openGame(g, false)
+		g, err := newPuzzle(s, m.length)
+		if err != nil {
+			m.err = err
+			m.openMenu()
+		} else {
+			m.openGame(g, false)
+		}
 	}
 	// The splash goes up last, in front of a screen that is already live. That
 	// is what makes dismissing it a screen swap and nothing else — and what
@@ -974,6 +993,8 @@ func (m *Model) handleMotion(x, y int) {
 		m.settings.point(a.index)
 	case actCustomNext, actCustomPrev:
 		m.custom.point(a.index)
+	case actSocialChoice:
+		m.social.point(a.index)
 	case actSprintNext, actSprintPrev:
 		m.sprints.point(a.index)
 	}
@@ -992,6 +1013,10 @@ func (m *Model) activeField() *textField {
 		if m.custom.secret.editing {
 			return &m.custom.secret
 		}
+	case screenChallenge:
+		if m.challenge.entry.editing {
+			return &m.challenge.entry
+		}
 	}
 	return nil
 }
@@ -1009,6 +1034,10 @@ func (m *Model) fieldAt(row int) *textField {
 		if row == customRowSecret {
 			return &m.custom.secret
 		}
+	case screenChallenge:
+		if !m.challenge.creating && row == challengeRowCode {
+			return &m.challenge.entry
+		}
 	}
 	return nil
 }
@@ -1021,6 +1050,8 @@ func (m *Model) pointField(row int) {
 		m.settings.point(row)
 	case screenCustom:
 		m.custom.point(row)
+	case screenChallenge:
+		// The entry screen has only one field, so there is no cursor to move.
 	}
 }
 
@@ -1176,8 +1207,14 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		return nil
 
 	case actFieldDone:
-		if f := m.fieldAt(a.index); f != nil && f.finish(true) {
-			m.fieldCommitted(a.index)
+		if f := m.fieldAt(a.index); f != nil {
+			changed := f.finish(true)
+			if m.screen == screenChallenge {
+				return m.openCurrentChallenge()
+			}
+			if changed {
+				m.fieldCommitted(a.index)
+			}
 		}
 		return nil
 
@@ -1211,6 +1248,41 @@ func (m *Model) dispatch(a action) tea.Cmd {
 			return nil
 		}
 		return m.startCustom()
+
+	case actSocialChoice:
+		if m.screen != screenSocial {
+			return nil
+		}
+		m.social.point(a.index)
+		return m.openSocialChoice(a.index)
+
+	case actChallengeNext, actChallengePrev:
+		if m.screen != screenChallenge || !m.challenge.creating {
+			return nil
+		}
+		delta := 1
+		if a.kind == actChallengePrev {
+			delta = -1
+		}
+		m.challenge.length = stepLength(m.challenge.length, delta)
+		if err := m.challenge.generate(); err != nil {
+			m.challenge.msg = challengeError(err)
+		}
+		return nil
+
+	case actChallengeGenerate:
+		if m.screen == screenChallenge && m.challenge.creating {
+			if err := m.challenge.generate(); err != nil {
+				m.challenge.msg = challengeError(err)
+			}
+		}
+		return nil
+
+	case actChallengeCopy:
+		return m.copyChallenge()
+
+	case actChallengeOpen:
+		return m.openCurrentChallenge()
 
 	case actSprintNext, actSprintPrev:
 		if m.screen != screenSprint {
@@ -1323,6 +1395,10 @@ func (m *Model) back() tea.Cmd {
 	case m.screen == screenList:
 		// An armed prompt must not be waiting when the list is next opened.
 		m.list.confirmDelete = false
+	}
+	if m.screen == screenChallenge || m.screen == screenCustom {
+		m.openSocialScreen()
+		return nil
 	}
 	m.openMenu()
 	return nil
@@ -1455,6 +1531,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateSettings(msg)
 	case screenCustom:
 		return m.updateCustom(msg)
+	case screenSocial:
+		return m.updateSocial(msg)
+	case screenChallenge:
+		return m.updateChallenge(msg)
 	case screenSprint:
 		return m.updateSprint(msg)
 	case screenHowTo:
@@ -1519,11 +1599,8 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 	case choiceDaily:
 		m.openDailyScreen()
 
-	case choiceCustom:
-		// Opened fresh every time: a word left over from the last hand-over is
-		// the one thing this screen must never show.
-		m.custom = newCustomScreen(m.length)
-		m.screen = screenCustom
+	case choiceSocial:
+		m.openSocialScreen()
 
 	case choiceSprint:
 		// Opened fresh every time, for the same reason as custom: the setup
@@ -1845,6 +1922,112 @@ func (m *Model) updateCustom(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *Model) updateSocial(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	choice, selected, back := m.social.update(msg)
+	switch {
+	case back:
+		m.openMenu()
+	case selected:
+		return m, m.openSocialChoice(choice)
+	}
+	return m, nil
+}
+
+func (m *Model) openSocialScreen() {
+	m.social = socialScreen{}
+	m.screen = screenSocial
+}
+
+func (m *Model) openSocialChoice(choice int) tea.Cmd {
+	switch choice {
+	case socialNewChallenge:
+		screen, err := newChallengeCreate(m.length)
+		if err != nil {
+			m.err = err
+			return nil
+		}
+		m.challenge = screen
+		m.screen = screenChallenge
+	case socialEnterChallenge:
+		m.challenge = newChallengeJoin("")
+		m.screen = screenChallenge
+	case socialCustom:
+		m.custom = newCustomScreen(m.length)
+		m.screen = screenCustom
+	}
+	return nil
+}
+
+func (m *Model) updateChallenge(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	open, copy, back, err := m.challenge.update(msg)
+	switch {
+	case err != nil:
+		m.challenge.msg = challengeError(err)
+	case back:
+		m.openSocialScreen()
+	case copy:
+		return m, m.copyChallenge()
+	case open:
+		return m, m.openCurrentChallenge()
+	}
+	return m, nil
+}
+
+func (m *Model) copyChallenge() tea.Cmd {
+	if m.screen != screenChallenge || !m.challenge.creating {
+		return nil
+	}
+	m.challenge.copied = true
+	return tea.SetClipboard(m.challenge.code.String())
+}
+
+func (m *Model) openCurrentChallenge() tea.Cmd {
+	if m.screen != screenChallenge {
+		return nil
+	}
+	c, err := m.challenge.parsed()
+	if err != nil {
+		m.challenge.msg = challengeError(err)
+		if !m.challenge.creating {
+			m.challenge.entry.begin()
+		}
+		return nil
+	}
+	return m.openChallenge(c)
+}
+
+var errChallengeSpent = errors.New("this challenge was deleted and cannot be played again")
+
+// openChallenge follows the daily's deterministic lifecycle: saved state wins,
+// a tombstone refuses recreation, and only a genuinely new code builds a board.
+func (m *Model) openChallenge(c challenge.Code) tea.Cmd {
+	id := c.ID()
+	switch g, err := m.store.Load(id); {
+	case err == nil:
+		m.length = g.Length
+		m.openGame(g, true)
+		return nil
+	case !errors.Is(err, store.ErrNotFound):
+		m.challenge.msg = err.Error()
+		return nil
+	}
+	if spent, err := dailySpent(m.store, id); err != nil {
+		m.challenge.msg = err.Error()
+		return nil
+	} else if spent {
+		m.challenge.msg = errChallengeSpent.Error()
+		return nil
+	}
+	g, err := c.NewGame()
+	if err != nil {
+		m.challenge.msg = challengeError(err)
+		return nil
+	}
+	m.length = g.Length
+	m.openGame(g, false)
+	return nil
+}
+
 // startCustom hands the terminal over: it turns the typed word into a board
 // and shows it, having first forgotten the word.
 //
@@ -2066,6 +2249,10 @@ func (m *Model) screenTitle() string {
 		return "settings"
 	case screenCustom:
 		return "custom"
+	case screenSocial:
+		return "social play"
+	case screenChallenge:
+		return "challenge"
 	case screenSprint:
 		return "sprint"
 	case screenHowTo:
@@ -2097,6 +2284,8 @@ func (m *Model) screenStatus() string {
 			what = fmt.Sprintf("daily %s · %s", g.Daily, what)
 		case g.Custom:
 			what = fmt.Sprintf("custom · %s", what)
+		case g.Challenge != nil:
+			what = fmt.Sprintf("challenge · %s", what)
 		}
 		return fmt.Sprintf("%s · %d/%d", what, g.Attempts(), g.MaxAttempts)
 
@@ -2135,6 +2324,10 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.settings.view(h), m.settings.help(h)
 	case screenCustom:
 		return m.custom.view(h), m.custom.help(h)
+	case screenSocial:
+		return m.social.view(h), m.social.help(h)
+	case screenChallenge:
+		return m.challenge.view(h), m.challenge.help(h)
 	case screenSprint:
 		return m.sprints.view(h), m.sprints.help(h)
 	case screenHowTo:
@@ -2155,7 +2348,7 @@ type choiceKind int
 const (
 	choiceNewGame choiceKind = iota
 	choiceDaily
-	choiceCustom
+	choiceSocial
 	choiceSprint
 	choiceList
 	choiceProfile
@@ -2240,7 +2433,7 @@ func newMenuScreen(transfers bool) menuScreen {
 		choice{kind: choiceDaily, label: "daily"},
 		// Under the daily for the same reason: another way to get a board,
 		// rather than another difficulty.
-		choice{kind: choiceCustom, label: "custom"},
+		choice{kind: choiceSocial, label: "social play"},
 		// Sprint is the last of the ways to get a board: a timed run of them.
 		choice{kind: choiceSprint, label: "sprint"},
 		choice{kind: choiceList, label: "puzzles"},
@@ -2356,7 +2549,7 @@ func (m *menuScreen) view(h *hitMap) string {
 // below them is navigation and stays muted.
 func (m *menuScreen) weight(c choice) lipgloss.Style {
 	switch c.kind {
-	case choiceNewGame, choiceDaily, choiceCustom, choiceSprint:
+	case choiceNewGame, choiceDaily, choiceSocial, choiceSprint:
 		return st.text
 	default:
 		return st.muted

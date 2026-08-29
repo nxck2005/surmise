@@ -1,10 +1,53 @@
 package words
 
 import (
+	"bytes"
+	"crypto/sha256"
 	_ "embed"
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestAnswerVersionOneIsFrozen(t *testing.T) {
+	want := map[int]struct {
+		count int
+		sum   string
+	}{
+		4: {928, "2b56b83c111e737123ebfc54964ab1dcc15ff57da51d96a1a7da626cbbf0cee1"},
+		5: {1058, "98904c6037d1ff987c21c2cf8a576f279f2e821e62e1efab3b2e975921a394fb"},
+		6: {1179, "2d99cb3a77679f9a80f9278f59f5081bde9116172ea8fcba0ee679b451510252"},
+	}
+	if CurrentAnswerVersion != 1 {
+		t.Fatalf("CurrentAnswerVersion = %d, want 1; add a snapshot instead of moving version 1", CurrentAnswerVersion)
+	}
+	for n, expected := range want {
+		b, err := data.ReadFile(fmt.Sprintf("data/answers%d.txt", n))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+		if got := fmt.Sprintf("%x", sha256.Sum256(b)); got != expected.sum {
+			t.Errorf("length %d version 1 hash = %s, want %s", n, got, expected.sum)
+		}
+		count, err := AnswerCountAt(1, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count != expected.count {
+			t.Errorf("length %d version 1 count = %d, want %d", n, count, expected.count)
+		}
+	}
+}
+
+func TestAnswerVersionRejectsUnknownVersion(t *testing.T) {
+	if _, err := AnswerCountAt(2, 5); err == nil {
+		t.Error("AnswerCountAt accepted version 2")
+	}
+	if _, err := AnswerAtVersion(2, 5, 0); err == nil {
+		t.Error("AnswerAtVersion accepted version 2")
+	}
+}
 
 // blocked is the same hand-maintained list genwords filters with. It is
 // embedded here rather than in words.go because nothing at runtime needs it:

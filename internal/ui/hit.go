@@ -57,20 +57,26 @@ const (
 	actCustomNext     // index: custom row, next value
 	actCustomPrev     // index: custom row, previous value
 	actCustomStart    // hand the terminal over and open the board
-	actSprintNext     // index: sprint row, next value
-	actSprintPrev     // index: sprint row, previous value
-	actSprintStart    // deal the first board and start the clock
-	actSprintAgain    // run another session on the same settings
-	actLetter         // letter: on-screen keyboard cap
-	actSubmit         // enter
-	actBackspace      // backspace
-	actTrim           // index: erase the typed row back to this slot
-	actNewPuzzle      // tab+enter
-	actCancelNew      // dismiss the armed new-puzzle prompt
-	actResultReview   // enter/r: return to the finished board
-	actResultNext     // n: another random puzzle or the daily list
-	actResultCopy     // c: copy the spoiler-safe result
-	actBack           // esc
+	actSocialChoice   // index: social-play row
+	actChallengeNext  // next challenge length
+	actChallengePrev  // previous challenge length
+	actChallengeGenerate
+	actChallengeCopy
+	actChallengeOpen
+	actSprintNext   // index: sprint row, next value
+	actSprintPrev   // index: sprint row, previous value
+	actSprintStart  // deal the first board and start the clock
+	actSprintAgain  // run another session on the same settings
+	actLetter       // letter: on-screen keyboard cap
+	actSubmit       // enter
+	actBackspace    // backspace
+	actTrim         // index: erase the typed row back to this slot
+	actNewPuzzle    // tab+enter
+	actCancelNew    // dismiss the armed new-puzzle prompt
+	actResultReview // enter/r: return to the finished board
+	actResultNext   // n: another random puzzle or the daily list
+	actResultCopy   // c: copy the spoiler-safe result
+	actBack         // esc
 	actQuit
 	actDeletePuzzle // index: puzzle list row to delete; arms, then confirms
 	actCancelDelete // dismiss the armed delete prompt

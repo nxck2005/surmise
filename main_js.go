@@ -24,7 +24,8 @@ import (
 var browserTerm *web.Terminal
 
 // loadConfig reads the same options the flags carry, from the page's query
-// string: ?theme=dracula&length=6&day=2026-08-06&splash=off&motion=off
+// string: ?theme=dracula&length=6&day=2026-08-06&splash=off&motion=off,
+// or ?challenge=CODE to open a reproducible social board.
 //
 // There is no -data (a browser has no directories), and no -themes, -version or
 // -playtime: the first has nothing to point at, and the others print to a stdout
@@ -57,10 +58,11 @@ func loadConfig() config {
 	}
 
 	cfg := config{
-		theme:  get(optTheme),
-		day:    get(optDay),
-		splash: get(optSplash),
-		motion: get(optMotion),
+		theme:     get(optTheme),
+		day:       get(optDay),
+		splash:    get(optSplash),
+		motion:    get(optMotion),
+		challenge: get(optChallenge),
 	}
 	// An unreadable length is zero, "use whatever was saved" — the same
 	// fallback $SURMISE_LENGTH gets natively.

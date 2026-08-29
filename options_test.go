@@ -39,6 +39,7 @@ var browserOptions = []string{
 	optSplash,
 	optMotion,
 	optLength,
+	optChallenge,
 }
 
 func declaredOptions(t *testing.T) map[string]string {

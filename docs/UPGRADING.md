@@ -25,6 +25,19 @@ safe across upgrades:
 The fixtures under `internal/store/testdata/` and the tests beside them pin all
 of this.
 
+## Challenge-code answer snapshots
+
+A challenge code carries an answer-list version. Version 1 is the exact ordered
+4-, 5-, and 6-letter answer pool shipped when codes were introduced, pinned by
+full-file hashes in `internal/words/words_test.go`.
+
+Future word-list work must add a new snapshot and advance
+`CurrentAnswerVersion`; it must not overwrite a snapshot an older challenge
+code names. Old decoders stay available for retained snapshots. This promises
+the same challenge identity and answer, not that every non-answer guess remains
+accepted forever. A safety removal may explicitly retire an affected old code;
+silently mapping it to another answer is never allowed.
+
 ## v0.3.1 → v0.3.2: every daily answer moved
 
 **What changed.** 981 words were taken out of the three answer lists: proper
