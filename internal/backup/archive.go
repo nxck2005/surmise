@@ -19,6 +19,7 @@ package backup
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -180,9 +181,5 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 }
 
 func sortByID(games []*game.Game) {
-	for i := 1; i < len(games); i++ {
-		for j := i; j > 0 && games[j].ID < games[j-1].ID; j-- {
-			games[j], games[j-1] = games[j-1], games[j]
-		}
-	}
+	sort.Slice(games, func(i, j int) bool { return games[i].ID < games[j].ID })
 }
