@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -334,6 +335,12 @@ func TestOversizedUserThemeIsListedWithAnError(t *testing.T) {
 // New data directories are 0700, matching the 0600 the records inside them
 // carry.
 func TestEnsureDirCreatesAPrivateDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX mode bits to assert: Stat reports a synthetic
+		// 0777 for every directory, and the create mode is expressed through
+		// the ACL instead.
+		t.Skip("permission bits are not meaningful on Windows")
+	}
 	dir := filepath.Join(t.TempDir(), "themes")
 	if err := EnsureDir(dir); err != nil {
 		t.Fatal(err)

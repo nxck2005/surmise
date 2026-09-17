@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -476,6 +477,12 @@ func TestStoreRefusesAnOversizedRecord(t *testing.T) {
 // The data directory is created 0700, like the records inside it are 0600:
 // history is the player's own, and nothing in it is meant to be world-readable.
 func TestDataDirectoryIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX mode bits to assert: Stat reports a synthetic
+		// 0777 for every directory, and the create mode is expressed through
+		// the ACL instead.
+		t.Skip("permission bits are not meaningful on Windows")
+	}
 	dir := t.TempDir()
 	if _, err := NewJSON(dir); err != nil {
 		t.Fatal(err)
