@@ -1,0 +1,8 @@
+{
+  "name": "surmise-deploy",
+  "private": true,
+  "description": "Pins the Vercel CLI the deploy workflow runs, with a lockfile and integrity hashes. Not part of the app; nothing here ships.",
+  "dependencies": {
+    "vercel": "58.9.0"
+  }
+}
