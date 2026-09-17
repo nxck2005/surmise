@@ -165,3 +165,24 @@ jobs:
             echo "could not alias $alias; the deploy URL above still works" \
               >>"$GITHUB_STEP_SUMMARY"
           fi
+
+      # Staging sits behind Vercel's Deployment Protection, so a plain curl
+      # gets the SSO redirect rather than the app; the CLI's curl command
+      # attaches the bypass the token is entitled to. This is the only place
+      # the security headers in web/vercel-output.json can be proven — the
+      # config says they should be served, but only the deployed site shows
+      # whether Vercel applied the route.
+      - name: verify the security headers
+        if: ${{ !startsWith(github.ref, 'refs/tags/') || contains(github.ref_name, '-') }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          headers=$("$RUNNER_TEMP/node_modules/.bin/vercel" curl https://surmise-staging.vercel.app/ \
+            --token "$VERCEL_TOKEN" --yes -- --silent --show-error --head | tr -d '\r')
+          echo "$headers" | grep -i '^content-security-policy:' || true
+          for header in content-security-policy x-content-type-options x-frame-options referrer-policy; do
+            if ! echo "$headers" | grep -qi "^$header:"; then
+              echo "staging is not serving $header"
+              exit 1
+            fi
+          done
