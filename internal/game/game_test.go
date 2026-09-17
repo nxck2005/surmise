@@ -344,6 +344,12 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 		{"answer length mismatch", func(g *Game) { g.Answer = "toolong" }},
 		{"marks out of sync", func(g *Game) { g.Marks = nil }},
 		{"too many guesses", func(g *Game) { g.MaxAttempts = 1 }},
+		// maxAttempts is derived, not stored state: every board has always
+		// allowed length+1 guesses, and a record claiming otherwise would only
+		// be a way to make the composer draw a board of the wrong size.
+		{"maxAttempts too large", func(g *Game) { g.MaxAttempts = 99 }},
+		{"unknown status", func(g *Game) { g.Status = "surrendered" }},
+		{"mark out of range", func(g *Game) { g.Marks[0][0] = 7 }},
 		// Words become what the board draws, tile by tile and byte by byte, so
 		// anything but lowercase letters is a way to smuggle terminal control
 		// bytes back out through a saved game or an imported backup.
@@ -460,6 +466,11 @@ func TestValidateRejectsCorruptTombstone(t *testing.T) {
 	tomb.ID = ""
 	if err := tomb.Validate(); err == nil {
 		t.Error("Validate accepted a tombstone with no id")
+	}
+	tomb = g.Tombstone()
+	tomb.Status = "surrendered"
+	if err := tomb.Validate(); err == nil {
+		t.Error("Validate accepted a tombstone with an invented status")
 	}
 }
 
