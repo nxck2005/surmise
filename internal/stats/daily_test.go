@@ -163,6 +163,21 @@ func TestDailyStreaksAreIndependentPerMode(t *testing.T) {
 	}
 }
 
+// A gap is judged, not walked day by day: a record dated decades before today
+// must break the run exactly once. The old calendar walk made every profile
+// recomputation iterate every day in between, so a hand-edited date could make
+// the screen arbitrarily slow.
+func TestAWideGapIsJustABreak(t *testing.T) {
+	games := []*game.Game{
+		mkDaily(5, game.Won, ago(10_000)),
+		mkDaily(5, game.Won, day),
+	}
+	got := ComputeAt(games, day).Daily[5]
+	if got.CurrentStreak != 1 || got.MaxStreak != 1 {
+		t.Errorf("streaks = %d/%d, want 1/1", got.CurrentStreak, got.MaxStreak)
+	}
+}
+
 // An unfinished daily is neutral, matching the ordinary walk's treatment of a
 // game still in play — but it is not a win, so it does not extend a run.
 func TestUnfinishedDailyIsNeutral(t *testing.T) {
