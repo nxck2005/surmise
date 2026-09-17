@@ -1,6 +1,10 @@
 package backup
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -115,6 +119,91 @@ func TestApplyNeverOverwritesAPuzzle(t *testing.T) {
 	if got := ids(t, to)[g.ID]; got.Answer != "crane" {
 		t.Errorf("answer = %q, want the local copy left alone", got.Answer)
 	}
+}
+
+// The audit's exploit: a crafted archive names an id that climbs out of the
+// puzzle directory. Read refuses it before Apply can write anything, and the
+// file next door is left exactly as it was.
+func TestApplyRefusesAnArchiveThatWouldEscapeTheDataDirectory(t *testing.T) {
+	dir := t.TempDir()
+	to, err := store.NewJSON(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{"schema":1,"theme":"nord"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	body := archiveWithID(t, "../settings")
+	before, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(body, to, store.Settings{}); err == nil {
+		t.Fatal("Apply accepted an archive with an escaping id")
+	}
+	after, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatalf("the import moved or removed a file outside the store: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("the import overwrote a file outside the puzzle directory")
+	}
+}
+
+// "./"+an existing id used to slip past the exact-string duplicate check and
+// land, path-cleaned, on a live puzzle. An import must not be able to replace
+// one that way.
+func TestApplyCannotOverwriteALivePuzzleThroughAnAlias(t *testing.T) {
+	to, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := wonGame(t, "crane")
+	if err := to.Save(g); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := store.EncodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "./`+g.ID+`"`), 1)
+	patched = bytes.Replace(patched, []byte(`"answer": "crane"`), []byte(`"answer": "slate"`), 1)
+	body, err := json.Marshal(Archive{Format: Format, Version: Version, Puzzles: []json.RawMessage{patched}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Apply(body, to, store.Settings{}); err == nil {
+		t.Fatal("Apply accepted an aliased puzzle id")
+	}
+	got := ids(t, to)[g.ID]
+	if got == nil || got.Answer != "crane" {
+		t.Errorf("the local puzzle is %+v, want it left alone", got)
+	}
+}
+
+// archiveWithID is a one-record archive whose only departure from a real one
+// is the id. The record is patched rather than encoded because the codec
+// refuses to write an unsafe id at all — which is the point being tested.
+func archiveWithID(t *testing.T, id string) []byte {
+	t.Helper()
+	g := wonGame(t, "crane")
+	raw, err := store.EncodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "`+id+`"`), 1)
+	if bytes.Equal(patched, raw) {
+		t.Fatal("the record does not carry the id it was encoded with")
+	}
+	body, err := json.Marshal(Archive{Format: Format, Version: Version, Puzzles: []json.RawMessage{patched}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
 }
 
 // A tombstone in an archive must not delete a puzzle the player still holds.

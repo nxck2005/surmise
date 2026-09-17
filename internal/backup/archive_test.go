@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -206,6 +207,39 @@ func TestReadRefusesWhatItCannotTrust(t *testing.T) {
 
 	if _, _, err := Read(valid); err != nil {
 		t.Errorf("Read refused a file this package wrote: %v", err)
+	}
+}
+
+// An id becomes a filename when an archive lands, so a record carrying
+// anything but a plain token is refused with the rest of an untrustworthy
+// file — before Apply is given the chance to write it.
+func TestReadRefusesAnUnsafePuzzleID(t *testing.T) {
+	g := wonGame(t, "crane")
+	raw, err := store.EncodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := []byte(`"id": "` + g.ID + `"`)
+	for _, unsafe := range []string{"../settings", "../../outside", "./alias", "a/b", "/etc/settings", `c:\settings`, "with space", ".."} {
+		quoted, err := json.Marshal(unsafe)
+		if err != nil {
+			t.Fatal(err)
+		}
+		patched := bytes.Replace(raw, id, append([]byte(`"id": `), quoted...), 1)
+		if bytes.Equal(patched, raw) {
+			t.Fatal("the record does not carry the id it was encoded with")
+		}
+		body, err := json.Marshal(Archive{
+			Format:  Format,
+			Version: Version,
+			Puzzles: []json.RawMessage{patched},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := Read(body); err == nil {
+			t.Errorf("Read accepted a record with id %q", unsafe)
+		}
 	}
 }
 
