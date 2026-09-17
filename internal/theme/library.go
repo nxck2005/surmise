@@ -174,6 +174,15 @@ func (l *Library) loadDir(dir string) {
 		}
 		// path opens the file; safeText(path) is what anyone gets to look at.
 		path := filepath.Join(dir, e.Name())
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.Size() > MaxFileBytes {
+			l.add(Entry{Name: fallbackName(e.Name()), Source: safeText(path),
+				Err: fmt.Errorf("theme: file is larger than %d bytes", MaxFileBytes)})
+			continue
+		}
 		b, err := os.ReadFile(path)
 		if err != nil {
 			l.add(Entry{Name: fallbackName(e.Name()), Source: safeText(path), Err: safeErr(err)})
@@ -285,7 +294,7 @@ const exampleName = "example.toml"
 // copy of the default theme. Writing your own theme then starts with a file
 // that already exists rather than a blank page.
 func EnsureDir(dir string) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("theme: create %s: %w", dir, err)
 	}
 	entries, err := os.ReadDir(dir)

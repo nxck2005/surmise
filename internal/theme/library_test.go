@@ -313,6 +313,40 @@ func TestResolveFallsBackAndReports(t *testing.T) {
 
 // EnsureDir seeds an empty themes directory, so the first thing a would-be
 // theme author finds is a file to copy rather than nothing at all.
+// An oversized user theme is listed with an error instead of being read whole,
+// so the picker can say what is wrong rather than lose the file.
+func TestOversizedUserThemeIsListedWithAnError(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "big.toml", strings.Repeat("a", MaxFileBytes+1))
+
+	for _, e := range Open(dir).Entries() {
+		if e.Name != "big" {
+			continue
+		}
+		if e.Err == nil {
+			t.Error("an oversized theme was listed without an error")
+		}
+		return
+	}
+	t.Fatal("the oversized theme is not listed at all")
+}
+
+// New data directories are 0700, matching the 0600 the records inside them
+// carry.
+func TestEnsureDirCreatesAPrivateDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "themes")
+	if err := EnsureDir(dir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Errorf("themes directory mode = %o, want 700", got)
+	}
+}
+
 func TestEnsureDirSeedsAnExample(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "themes")
 	if err := EnsureDir(dir); err != nil {

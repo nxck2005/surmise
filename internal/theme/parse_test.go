@@ -217,6 +217,21 @@ func TestMetricsAreRangeChecked(t *testing.T) {
 // a ui.hitMap marker, which scan would believe and use to move a click target
 // onto the glyph that carried it. Refusing them is an ordinary warning, so the
 // rest of a hostile or merely mangled file still loads.
+// Free text is capped: a name, an author and a glyph are drawn in a row, a
+// title line and one cell, so an imported or hand-written file cannot enlarge
+// the frame with a single value.
+func TestFreeTextFieldsAreCapped(t *testing.T) {
+	for _, body := range []string{
+		`name = "` + strings.Repeat("n", maxFieldBytes+1) + `"`,
+		`author = "` + strings.Repeat("a", maxFieldBytes+1) + `"`,
+		`glyphs.caret = "` + strings.Repeat("g", maxGlyphRunes+1) + `"`,
+	} {
+		if _, warns := Parse("capped", []byte(body)); len(warns) == 0 {
+			t.Errorf("Parse(%q) produced no warning", body)
+		}
+	}
+}
+
 func TestControlCharactersAreRefused(t *testing.T) {
 	const esc = "\x1b"
 	th, warns := Parse("test", []byte(

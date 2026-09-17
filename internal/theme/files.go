@@ -1,13 +1,20 @@
 package theme
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 )
+
+// MaxFileBytes bounds one theme file, on the way in and on the way out. A
+// theme is a page of settings; the cap is far above any honest file while
+// keeping a hand-edited or imported one from being read or carried whole.
+const MaxFileBytes = 64 << 10
 
 // A theme a player wrote is a file, and a backup has to carry it as one.
 //
@@ -63,6 +70,9 @@ func Files(dir string) ([]File, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 			continue
 		}
+		if info, err := e.Info(); err != nil || info.Size() > MaxFileBytes {
+			continue
+		}
 		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			// One unreadable theme is not worth failing a whole backup over;
@@ -88,37 +98,71 @@ func WriteNew(dir string, files []File) (added, skipped int, err error) {
 	if len(files) == 0 {
 		return 0, 0, nil
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return 0, 0, fmt.Errorf("theme: create %s: %w", dir, err)
 	}
 
-	var refused []string
+	var refused, oversized []string
 	for _, f := range files {
-		if !validName(f.Name) {
+		switch {
+		case !validName(f.Name):
 			refused = append(refused, f.Name)
 			skipped++
 			continue
-		}
-		path := filepath.Join(dir, f.Name)
-		if _, err := os.Stat(path); err == nil {
+		case len(f.Body) > MaxFileBytes:
+			oversized = append(oversized, f.Name)
 			skipped++
 			continue
 		}
-		if err := os.WriteFile(path, []byte(f.Body), 0o644); err != nil {
+
+		// O_EXCL rather than Stat-then-WriteFile: the check and the create are
+		// one step, so nothing can appear between them, and a pre-existing
+		// symlink — even a dangling one — is an EEXIST rather than a path out
+		// of the directory. A theme that is already there is left alone, which
+		// is the same rule as before; reads deliberately follow symlinks, so a
+		// theme linked in from elsewhere stays usable, but a restore never
+		// creates or crosses one.
+		path := filepath.Join(dir, f.Name)
+		fh, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			skipped++
+			continue
+		}
+		if err != nil {
+			return added, skipped, fmt.Errorf("theme: write %s: %w", f.Name, err)
+		}
+		if _, err := fh.Write([]byte(f.Body)); err != nil {
+			fh.Close()
+			return added, skipped, fmt.Errorf("theme: write %s: %w", f.Name, err)
+		}
+		if err := fh.Close(); err != nil {
 			return added, skipped, fmt.Errorf("theme: write %s: %w", f.Name, err)
 		}
 		added++
 	}
-	if len(refused) > 0 {
+
+	if len(refused) > 0 || len(oversized) > 0 {
 		// quoted, not spliced in raw: this error is rendered on the backup
 		// screen, and a refused name is exactly where terminal control
 		// characters would be coming from. %q turns an escape into text.
-		quoted := make([]string, len(refused))
-		for i, name := range refused {
-			quoted[i] = fmt.Sprintf("%q", name)
+		var parts []string
+		if len(refused) > 0 {
+			parts = append(parts, fmt.Sprintf("%d name(s) that are not a plain *.toml: %s",
+				len(refused), quoteNames(refused)))
 		}
-		return added, skipped, fmt.Errorf("theme: refused %d name(s) that are not a plain *.toml: %s",
-			len(refused), strings.Join(quoted, ", "))
+		if len(oversized) > 0 {
+			parts = append(parts, fmt.Sprintf("%d theme(s) larger than %d bytes: %s",
+				len(oversized), MaxFileBytes, quoteNames(oversized)))
+		}
+		return added, skipped, errors.New("theme: refused " + strings.Join(parts, "; "))
 	}
 	return added, skipped, nil
+}
+
+func quoteNames(names []string) string {
+	quoted := make([]string, len(names))
+	for i, name := range names {
+		quoted[i] = fmt.Sprintf("%q", name)
+	}
+	return strings.Join(quoted, ", ")
 }

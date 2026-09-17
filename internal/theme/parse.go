@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 )
@@ -122,6 +123,15 @@ func parseValue(s string) (string, error) {
 	return s, nil
 }
 
+// What a theme's free text may hold. Name and author are shown in a list row
+// and a title line; a glyph is drawn inside one cell. The caps are far above
+// anything readable in those places, and they bound what a hand-written or
+// imported file can put in the frame rather than rationing anyone's theme.
+const (
+	maxFieldBytes = 128
+	maxGlyphRunes = 16
+)
+
 // set applies one fully-qualified key. Both `bg = "#000"` and a `[colors]`
 // section work, since the flat form is what people write by hand and the
 // sectioned form is what the bundled files use.
@@ -130,9 +140,15 @@ func (t *Theme) set(key, value string) error {
 
 	switch key {
 	case "name":
+		if len(value) > maxFieldBytes {
+			return fmt.Errorf("name is longer than %d bytes", maxFieldBytes)
+		}
 		t.Name = value
 		return nil
 	case "author":
+		if len(value) > maxFieldBytes {
+			return fmt.Errorf("author is longer than %d bytes", maxFieldBytes)
+		}
 		t.Author = value
 		return nil
 	}
@@ -216,6 +232,9 @@ func (t *Theme) setGlyph(key, value string) error {
 	}
 	if key == "border" && !knownBorder(value) {
 		return fmt.Errorf("unknown border %q: want rounded, normal, thick, double, hidden or block", value)
+	}
+	if utf8.RuneCountInString(value) > maxGlyphRunes {
+		return fmt.Errorf("glyph is longer than %d runes", maxGlyphRunes)
 	}
 	*p = value
 	return nil
