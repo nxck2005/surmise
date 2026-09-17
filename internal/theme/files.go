@@ -110,8 +110,15 @@ func WriteNew(dir string, files []File) (added, skipped int, err error) {
 		added++
 	}
 	if len(refused) > 0 {
+		// quoted, not spliced in raw: this error is rendered on the backup
+		// screen, and a refused name is exactly where terminal control
+		// characters would be coming from. %q turns an escape into text.
+		quoted := make([]string, len(refused))
+		for i, name := range refused {
+			quoted[i] = fmt.Sprintf("%q", name)
+		}
 		return added, skipped, fmt.Errorf("theme: refused %d name(s) that are not a plain *.toml: %s",
-			len(refused), strings.Join(refused, ", "))
+			len(refused), strings.Join(quoted, ", "))
 	}
 	return added, skipped, nil
 }
