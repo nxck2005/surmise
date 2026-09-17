@@ -603,7 +603,7 @@ func (m *gameScreen) statusLine(h *hitMap) string {
 			st.muted.Render(" to cancel")
 	}
 	if m.message != "" && time.Now().Before(m.msgUntil) {
-		return st.err.Render(m.message)
+		return st.err.Render(safeText(m.message))
 	}
 
 	switch m.g.Status {

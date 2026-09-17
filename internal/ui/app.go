@@ -2191,7 +2191,7 @@ func (m *Model) frame(h *hitMap) string {
 		// Centred, and the body squared off first: joined left, an error wider
 		// than the screen it is reporting on dragged that screen to the left.
 		body = lipgloss.JoinVertical(lipgloss.Center,
-			block(body), "", st.err.Render(fmt.Sprintf("error: %v", m.err)))
+			block(body), "", st.err.Render(safeText(fmt.Sprintf("error: %v", m.err))))
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center, body, help)

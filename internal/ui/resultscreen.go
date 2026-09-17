@@ -76,7 +76,7 @@ func (m *resultScreen) view(_ *hitMap) string {
 
 	switch {
 	case m.notice != "":
-		sections = append(sections, "", st.err.Render(m.notice))
+		sections = append(sections, "", st.err.Render(safeText(m.notice)))
 	case m.copyRequested:
 		sections = append(sections, "", st.muted.Render("copy requested"))
 	}

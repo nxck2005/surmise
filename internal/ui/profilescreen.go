@@ -58,7 +58,7 @@ func (m *profileScreen) reload(s store.Store, today daily.Day, displayName strin
 func (m *profileScreen) view(h *hitMap) string {
 	if m.err != nil {
 		return titled(m.title(),
-			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
+			st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
 	}
 
 	s := m.summary

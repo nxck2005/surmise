@@ -108,7 +108,7 @@ func (m *challengeScreen) view(h *hitMap) string {
 		note := "paste a 16-character challenge code"
 		style := st.muted
 		if m.msg != "" {
-			note, style = m.msg, st.err
+			note, style = safeText(m.msg), st.err
 		}
 		return lipgloss.JoinVertical(lipgloss.Center,
 			st.title.Render("enter code"), "",
@@ -133,7 +133,7 @@ func (m *challengeScreen) view(h *hitMap) string {
 		note = "copy requested"
 	}
 	if m.msg != "" {
-		note = m.msg
+		note = safeText(m.msg)
 	}
 	return lipgloss.JoinVertical(lipgloss.Center,
 		st.title.Render("new challenge"), "", mode, "",

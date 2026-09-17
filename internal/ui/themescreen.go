@@ -221,7 +221,7 @@ func (m *themeScreen) renderRow(e theme.Entry, selected bool) string {
 
 	return prefix +
 		st.accent.Render(mark) + " " +
-		nameStyle.Render(fmt.Sprintf("%-24s", e.Name)) +
+		nameStyle.Render(fmt.Sprintf("%-24s", safeText(e.Name))) +
 		st.muted.Render(origin)
 }
 
@@ -234,18 +234,18 @@ func (m *themeScreen) note() string {
 	}
 	switch {
 	case e.Err != nil:
-		return st.err.Render(fmt.Sprintf("%s: %v", e.Source, e.Err))
+		return st.err.Render(safeText(fmt.Sprintf("%s: %v", e.Source, e.Err)))
 	case len(e.Warnings) > 0:
 		lines := make([]string, 0, len(e.Warnings)+1)
-		lines = append(lines, st.err.Render(e.Source))
+		lines = append(lines, st.err.Render(safeText(e.Source)))
 		for _, w := range e.Warnings {
-			lines = append(lines, st.err.Render("  "+w.String()))
+			lines = append(lines, st.err.Render(safeText("  "+w.String())))
 		}
 		return strings.Join(lines, "\n")
 	case !e.Builtin():
-		return st.muted.Render(e.Source)
+		return st.muted.Render(safeText(e.Source))
 	case e.Theme.Author != "":
-		return st.muted.Render("by " + e.Theme.Author)
+		return st.muted.Render("by " + safeText(e.Theme.Author))
 	}
 	return ""
 }
