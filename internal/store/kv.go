@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -82,7 +83,15 @@ func (s *KVStore) Load(id string) (*game.Game, error) {
 
 // load reads whatever is stored, tombstones included. Only Delete and All,
 // which have to see deletions, use it directly.
+//
+// The id is checked before it is concatenated into a key, for the same reason
+// JSON checks it before building a path: it can arrive from outside, and both
+// stores promise the same accept set. A key suffix that is not a plain token
+// was not written by this app.
 func (s *KVStore) load(id string) (*game.Game, error) {
+	if !game.ValidID(id) {
+		return nil, fmt.Errorf("store: invalid puzzle id %q", id)
+	}
 	v, ok := s.kv.Get(kvPuzzleKey(id))
 	if !ok {
 		return nil, ErrNotFound

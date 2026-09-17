@@ -95,12 +95,32 @@ func TestStoreRoundTrip(t *testing.T) {
 }
 
 func TestStoreLoadMissing(t *testing.T) {
+	const absent = "8e1c4a72-9b3d-4f60-8123-456789abcde0"
 	eachStore(t, "missing", func(t *testing.T, s settingsCapable) {
-		if _, err := s.Load("nope"); !errors.Is(err, ErrNotFound) {
+		if _, err := s.Load(absent); !errors.Is(err, ErrNotFound) {
 			t.Errorf("Load of an unknown id = %v, want ErrNotFound", err)
 		}
-		if err := s.Delete("nope"); !errors.Is(err, ErrNotFound) {
+		if err := s.Delete(absent); !errors.Is(err, ErrNotFound) {
 			t.Errorf("Delete of an unknown id = %v, want ErrNotFound", err)
+		}
+	})
+}
+
+// An id that is not a plain token names nothing a store could hold, so it is
+// refused as an error rather than reported as a missing puzzle. The two are
+// different answers, and only one of them hides a crafted attempt.
+func TestStoreRefusesUnsafeIDs(t *testing.T) {
+	eachStore(t, "unsafe id", func(t *testing.T, s settingsCapable) {
+		g := newGame(t, 5)
+		g.ID = "../settings"
+		if err := s.Save(g); err == nil {
+			t.Error("Save of an escaping id succeeded")
+		}
+		if _, err := s.Load("../settings"); err == nil || errors.Is(err, ErrNotFound) {
+			t.Errorf("Load of an escaping id = %v, want a refusal", err)
+		}
+		if err := s.Delete("../settings"); err == nil || errors.Is(err, ErrNotFound) {
+			t.Errorf("Delete of an escaping id = %v, want a refusal", err)
 		}
 	})
 }

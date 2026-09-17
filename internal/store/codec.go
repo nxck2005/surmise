@@ -70,8 +70,22 @@ func encodeGame(g *game.Game) ([]byte, error) {
 
 // decodeGame reads whatever was stored, tombstones included. Callers that must
 // not resume a deletion check Deleted themselves; only Delete and All see one.
+//
+// It holds the record to the id it was fetched by. In both stores that id
+// comes from the storage location — a file name or a key suffix — and every
+// caller (List, Load, Delete, the stats walks) keys on it, so a record that
+// answers for a different id is either a hand edit or a plant. The mismatch is
+// refused here, in the one place both stores read a whole record, rather than
+// trusted and carried to a caller that would act on the wrong identity.
 func decodeGame(id string, b []byte) (*game.Game, error) {
-	return decodeRecord("puzzle "+id, b)
+	g, err := decodeRecord("puzzle "+id, b)
+	if err != nil {
+		return nil, err
+	}
+	if g.ID != id {
+		return nil, fmt.Errorf("store: record %q holds puzzle %q", id, g.ID)
+	}
+	return g, nil
 }
 
 // decodeRecord is decodeGame with the caller's own name for what it is reading,
