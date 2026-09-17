@@ -153,6 +153,15 @@ function openFile(done) {
       finish();
       return;
     }
+    // The same 64 MiB the Go side holds an archive to: refuse by the size the
+    // browser already knows rather than reading a huge file into memory to be
+    // turned away. The name is the file's, but nothing here trusts it — the
+    // error line sanitises whatever it is given.
+    if (file.size > 64 * 1024 * 1024) {
+      answer({ error: `${file.name} is larger than 64 MiB` });
+      finish();
+      return;
+    }
     try {
       answer({ name: file.name, text: await file.text() });
     } catch (error) {

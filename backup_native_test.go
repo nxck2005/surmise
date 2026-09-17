@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nxck2005/surmise/internal/backup"
 )
 
 // The desktop backup screen's file access. The screen itself is tested in
@@ -118,6 +120,18 @@ func TestFileTransferWithNoBackupsSaysWhereTheyGo(t *testing.T) {
 }
 
 // The name is dated, so a directory of these reads as a list of days.
+// Importing reads through a cap: a FIFO, a device or a swapped-in file cannot
+// make the app allocate without bound before the archive is even parsed.
+func TestReadCappedRefusesAnOversizedStream(t *testing.T) {
+	b, err := readCapped(strings.NewReader("ok"))
+	if err != nil || string(b) != "ok" {
+		t.Fatalf("readCapped(small) = %q, %v", b, err)
+	}
+	if _, err := readCapped(strings.NewReader(strings.Repeat("a", backup.MaxArchiveBytes+1))); err == nil {
+		t.Error("readCapped accepted a stream larger than MaxArchiveBytes")
+	}
+}
+
 func TestBackupNameIsDated(t *testing.T) {
 	day := time.Date(2026, 8, 18, 23, 59, 0, 0, time.UTC)
 	if got := backupName(day, 1); got != "surmise-backup-2026-08-18.json" {
