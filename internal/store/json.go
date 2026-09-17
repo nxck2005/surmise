@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -29,6 +30,14 @@ type JSON struct {
 
 const puzzleDir = "puzzles"
 
+// MaxRecordBytes bounds one stored puzzle or settings file. A real record is a
+// few kilobytes at most — attempts are length+1, so even the longest board
+// holds seven short words — and the cap is what stops a planted or hand-edited
+// file from being read whole into memory before the codec can refuse it.
+// internal/backup holds individual archive records to the same figure, so one
+// constant describes a record everywhere.
+const MaxRecordBytes = 64 << 10
+
 // DefaultDir is where puzzles live: ~/.config/surmise on Linux, and the
 // platform equivalent elsewhere.
 func DefaultDir() (string, error) {
@@ -42,7 +51,12 @@ func DefaultDir() (string, error) {
 // NewJSON opens (and creates if needed) a store rooted at dir.
 func NewJSON(dir string) (*JSON, error) {
 	s := &JSON{dir: dir}
-	if err := os.MkdirAll(filepath.Join(dir, puzzleDir), 0o755); err != nil {
+	// 0700: the data directory belongs to the player alone. The files inside
+	// carry 0600; a fresh install should not open the directory wider than the
+	// records it holds. Directories that already exist keep whatever mode they
+	// had — tightening those is a policy a user chooses, not a silent
+	// side effect of opening the app.
+	if err := os.MkdirAll(filepath.Join(dir, puzzleDir), 0o700); err != nil {
 		return nil, fmt.Errorf("store: create %s: %w", dir, err)
 	}
 	return s, nil
@@ -93,7 +107,7 @@ func (s *JSON) load(id string) (*game.Game, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(path)
+	b, err := readLimited(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, ErrNotFound
 	}
@@ -102,6 +116,28 @@ func (s *JSON) load(id string) (*game.Game, error) {
 	}
 
 	return decodeGame(id, b)
+}
+
+// readLimited reads a file that is supposed to hold one record, refusing
+// anything over MaxRecordBytes rather than pulling it all into memory first.
+// The one-byte overshoot is how "exactly at the limit" is told from "over it"
+// without a second read. A file that does not exist comes back as the open
+// error, so callers can still recognise fs.ErrNotExist.
+func readLimited(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	b, err := io.ReadAll(io.LimitReader(f, MaxRecordBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > MaxRecordBytes {
+		return nil, fmt.Errorf("%s is larger than %d bytes", filepath.Base(path), MaxRecordBytes)
+	}
+	return b, nil
 }
 
 // Delete removes a puzzle.

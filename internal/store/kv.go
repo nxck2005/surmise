@@ -96,6 +96,9 @@ func (s *KVStore) load(id string) (*game.Game, error) {
 	if !ok {
 		return nil, ErrNotFound
 	}
+	if len(v) > MaxRecordBytes {
+		return nil, fmt.Errorf("store: record %s is larger than %d bytes", id, MaxRecordBytes)
+	}
 	return decodeGame(id, []byte(v))
 }
 
@@ -162,7 +165,7 @@ func (s *KVStore) List() ([]Summary, error) {
 // defaults rather than an error: a bad settings blob must never cost a puzzle.
 func (s *KVStore) Settings() Settings {
 	v, ok := s.kv.Get(kvSettingsKey)
-	if !ok {
+	if !ok || len(v) > MaxRecordBytes {
 		return Settings{}
 	}
 	return decodeSettings([]byte(v))
