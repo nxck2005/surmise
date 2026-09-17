@@ -158,7 +158,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           alias=surmise-staging.vercel.app
-          if npx --yes vercel@58.9.0 alias set "${{ steps.deploy.outputs.url }}" "$alias" \
+          if "$RUNNER_TEMP/node_modules/.bin/vercel" alias set "${{ steps.deploy.outputs.url }}" "$alias" \
               --token "$VERCEL_TOKEN"; then
             echo "staging: https://$alias" >>"$GITHUB_STEP_SUMMARY"
           else
