@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/words"
@@ -265,6 +266,30 @@ func FormatID(b [16]byte, version byte) string {
 	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
+// validID matches the id shapes this app has ever written: the sixteen
+// lowercase hex characters older saves carry, and the canonical lowercase UUID
+// that replaced them (version 4 for random puzzles, version 8 for derived
+// ones). It is deliberately exact rather than a general "safe filename" rule —
+// an id is a persistence key, and a shape that has never been handed out
+// should not start being accepted merely because it survives a path join.
+//
+// Lowercase-only is load-bearing on case-insensitive filesystems: an uppercase
+// spelling of the same UUID would be a different string on Linux and the same
+// file on macOS and Windows, and the store can only promise one of those
+// readings.
+var validID = regexp.MustCompile(`^(?:[0-9a-f]{16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
+
+// ValidID reports whether an id may be persisted as a puzzle's identity.
+//
+// This is a storage rule, not a display one: Code hashes any string at all.
+// An id read off a save or a backup is about to become a filename (in the
+// JSON store) or a key suffix (in the browser's), so every path that turns an
+// id into either goes through here. An id that could climb out of the puzzle
+// directory is refused before it is joined to anything.
+func ValidID(id string) bool {
+	return validID.MatchString(id)
+}
+
 // codeSpace is how many distinct codes exist: six decimal digits.
 const codeSpace = 1_000_000
 
@@ -363,12 +388,19 @@ func (g *Game) LetterStates() map[byte]Mark {
 
 // Validate checks that a decoded Game is internally consistent. The store uses
 // it to reject corrupt or hand-edited save files rather than crashing later.
+//
+// It is also where an id is held to ValidID. Every constructor and every
+// store's read and write path runs through here, so a Game that exists at all
+// is one whose id can be persisted; there is no way to hold an unsafe identity
+// and discover the problem only at Save. The message quotes the id rather than
+// splicing it in raw: a hand-edited or imported id may contain control
+// characters, and errors are rendered on the error line. %q escapes them.
 func (g *Game) Validate() error {
 	// A tombstone has been stripped of everything the rest of these checks are
 	// about, so only its identity is left to check.
 	if g.Deleted {
-		if g.ID == "" {
-			return errors.New("game: missing id")
+		if !ValidID(g.ID) {
+			return fmt.Errorf("game: %q is not a valid puzzle id", g.ID)
 		}
 		if !words.SupportedLength(g.Length) {
 			return fmt.Errorf("game: unsupported length %d", g.Length)
@@ -383,8 +415,8 @@ func (g *Game) Validate() error {
 	}
 
 	switch {
-	case g.ID == "":
-		return errors.New("game: missing id")
+	case !ValidID(g.ID):
+		return fmt.Errorf("game: %q is not a valid puzzle id", g.ID)
 	case !words.SupportedLength(g.Length):
 		return fmt.Errorf("game: unsupported length %d", g.Length)
 	case len(g.Answer) != g.Length:

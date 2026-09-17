@@ -113,7 +113,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 	// second boundary between them would read as marking having moved things.
 	freezeClock(m)
 
-	result, err := game.NewFrom("result-layout", "crane", 5)
+	result, err := game.NewFrom("3f2a7b4c-5d6e-4f70-8123-456789abcdef", "crane", 5)
 	if err != nil {
 		t.Fatal(err)
 	}

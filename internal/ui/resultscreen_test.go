@@ -13,7 +13,7 @@ import (
 )
 
 func TestShareResultIsSpoilerSafe(t *testing.T) {
-	g, err := game.NewFrom("share-win", "crane", 5)
+	g, err := game.NewFrom("8e1c4a72-9b3d-4f60-8123-456789abcdef", "crane", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestShareResultIsSpoilerSafe(t *testing.T) {
 }
 
 func TestShareResultMarksALoss(t *testing.T) {
-	g, err := game.NewFrom("share-loss", "crane", 5)
+	g, err := game.NewFrom("8e1c4a72-9b3d-4f60-8123-456789abcde0", "crane", 5)
 	if err != nil {
 		t.Fatal(err)
 	}
