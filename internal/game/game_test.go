@@ -344,6 +344,15 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 		{"answer length mismatch", func(g *Game) { g.Answer = "toolong" }},
 		{"marks out of sync", func(g *Game) { g.Marks = nil }},
 		{"too many guesses", func(g *Game) { g.MaxAttempts = 1 }},
+		// Words become what the board draws, tile by tile and byte by byte, so
+		// anything but lowercase letters is a way to smuggle terminal control
+		// bytes back out through a saved game or an imported backup.
+		{"escape in the answer", func(g *Game) { g.Answer = "cr\x1bne" }},
+		{"escape in a guess", func(g *Game) { g.Guesses[0] = "abo\x1bt" }},
+		{"uppercase answer", func(g *Game) { g.Answer = "CRANE" }},
+		{"digit in a guess", func(g *Game) { g.Guesses[1] = "ac0rn" }},
+		{"daily is not a date", func(g *Game) { g.Daily = "2026-13-01" }},
+		{"daily carries an escape", func(g *Game) { g.Daily = "2026-08-06\x1b" }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -358,6 +367,29 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 				t.Error("Validate accepted corrupt game")
 			}
 		})
+	}
+}
+
+// A daily label is drawn on the board header, the browse list and the result
+// card, so it is held to the one form the app writes: an exact calendar date.
+func TestValidateAcceptsOnlyRealDailyDates(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.Daily = "2026-08-06"
+	if err := g.Validate(); err != nil {
+		t.Errorf("Validate with a daily date: %v", err)
+	}
+	for _, bad := range []string{
+		"2026-8-6", // unpadded
+		"2026-13-01",
+		"2026-02-30",
+		"yesterday",
+		"2026-08-06\x1b",
+		"2026-08-06 ",
+	} {
+		g.Daily = bad
+		if err := g.Validate(); err == nil {
+			t.Errorf("Validate accepted daily %q", bad)
+		}
 	}
 }
 

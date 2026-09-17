@@ -243,6 +243,47 @@ func TestReadRefusesAnUnsafePuzzleID(t *testing.T) {
 	}
 }
 
+// A word is what the board draws, tile by tile, so control bytes patched into
+// an answer or a guess are refused with the rest of an untrustworthy archive —
+// before Apply is given the chance to save one.
+func TestReadRefusesWordsWithControlCharacters(t *testing.T) {
+	g := wonGame(t, "crane")
+	// A wrong guess, so the word being patched below is not also the answer:
+	// each case has to reach its own check.
+	g.Guesses[0] = "about"
+	g.Marks = [][]game.Mark{game.Score("about", g.Answer)}
+	raw, err := store.EncodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// \u001b is how JSON spells a control byte; the escape is the point, so
+	// the patch has to stay valid JSON for the decoder to reach Validate.
+	cases := []struct {
+		name     string
+		old, new []byte
+	}{
+		{"answer", []byte(`"answer": "crane"`), []byte(`"answer": "cr\u001bne"`)},
+		{"guess", []byte(`"about"`), []byte(`"\u001b]0;x"`)},
+	}
+	for _, c := range cases {
+		patched := bytes.Replace(raw, c.old, c.new, 1)
+		if bytes.Equal(patched, raw) {
+			t.Fatalf("the record does not carry %q", c.old)
+		}
+		body, err := json.Marshal(Archive{
+			Format:  Format,
+			Version: Version,
+			Puzzles: []json.RawMessage{patched},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := Read(body); err == nil {
+			t.Errorf("Read accepted a record with a control character in its %s", c.name)
+		}
+	}
+}
+
 // Two records claiming the same puzzle mean the file was assembled by
 // something other than Build, and there is no honest way to choose between
 // them.

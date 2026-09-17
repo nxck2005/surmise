@@ -174,7 +174,7 @@ func (m *customScreen) view(h *hitMap) string {
 		m.renderRow(h, customRowAnyWord, "any word", onOff(m.anyWord)),
 	}
 
-	note := m.msg
+	note := safeText(m.msg)
 	style := st.err
 	if note == "" {
 		note, style = m.note(), st.muted

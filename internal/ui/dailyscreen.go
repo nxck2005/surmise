@@ -149,7 +149,7 @@ func (m *dailyScreen) view(h *hitMap) string {
 
 	if m.err != nil {
 		return lipgloss.JoinVertical(lipgloss.Center, heading, "",
-			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
+			st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
 	}
 
 	rows := make([]string, len(m.rows))

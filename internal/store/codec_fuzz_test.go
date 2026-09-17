@@ -29,6 +29,9 @@ func FuzzDecodeRecord(f *testing.F) {
 	f.Add([]byte(`{"schema":1,"id":"../escape","length":5,"answer":"crane",` +
 		`"guesses":[],"marks":[],"maxAttempts":6,"status":"in_progress",` +
 		`"startedAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`))
+	f.Add([]byte(`{"schema":1,"id":"3f2a7b4c-5d6e-4f70-8123-456789abcdef","length":5,` +
+		`"answer":"cr\u001bne","guesses":[],"marks":[],"maxAttempts":6,` +
+		`"status":"in_progress","startedAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`))
 	f.Add([]byte("\x00\x01\x02"))
 	for _, name := range []string{"legacy-puzzle.json", "legacy-settings.json"} {
 		b, err := os.ReadFile(filepath.Join("testdata", name))

@@ -199,7 +199,7 @@ func (b *backupScreen) note() string {
 	case b.waiting:
 		lines = []string{"waiting for a file…"}
 	case b.failure != "":
-		lines, style = []string{b.failure}, st.err
+		lines, style = []string{safeText(b.failure)}, st.err
 	case len(b.report) > 0:
 		lines = b.report
 	default:

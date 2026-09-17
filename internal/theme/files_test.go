@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 func write(t *testing.T, dir, name, body string) {
@@ -120,6 +121,20 @@ func TestWriteNewRefusesNamesThatEscape(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "escaped.toml")); err == nil {
 		t.Error("a name with a parent reference wrote outside the themes directory")
+	}
+}
+
+// The refusal error is printed to a terminal — the backup screen renders it —
+// so a refused name has to arrive quoted, never as the control bytes it is made
+// of. %q is what makes an escape read as text instead of as an escape.
+func TestWriteNewQuotesRefusedNamesInItsError(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "themes")
+	_, _, err := WriteNew(dir, []File{{Name: "\x1b]0;owned\x07.toml", Body: "no"}})
+	if err == nil {
+		t.Fatal("WriteNew accepted a name full of control characters")
+	}
+	if strings.ContainsFunc(err.Error(), unicode.IsControl) {
+		t.Errorf("the error carries raw control characters: %q", err.Error())
 	}
 }
 

@@ -190,7 +190,7 @@ func (m *listScreen) view(h *hitMap) string {
 	switch {
 	case m.err != nil:
 		return titled("puzzles",
-			st.err.Render(fmt.Sprintf("could not read puzzles: %v", m.err)))
+			st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
 	case len(m.items) == 0:
 		return titled("puzzles",
 			st.muted.Render("no puzzles yet — start one from the menu"))

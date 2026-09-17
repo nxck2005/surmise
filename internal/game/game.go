@@ -154,6 +154,34 @@ func challengeTombstone(info *ChallengeInfo) *ChallengeInfo {
 // so difficulty stays roughly even.
 func attemptsFor(n int) int { return n + 1 }
 
+// lettersOnly reports whether w is the shape every stored word has: lowercase
+// ASCII letters, one per tile. Words come from the embedded lists or from a
+// player typing, and both are normalized to this form before they are saved;
+// anything else is a hand edit or an imported file. Letting it through would
+// put terminal control bytes back on the board one tile at a time, since a
+// guess is drawn byte by byte and an answer is drawn on the result.
+func lettersOnly(w string) bool {
+	for i := 0; i < len(w); i++ {
+		if w[i] < 'a' || w[i] > 'z' {
+			return false
+		}
+	}
+	return true
+}
+
+// validDaily reports whether d is the exact form a daily label is written in:
+// empty for an ordinary puzzle, or a real calendar date. The label is drawn on
+// the board header, in the browse list and on the result card, so it cannot be
+// free text. time.Parse is what refuses an impossible day as well as a
+// malformed one.
+func validDaily(d string) bool {
+	if d == "" {
+		return true
+	}
+	_, err := time.Parse(time.DateOnly, d)
+	return err == nil
+}
+
 // New starts a puzzle of the given length with a randomly chosen answer.
 func New(length int) (*Game, error) {
 	answer, err := words.Random(length)
@@ -213,10 +241,8 @@ func NewFrom(id, answer string, length int) (*Game, error) {
 // player has asked it not to.
 func NewCustom(answer string, length int) (*Game, error) {
 	w := words.Normalize(answer)
-	for i := 0; i < len(w); i++ {
-		if w[i] < 'a' || w[i] > 'z' {
-			return nil, fmt.Errorf("game: answer %q must be letters only", answer)
-		}
+	if !lettersOnly(w) {
+		return nil, fmt.Errorf("game: answer %q must be letters only", answer)
 	}
 	id, err := newID()
 	if err != nil {
@@ -421,6 +447,10 @@ func (g *Game) Validate() error {
 		return fmt.Errorf("game: unsupported length %d", g.Length)
 	case len(g.Answer) != g.Length:
 		return fmt.Errorf("game: answer %q does not match length %d", g.Answer, g.Length)
+	case !lettersOnly(g.Answer):
+		return fmt.Errorf("game: answer %q is not lowercase letters", g.Answer)
+	case !validDaily(g.Daily):
+		return fmt.Errorf("game: daily %q is not a date", g.Daily)
 	case len(g.Guesses) != len(g.Marks):
 		return fmt.Errorf("game: %d guesses but %d marks", len(g.Guesses), len(g.Marks))
 	case g.MaxAttempts <= 0:
@@ -431,6 +461,9 @@ func (g *Game) Validate() error {
 	for i, guess := range g.Guesses {
 		if len(guess) != g.Length || len(g.Marks[i]) != g.Length {
 			return fmt.Errorf("game: guess %d has wrong length", i)
+		}
+		if !lettersOnly(guess) {
+			return fmt.Errorf("game: guess %d %q is not lowercase letters", i, guess)
 		}
 	}
 	return nil

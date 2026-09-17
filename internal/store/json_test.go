@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -450,5 +451,32 @@ func TestStoreIgnoresARecordThatDisagreesWithItsFile(t *testing.T) {
 	}
 	if _, err := s.Load(other); err == nil {
 		t.Error("Load of a record that disclaims its own file succeeded")
+	}
+}
+
+// Words are drawn byte by byte on the board, so control bytes smuggled into a
+// saved answer or guess are refused like any other corruption: a file has to
+// be skipped, not painted.
+func TestStoreRefusesWordsWithControlCharacters(t *testing.T) {
+	s := newStore(t)
+	g := newGame(t, 5)
+	b, err := encodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := bytes.Replace(b, []byte(`"answer": "`+g.Answer+`"`),
+		[]byte(`"answer": "cr\u001bne"`), 1)
+	if bytes.Equal(patched, b) {
+		t.Fatal("the record does not carry the answer it was encoded with")
+	}
+	if err := os.WriteFile(filepath.Join(s.dir, puzzleDir, g.ID+".json"), patched, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Load(g.ID); err == nil {
+		t.Error("Load accepted a record whose answer carries a control character")
+	}
+	if list, err := s.List(); err != nil || len(list) != 0 {
+		t.Errorf("List = %v (err %v), want the corrupt record ignored", list, err)
 	}
 }
