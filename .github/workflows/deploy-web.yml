@@ -178,7 +178,7 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           headers=$("$RUNNER_TEMP/node_modules/.bin/vercel" curl https://surmise-staging.vercel.app/ \
-            --token "$VERCEL_TOKEN" --yes -- --silent --show-error --head | tr -d '\r')
+            --yes -- --silent --show-error --head | tr -d '\r')
           echo "$headers" | grep -i '^content-security-policy:' || true
           for header in content-security-policy x-content-type-options x-frame-options referrer-policy; do
             if ! echo "$headers" | grep -qi "^$header:"; then
