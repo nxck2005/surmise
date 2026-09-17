@@ -48,8 +48,17 @@ func NewJSON(dir string) (*JSON, error) {
 	return s, nil
 }
 
-func (s *JSON) pathFor(id string) string {
-	return filepath.Join(s.dir, puzzleDir, id+".json")
+// pathFor names a puzzle's file. It is checked because an id is about to be
+// joined into a path, and an id can arrive from outside — a crafted backup, a
+// hand-edited save. Without this, an id like "../settings" writes
+// settings.json next door to the puzzle directory. The codec refuses such an
+// id on its own read and write paths too; this is the layer that makes the
+// refusal hold even for a caller that reaches the store directly.
+func (s *JSON) pathFor(id string) (string, error) {
+	if !game.ValidID(id) {
+		return "", fmt.Errorf("store: invalid puzzle id %q", id)
+	}
+	return filepath.Join(s.dir, puzzleDir, id+".json"), nil
 }
 
 func (s *JSON) Save(g *game.Game) error {
@@ -57,7 +66,11 @@ func (s *JSON) Save(g *game.Game) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(s.pathFor(g.ID), b)
+	path, err := s.pathFor(g.ID)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, b)
 }
 
 // Load returns a playable puzzle. A tombstone is reported as ErrNotFound: it is
@@ -76,7 +89,11 @@ func (s *JSON) Load(id string) (*game.Game, error) {
 // load reads whatever is on disk, tombstones included. Only Delete and All,
 // which have to see deletions, use it directly.
 func (s *JSON) load(id string) (*game.Game, error) {
-	b, err := os.ReadFile(s.pathFor(id))
+	path, err := s.pathFor(id)
+	if err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, ErrNotFound
 	}
@@ -111,7 +128,11 @@ func (s *JSON) Delete(id string) error {
 		return s.saveTombstone(g.Tombstone())
 	}
 
-	if err := os.Remove(s.pathFor(id)); err != nil {
+	path, err := s.pathFor(id)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return ErrNotFound
 		}
@@ -127,7 +148,11 @@ func (s *JSON) saveTombstone(g *game.Game) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(s.pathFor(g.ID), b)
+	path, err := s.pathFor(g.ID)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(path, b)
 }
 
 // All returns every readable record, tombstones included — stats need them to

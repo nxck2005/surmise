@@ -19,6 +19,16 @@ func newStore(t *testing.T) *JSON {
 	return s
 }
 
+// mustPath is pathFor for tests that know the id is valid.
+func mustPath(t *testing.T, s *JSON, id string) string {
+	t.Helper()
+	p, err := s.pathFor(id)
+	if err != nil {
+		t.Fatalf("pathFor(%q): %v", id, err)
+	}
+	return p
+}
+
 func newGame(t *testing.T, length int) *game.Game {
 	t.Helper()
 	g, err := game.New(length)
@@ -66,7 +76,8 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 func TestLoadMissingReturnsNotFound(t *testing.T) {
 	s := newStore(t)
-	if _, err := s.Load("nope"); !errors.Is(err, ErrNotFound) {
+	const absent = "8e1c4a72-9b3d-4f60-8123-456789abcde0"
+	if _, err := s.Load(absent); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Load(missing) = %v, want ErrNotFound", err)
 	}
 }
@@ -140,7 +151,7 @@ func TestDeleteRemovesOnlyItsPuzzle(t *testing.T) {
 	if _, err := s.Load(doomed.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Load after Delete = %v, want ErrNotFound", err)
 	}
-	if _, err := os.Stat(s.pathFor(doomed.ID)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(mustPath(t, s, doomed.ID)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("file still on disk after Delete: %v", err)
 	}
 
@@ -173,7 +184,7 @@ func TestDeleteFinishedLeavesTombstone(t *testing.T) {
 	if err := s.Delete(g.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := os.Stat(s.pathFor(g.ID)); err != nil {
+	if _, err := os.Stat(mustPath(t, s, g.ID)); err != nil {
 		t.Fatalf("tombstone missing from disk: %v", err)
 	}
 
@@ -210,7 +221,7 @@ func TestDeleteFinishedLeavesTombstone(t *testing.T) {
 
 	// On disk it must say only what it means — a file full of empty answers and
 	// null guesses reads as corruption, not as a marker.
-	b, err := os.ReadFile(s.pathFor(g.ID))
+	b, err := os.ReadFile(mustPath(t, s, g.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +267,7 @@ func TestDeleteDailyKeepsItsDate(t *testing.T) {
 		t.Errorf("tombstone = %+v, want deleted with daily 2026-08-06", got)
 	}
 
-	b, err := os.ReadFile(s.pathFor(g.ID))
+	b, err := os.ReadFile(mustPath(t, s, g.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +297,8 @@ func TestDeleteTombstoneReturnsNotFound(t *testing.T) {
 
 func TestDeleteMissingReturnsNotFound(t *testing.T) {
 	s := newStore(t)
-	if err := s.Delete("nope"); !errors.Is(err, ErrNotFound) {
+	const absent = "8e1c4a72-9b3d-4f60-8123-456789abcde0"
+	if err := s.Delete(absent); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Delete(missing) = %v, want ErrNotFound", err)
 	}
 }
@@ -335,7 +347,7 @@ func TestLoadsPreCodeSaveFormat(t *testing.T) {
 		"updatedAt": "2025-01-01T00:00:00Z",
 		"elapsedMs": 0
 	}`
-	if err := os.WriteFile(s.pathFor(id), []byte(old), 0o644); err != nil {
+	if err := os.WriteFile(mustPath(t, s, id), []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -348,5 +360,95 @@ func TestLoadsPreCodeSaveFormat(t *testing.T) {
 	}
 	if code := game.Code(got.ID); len(code) != 6 {
 		t.Errorf("Code(%q) = %q, want six digits", id, code)
+	}
+}
+
+// An id becomes a filename, and a crafted backup is how a hostile one gets
+// here. The store is the last line: an id that is not a plain token must be
+// refused before any path is built from it.
+func TestSaveRefusesAnIDThatCouldEscapeTheStore(t *testing.T) {
+	s := newStore(t)
+	settings := filepath.Join(s.dir, "settings.json")
+	outside := filepath.Join(filepath.Dir(s.dir), "outside.json")
+
+	for _, id := range []string{"../settings", "../../outside", "./alias", "a/b", `a\b`, "/etc/settings", `c:\settings`, "..", ".", ""} {
+		g := newGame(t, 5)
+		g.ID = id
+		if err := s.Save(g); err == nil {
+			t.Errorf("Save(%q) succeeded, want a refusal", id)
+		}
+	}
+
+	for _, path := range []string{settings, outside} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("a save escaped the store: %s was written", path)
+		}
+	}
+	if list, err := s.List(); err != nil || len(list) != 0 {
+		t.Errorf("List = %v (err %v), want nothing saved", list, err)
+	}
+}
+
+// Delete keys on the id too. A record the store did not write must not let one
+// climb out of the puzzle directory and tombstone a file next door.
+func TestDeleteRefusesAnIDThatLeavesTheStore(t *testing.T) {
+	s := newStore(t)
+	const crafted = `{
+		"schema": 1,
+		"id": "../settings",
+		"length": 5,
+		"answer": "crane",
+		"guesses": ["crane"],
+		"marks": [[2,2,2,2,2]],
+		"maxAttempts": 6,
+		"status": "won",
+		"startedAt": "2026-01-01T00:00:00Z",
+		"updatedAt": "2026-01-01T00:00:00Z"
+	}`
+	settings := filepath.Join(s.dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(crafted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Delete("../settings"); err == nil {
+		t.Error("Delete(../settings) succeeded, want a refusal")
+	}
+
+	after, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatalf("a delete reached outside the store: %v", err)
+	}
+	var g game.Game
+	if err := json.Unmarshal(after, &g); err != nil {
+		t.Fatal(err)
+	}
+	if g.Deleted {
+		t.Error("Delete(../settings) wrote a tombstone outside the store")
+	}
+}
+
+// A record answers for the file it is in: a valid id in the wrong place is not
+// the puzzle the store was asked for, and every caller keys on the file name.
+func TestStoreIgnoresARecordThatDisagreesWithItsFile(t *testing.T) {
+	s := newStore(t)
+	g := newGame(t, 5)
+	b, err := encodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const other = "3f2a7b4c-5d6e-4f70-8123-456789abcdef"
+	if err := os.WriteFile(filepath.Join(s.dir, puzzleDir, other+".json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Errorf("List = %v, want the mismatched record ignored", list)
+	}
+	if _, err := s.Load(other); err == nil {
+		t.Error("Load of a record that disclaims its own file succeeded")
 	}
 }

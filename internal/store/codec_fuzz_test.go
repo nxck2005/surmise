@@ -13,7 +13,7 @@ import (
 // refuse, never to panic: every input ends in either a valid game or an error,
 // and which of the two is not the fuzz test's business.
 func FuzzDecodeRecord(f *testing.F) {
-	g, err := game.NewFrom("fuzz-seed", "crane", 5)
+	g, err := game.NewFrom("3f2a7b4c-5d6e-4f70-8123-456789abcdef", "crane", 5)
 	if err != nil {
 		f.Fatal(err)
 	}
@@ -26,6 +26,9 @@ func FuzzDecodeRecord(f *testing.F) {
 	f.Add([]byte(`{"schema":1}`))
 	f.Add([]byte(`{"schema":999,"id":"x"}`))
 	f.Add([]byte(`{"id":"x","length":5,"answer":"crane","status":"won"}`))
+	f.Add([]byte(`{"schema":1,"id":"../escape","length":5,"answer":"crane",` +
+		`"guesses":[],"marks":[],"maxAttempts":6,"status":"in_progress",` +
+		`"startedAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}`))
 	f.Add([]byte("\x00\x01\x02"))
 	for _, name := range []string{"legacy-puzzle.json", "legacy-settings.json"} {
 		b, err := os.ReadFile(filepath.Join("testdata", name))

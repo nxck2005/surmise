@@ -128,11 +128,13 @@ func TestDailyKeepsItsIDWhenTheCodeCollides(t *testing.T) {
 	want := daily.ID(m.day, 5)
 
 	// Park a puzzle already wearing the daily's code. Codes are six digits, so
-	// a hit turns up in about a million tries.
+	// a hit turns up in about a million tries. The ids are legacy-shaped
+	// because a persisted puzzle may only carry the shapes the app has ever
+	// written.
 	code := game.Code(want)
 	var clash *game.Game
 	for i := range 4_000_000 {
-		id := fmt.Sprintf("collide-%d", i)
+		id := fmt.Sprintf("%016x", i)
 		if game.Code(id) != code {
 			continue
 		}

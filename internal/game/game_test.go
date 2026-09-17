@@ -73,6 +73,67 @@ func TestNewIDsAreUUIDv4(t *testing.T) {
 	}
 }
 
+// An id is a persistence key, so the set of shapes is closed: the two this app
+// has ever written, and nothing else. Accepting more would let a crafted save
+// or backup name itself in a way the store cannot safely hold — the id becomes
+// a filename in the JSON store and a key suffix in the browser's.
+func TestValidID(t *testing.T) {
+	valid := []string{
+		"7f3a1c0b9d2e4f56",                     // a pre-UUID id, as older saves hold
+		"3f2a7b4c-5d6e-4f70-8123-456789abcdef", // a random puzzle's UUIDv4
+		"0130405e-2c98-8e40-ba2c-dce569a50a05", // a derived puzzle's UUIDv8
+		"0000000000000000",
+	}
+	for _, id := range valid {
+		if !ValidID(id) {
+			t.Errorf("ValidID(%q) = false, want true", id)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"x",
+		"fuzz-seed",
+		"../escape",
+		`..\escape`,
+		"a/b",
+		".",
+		"..",
+		"./abc",
+		"abc.",
+		"with space",
+		"3f2a7b4c-5d6e-4f70-8123-456789abcde",   // one character short
+		"3f2a7b4c-5d6e-4f70-8123-456789abcdef0", // one character long
+		// Uppercase is a different string on Linux and the same file on macOS
+		// and Windows, so the store could only promise one of the two readings.
+		"3F2A7B4C-5D6E-4F70-8123-456789ABCDEF",
+		"7F3A1C0B9D2E4F56",
+		"3f2a7b4c_5d6e_4f70_8123_456789abcdef",
+		"3f2a7b4c-5d6e-4f70-8123-456789abcdeg", // not hex
+		"con",                                  // a device name on Windows
+		"\x1b]52;c;x\x07",
+		"café",
+	}
+	for _, id := range invalid {
+		if ValidID(id) {
+			t.Errorf("ValidID(%q) = true, want false", id)
+		}
+	}
+
+	for _, make := range []func() (*Game, error){
+		func() (*Game, error) { return New(5) },
+		func() (*Game, error) { return NewCustom("nishu", 5) },
+	} {
+		g, err := make()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ValidID(g.ID) {
+			t.Errorf("a constructor produced the invalid id %q", g.ID)
+		}
+	}
+}
+
 func TestNewFromKeepsTheIdentityItIsGiven(t *testing.T) {
 	const id = "13f0405e-2c98-8e40-ba2c-dce569a50a05"
 	g, err := NewFrom(id, "  ABOUT ", 5)
@@ -103,15 +164,17 @@ func TestNewFromKeepsTheIdentityItIsGiven(t *testing.T) {
 }
 
 func TestNewFromRejectsUnplayableInput(t *testing.T) {
+	const id = "3f2a7b4c-5d6e-4f70-8123-456789abcdef"
 	cases := []struct {
 		name       string
 		id, answer string
 		length     int
 	}{
 		{"no id", "", "about", 5},
-		{"unsupported length", "id", "abouts", 7},
-		{"answer does not match length", "id", "about", 4},
-		{"answer is not a word", "id", "zzzzz", 5},
+		{"id that could escape a store", "../escape", "about", 5},
+		{"unsupported length", id, "abouts", 7},
+		{"answer does not match length", id, "about", 4},
+		{"answer is not a word", id, "zzzzz", 5},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -382,7 +445,7 @@ func TestNewCustomTakesAWordOutsideTheList(t *testing.T) {
 		t.Skipf("%q reached the word list; pick another non-word", secret)
 	}
 
-	if _, err := NewFrom("id", secret, 5); err == nil {
+	if _, err := NewFrom("3f2a7b4c-5d6e-4f70-8123-456789abcdef", secret, 5); err == nil {
 		t.Fatal("NewFrom accepted an off-list answer; it must stay strict")
 	}
 

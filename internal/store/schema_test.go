@@ -58,7 +58,7 @@ func TestLegacySettingsStillDecode(t *testing.T) {
 // is looking at.
 func TestSchemaStampedOnEveryWrite(t *testing.T) {
 	g := &game.Game{
-		ID: "test-id", Length: 5, Answer: "crane",
+		ID: "5b8d0e2f-1a3c-4d57-8e9f-0a1b2c3d4e5f", Length: 5, Answer: "crane",
 		Guesses: []string{"crane"}, Marks: [][]game.Mark{{2, 2, 2, 2, 2}},
 		MaxAttempts: 6, Status: game.Won,
 		StartedAt: time.Unix(0, 0).UTC(), UpdatedAt: time.Unix(0, 0).UTC(),
@@ -91,7 +91,7 @@ func TestSchemaStampedOnEveryWrite(t *testing.T) {
 
 func TestRecordRoundTripKeepsSchema(t *testing.T) {
 	g := &game.Game{
-		ID: "test-id", Length: 5, Answer: "crane",
+		ID: "7c9e1d3a-2b4f-4a58-9d6e-0f1a2b3c4d5e", Length: 5, Answer: "crane",
 		Guesses: []string{"crane"}, Marks: [][]game.Mark{{2, 2, 2, 2, 2}},
 		MaxAttempts: 6, Status: game.Won,
 		StartedAt: time.Unix(0, 0).UTC(), UpdatedAt: time.Unix(0, 0).UTC(),
