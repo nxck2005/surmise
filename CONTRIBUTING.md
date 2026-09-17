@@ -49,6 +49,11 @@ map of the repository there is.
   it may become a filename or a storage key, and `game.Validate` enforces that
   on every read and write. Never join an id from a save, a backup or a URL onto
   a path without it.
+- **Never interpolate stored or imported text into a frame raw.** Words, daily
+  dates, ids and theme values are refused at their own boundary
+  (`game.Validate`, `theme.Parse`, the store codec); errors and messages that
+  may carry anything else go through `ui.safeText` before they are rendered.
+  The board draws a word byte by byte, so a control byte is an escape.
 - **New dependencies need an argument.** The direct set is deliberately three
   Charm modules. The theme reader is hand-rolled, UUIDs come from
   `crypto/rand`, and that is on purpose — say why nothing smaller exists before

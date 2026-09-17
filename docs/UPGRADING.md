@@ -38,7 +38,7 @@ the same challenge identity and answer, not that every non-answer guess remains
 accepted forever. A safety removal may explicitly retire an affected old code;
 silently mapping it to another answer is never allowed.
 
-## v0.5.4 → v0.6.0: puzzle ids are validated
+## v0.5.4 → v0.6.0: saved records are validated
 
 **What changed.** A puzzle id must now be one of the two shapes this app has
 ever written: sixteen lowercase hex characters (saves from before puzzles
@@ -58,6 +58,15 @@ backup that was not written by this app. That file now reports an error instead
 of being written. Every puzzle, tombstone, setting and theme written by any
 released build still reads unchanged — no migration and no schema bump, because
 the bytes are the same and only what is accepted narrowed.
+
+**The words are validated too.** A saved answer, guess or daily label must be
+lowercase letters or an exact `YYYY-MM-DD` date; anything else is refused
+wherever a record is read, and an archive carrying one is refused whole. An
+import error that names a refused theme file now quotes that name instead of
+printing it raw. This is the same class of change, closing the second finding
+of the 2026-09-05 audit: those fields are drawn on the board, where an embedded
+terminal escape could reach the terminal — or, in a browser, the clipboard. No
+released build ever wrote such a record, so no legitimate save is affected.
 
 ## v0.3.1 → v0.3.2: every daily answer moved
 
