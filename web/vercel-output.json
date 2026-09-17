@@ -2,6 +2,16 @@
   "version": 3,
   "routes": [
     {
+      "src": "^/(.*)$",
+      "headers": {
+        "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "no-referrer"
+      },
+      "continue": true
+    },
+    {
       "src": "^/surmise\\.wasm$",
       "headers": { "cache-control": "public, max-age=31536000, immutable" },
       "continue": true
