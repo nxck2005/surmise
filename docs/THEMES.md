@@ -191,6 +191,18 @@ A theme whose `name` matches a built-in one replaces it, so you can adjust a
 bundled theme by copying it out and editing the copy. Drop the `name` line and
 the theme is called after its file.
 
+## Limits, and linked files
+
+A theme file may be at most 64 KiB, its `name` and `author` at most 128 bytes
+each, and a glyph at most 16 runes — far above anything readable in a list row
+or one tile. A file over a cap is listed with an error rather than read whole.
+
+A theme file may be a symlink. The themes directory is your own, and linking a
+theme in from a dotfiles repository is a normal way to keep one, so reads —
+the picker, and a backup's export — follow links. A restore never does: it
+writes a new file exclusively and leaves an existing name, link included,
+exactly as it was.
+
 ## Crediting a theme
 
 `author` is a free-text line beside `name`, shown under the theme in the picker:

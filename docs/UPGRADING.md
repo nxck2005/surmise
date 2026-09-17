@@ -68,6 +68,17 @@ of the 2026-09-05 audit: those fields are drawn on the board, where an embedded
 terminal escape could reach the terminal — or, in a browser, the clipboard. No
 released build ever wrote such a record, so no legitimate save is affected.
 
+**The rest of the audit's hardening lands here as well.** An imported archive
+is bounded — 64 MiB for the file, at most 10,000 records of 64 KiB, 256 themes
+of 64 KiB — and a record or theme over its cap is refused or shown with an
+error rather than read whole. A decoded puzzle's `maxAttempts` must be its
+length plus one, its status a real one, and its marks in range. New data
+directories are created `0700`; directories that already exist keep whatever
+mode they have. A restore never follows a symlink when writing a theme file,
+though reading one through a link still works. For a browser deploy the site
+now sends a strict Content-Security-Policy and the usual companion headers.
+None of this changes a record written by a released build.
+
 ## v0.3.1 → v0.3.2: every daily answer moved
 
 **What changed.** 981 words were taken out of the three answer lists: proper
