@@ -763,23 +763,27 @@ func (m *Model) bankPlaytime(d time.Duration) {
 	m.saveSettings(s)
 }
 
-// playtime is the lifetime total as it should be displayed: the counter, floored
-// by what the saved puzzles can still prove. The floor is what an install whose
-// history predates the counter shows, and it is written back the first time it
-// wins, which is the whole of the migration.
-func (m *Model) playtime() time.Duration {
-	saved := time.Duration(m.settingsOf().PlaytimeMS) * time.Millisecond
+// openProfile shows the profile from one pass over the saved puzzles. Both
+// figures it needs — the summary and the playtime floor — read the same
+// snapshot, which is why the scan lives here rather than in each of them: the
+// screen used to read the whole store and then the root read it again for the
+// counter.
+//
+// The floor is what an install whose history predates the counter shows, and it
+// is written back the first time it wins, which is the whole of the migration.
+func (m *Model) openProfile(s store.Settings) {
 	games, err := m.store.All()
 	if err != nil {
-		return saved
+		m.err = err
+		return
 	}
+	saved := time.Duration(s.PlaytimeMS) * time.Millisecond
 	total := stats.Playtime(saved, games)
 	if total > saved {
-		s := m.settingsOf()
 		s.PlaytimeMS = total.Milliseconds()
 		m.saveSettings(s)
 	}
-	return total
+	m.profile.reload(games, m.day, s.DisplayName, total)
 }
 
 func (m *Model) Init() tea.Cmd {
@@ -1613,8 +1617,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.screen = screenList
 
 	case choiceProfile:
-		s := m.settingsOf()
-		m.profile.reload(m.store, m.day, s.DisplayName, m.playtime())
+		m.openProfile(m.settingsOf())
 		m.screen = screenProfile
 
 	case choiceThemes:

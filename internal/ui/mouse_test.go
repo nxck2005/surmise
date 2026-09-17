@@ -146,7 +146,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			}
 			m.screen = screenDaily
 		}},
-		{"profile", func() { m.profile.reload(m.store, m.day, "", 0); m.screen = screenProfile }},
+		{"profile", func() { reloadProfile(t, m, "", 0); m.screen = screenProfile }},
 		{"themes", func() { m.themes.reload(m.themeLib, m.themeName); m.screen = screenThemes }},
 		{"settings", func() { m.settings.reload(m.settingsOf()); m.screen = screenSettings }},
 		{"social play", func() { m.social = socialScreen{}; m.screen = screenSocial }},
@@ -761,7 +761,7 @@ func TestProfileShedsExtrasOnAShortTerminal(t *testing.T) {
 	m.game.g.Answer = "crane"
 	send(t, m, "c", "r", "a", "n", "e", "enter")
 	send(t, m, "esc")
-	m.profile.reload(m.store, m.day, "", 0)
+	reloadProfile(t, m, "", 0)
 	m.screen = screenProfile
 
 	roomy := drawAt(t, m, testHeight)

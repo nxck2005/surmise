@@ -71,6 +71,17 @@ func animModel(t *testing.T) *Model {
 	return newModelWithMotion(t, motionPronouncedName)
 }
 
+// reloadProfile shows the profile the way opening it does, from one read of the
+// store, so tests do not have to know the snapshot shape.
+func reloadProfile(t *testing.T, m *Model, displayName string, playtime time.Duration) {
+	t.Helper()
+	games, err := m.store.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.profile.reload(games, m.day, displayName, playtime)
+}
+
 func newModelWithMotion(t *testing.T, motion string) *Model {
 	t.Helper()
 	s, err := store.NewJSON(t.TempDir())
@@ -825,7 +836,7 @@ func TestProfileReflectsPlay(t *testing.T) {
 	send(t, m, "c", "r", "a", "n", "e", "enter")
 	send(t, m, "esc")
 
-	m.profile.reload(m.store, m.day, "", 0)
+	reloadProfile(t, m, "", 0)
 	m.screen = screenProfile
 	view := m.View().Content
 

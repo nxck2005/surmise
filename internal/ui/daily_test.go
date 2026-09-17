@@ -171,7 +171,7 @@ func TestProfileShowsTheDailyStreak(t *testing.T) {
 	}
 	send(t, m, "esc")
 
-	m.profile.reload(m.store, m.day, "", 0)
+	reloadProfile(t, m, "", 0)
 	m.screen = screenProfile
 	view := m.View().Content
 
@@ -204,7 +204,7 @@ func TestProfileHasNoDailySectionWithoutADaily(t *testing.T) {
 	}
 	send(t, m, "esc")
 
-	m.profile.reload(m.store, m.day, "", 0)
+	reloadProfile(t, m, "", 0)
 	m.screen = screenProfile
 	if view := m.View().Content; strings.Contains(view, "streak 1 (max 1)") {
 		t.Errorf("casual play produced a daily row\n%s", view)
