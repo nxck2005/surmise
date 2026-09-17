@@ -38,6 +38,27 @@ the same challenge identity and answer, not that every non-answer guess remains
 accepted forever. A safety removal may explicitly retire an affected old code;
 silently mapping it to another answer is never allowed.
 
+## v0.5.4 → v0.6.0: puzzle ids are validated
+
+**What changed.** A puzzle id must now be one of the two shapes this app has
+ever written: sixteen lowercase hex characters (saves from before puzzles
+carried UUIDs) or a canonical lowercase UUID (version 4 for a random puzzle,
+version 8 for a derived one). Anything else is refused wherever an id is read
+or written, and an archive carrying such a record is refused whole, before any
+of it is imported. A record is also held to the id it is stored under: one that
+answers for a different id is ignored rather than trusted.
+
+**Why.** A puzzle id becomes a filename on the desktop and a storage key in a
+browser, and an imported backup supplies ids. Without the check, an archive
+could name an id like `../settings` and have the import write outside the
+puzzle directory.
+
+**What you will notice.** Nothing, unless you hand-edited a save or import a
+backup that was not written by this app. That file now reports an error instead
+of being written. Every puzzle, tombstone, setting and theme written by any
+released build still reads unchanged — no migration and no schema bump, because
+the bytes are the same and only what is accepted narrowed.
+
 ## v0.3.1 → v0.3.2: every daily answer moved
 
 **What changed.** 981 words were taken out of the three answer lists: proper

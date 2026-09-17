@@ -44,6 +44,11 @@ map of the repository there is.
   code stays length-agnostic.
 - **Don't look a puzzle up by its code.** `#042317` is a display label derived
   from the id and not unique; everything keys on the id.
+- **An id is a persistence key, not free text.** It has to satisfy
+  `game.ValidID` (legacy 16-lowercase-hex or a canonical lowercase UUID) before
+  it may become a filename or a storage key, and `game.Validate` enforces that
+  on every read and write. Never join an id from a save, a backup or a URL onto
+  a path without it.
 - **New dependencies need an argument.** The direct set is deliberately three
   Charm modules. The theme reader is hand-rolled, UUIDs come from
   `crypto/rand`, and that is on purpose — say why nothing smaller exists before
