@@ -19,6 +19,7 @@ package backup
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -42,6 +43,22 @@ const Format = "surmise.backup"
 // one would silently drop, and dropping a player's history quietly is the one
 // failure this package exists to prevent.
 const Version = 1
+
+// MaxArchiveBytes bounds an archive before it is parsed. An archive is the one
+// file this app invites in from outside, and a real history is a few megabytes
+// at most — ten thousand records of a few kilobytes each — so the cap is far
+// above any honest file while keeping a hostile one from being read and
+// unmarshalled whole. The three native and browser entry points all hold
+// themselves to this figure, so one number describes "too big to be a backup".
+const MaxArchiveBytes = 64 << 20
+
+// What an archive may hold, checked before a single record is decoded. The
+// limits are two orders of magnitude above a long history; their job is to
+// bound the shapes a parser walks, not to ration anyone's play.
+const (
+	maxPuzzles = 10_000
+	maxThemes  = 256
+)
 
 // Archive is the file. Records are held as raw JSON rather than decoded games
 // so that they are exactly the bytes a store holds — see store.EncodeRecord.
@@ -110,6 +127,10 @@ func Build(s store.Store, settings store.Settings, themes []theme.File, app stri
 // their history reachable. An archive is data being invited in from outside,
 // and half of one is not something to write into a working install.
 func Read(b []byte) (*Archive, []*game.Game, error) {
+	if len(b) > MaxArchiveBytes {
+		return nil, nil, fmt.Errorf("backup: this file is larger than %d bytes", MaxArchiveBytes)
+	}
+
 	var a Archive
 	if err := json.Unmarshal(b, &a); err != nil {
 		return nil, nil, fmt.Errorf("backup: this is not a %s file: %w", Format, err)
@@ -127,10 +148,24 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 		return nil, nil, fmt.Errorf("backup: this file is version %d and this build reads %d — update the game and try again",
 			a.Version, Version)
 	}
+	if len(a.Puzzles) > maxPuzzles {
+		return nil, nil, fmt.Errorf("backup: %d records is more than a backup may hold (%d)", len(a.Puzzles), maxPuzzles)
+	}
+	if len(a.Themes) > maxThemes {
+		return nil, nil, fmt.Errorf("backup: %d themes is more than a backup may hold (%d)", len(a.Themes), maxThemes)
+	}
+	for i, t := range a.Themes {
+		if len(t.Body) > theme.MaxFileBytes {
+			return nil, nil, fmt.Errorf("backup: theme %d is larger than %d bytes", i+1, theme.MaxFileBytes)
+		}
+	}
 
 	games := make([]*game.Game, 0, len(a.Puzzles))
 	seen := make(map[string]bool, len(a.Puzzles))
 	for i, raw := range a.Puzzles {
+		if len(raw) > store.MaxRecordBytes {
+			return nil, nil, fmt.Errorf("backup: record %d is larger than %d bytes", i+1, store.MaxRecordBytes)
+		}
 		g, err := store.DecodeRecord(fmt.Sprintf("record %d of this backup", i+1), raw)
 		if err != nil {
 			return nil, nil, fmt.Errorf("backup: %w", err)
@@ -146,9 +181,5 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 }
 
 func sortByID(games []*game.Game) {
-	for i := 1; i < len(games); i++ {
-		for j := i; j > 0 && games[j].ID < games[j-1].ID; j-- {
-			games[j], games[j-1] = games[j-1], games[j]
-		}
-	}
+	sort.Slice(games, func(i, j int) bool { return games[i].ID < games[j].ID })
 }

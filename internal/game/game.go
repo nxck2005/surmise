@@ -28,6 +28,12 @@ const (
 // Done reports whether the puzzle is finished, either way.
 func (s Status) Done() bool { return s == Won || s == Lost }
 
+// valid reports whether s is one of the three states a puzzle can be in. A
+// decoded record is held to this because the status is not just a label: it
+// decides whether a puzzle is finished, how a row is coloured and how the
+// streak walks read it, and an invented value would quietly act like a loss.
+func (s Status) valid() bool { return s == InProgress || s == Won || s == Lost }
+
 // Errors returned by Guess. The UI matches on these to choose a message.
 var (
 	ErrFinished    = errors.New("puzzle is already finished")
@@ -431,6 +437,9 @@ func (g *Game) Validate() error {
 		if !words.SupportedLength(g.Length) {
 			return fmt.Errorf("game: unsupported length %d", g.Length)
 		}
+		if !g.Status.valid() {
+			return fmt.Errorf("game: unknown status %q", g.Status)
+		}
 		return nil
 	}
 	if g.Challenge != nil && g.Challenge.Code == "" {
@@ -453,10 +462,10 @@ func (g *Game) Validate() error {
 		return fmt.Errorf("game: daily %q is not a date", g.Daily)
 	case len(g.Guesses) != len(g.Marks):
 		return fmt.Errorf("game: %d guesses but %d marks", len(g.Guesses), len(g.Marks))
-	case g.MaxAttempts <= 0:
-		return errors.New("game: maxAttempts must be positive")
-	case len(g.Guesses) > g.MaxAttempts:
-		return fmt.Errorf("game: %d guesses exceeds max %d", len(g.Guesses), g.MaxAttempts)
+	case g.MaxAttempts != attemptsFor(g.Length):
+		return fmt.Errorf("game: maxAttempts %d does not match %d letters", g.MaxAttempts, g.Length)
+	case !g.Status.valid():
+		return fmt.Errorf("game: unknown status %q", g.Status)
 	}
 	for i, guess := range g.Guesses {
 		if len(guess) != g.Length || len(g.Marks[i]) != g.Length {
@@ -464,6 +473,11 @@ func (g *Game) Validate() error {
 		}
 		if !lettersOnly(guess) {
 			return fmt.Errorf("game: guess %d %q is not lowercase letters", i, guess)
+		}
+		for _, m := range g.Marks[i] {
+			if m < Absent || m > Correct {
+				return fmt.Errorf("game: guess %d has mark %d, want 0-%d", i, m, Correct)
+			}
 		}
 	}
 	return nil

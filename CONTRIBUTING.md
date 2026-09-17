@@ -54,6 +54,12 @@ map of the repository there is.
   (`game.Validate`, `theme.Parse`, the store codec); errors and messages that
   may carry anything else go through `ui.safeText` before they are rendered.
   The board draws a word byte by byte, so a control byte is an escape.
+- **Untrusted input has a size.** Archives, records and theme files are read
+  through caps (`backup.MaxArchiveBytes`, `store.MaxRecordBytes`,
+  `theme.MaxFileBytes`) applied *while* reading, not after. A new entry point
+  that reads a file, stream or browser `File` needs one too. Theme files may be
+  symlinks, so reads follow them; writes use `O_EXCL` and never create or
+  cross one.
 - **New dependencies need an argument.** The direct set is deliberately three
   Charm modules. The theme reader is hand-rolled, UUIDs come from
   `crypto/rand`, and that is on purpose — say why nothing smaller exists before

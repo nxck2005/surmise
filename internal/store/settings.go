@@ -1,9 +1,6 @@
 package store
 
-import (
-	"os"
-	"path/filepath"
-)
+import "path/filepath"
 
 // Settings is what the player has chosen, as opposed to what they have played.
 // Native builds keep it at the root of the data dir; KVStore uses the same
@@ -83,8 +80,10 @@ func (s *JSON) settingsPath() string { return filepath.Join(s.dir, settingsName)
 
 // Settings reads the saved preferences. A missing or damaged file yields the
 // defaults rather than an error: a bad settings file must never cost a puzzle.
+// It is read through the same record limit as a puzzle, for the same reason —
+// a hand-replaced settings file must not be read into memory whole.
 func (s *JSON) Settings() Settings {
-	b, err := os.ReadFile(s.settingsPath())
+	b, err := readLimited(s.settingsPath())
 	if err != nil {
 		return Settings{}
 	}

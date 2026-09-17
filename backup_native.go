@@ -57,7 +57,7 @@ var _ ui.Transfer = fileTransfer{}
 // already there.
 func (f fileTransfer) Save(b []byte) (string, error) {
 	dir := filepath.Join(f.dir, backupDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create %s: %w", dir, err)
 	}
 
@@ -123,11 +123,31 @@ func (f fileTransfer) Load() ([]byte, string, error) {
 	}
 
 	path := filepath.Join(dir, newest)
-	b, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("read %s: %w", path, err)
+	}
+	defer file.Close()
+	b, err := readCapped(file)
 	if err != nil {
 		return nil, "", fmt.Errorf("read %s: %w", path, err)
 	}
 	return b, newest, nil
+}
+
+// readCapped reads a backup from a file or stream, refusing anything over
+// backup.MaxArchiveBytes while it is read rather than after. A plain ReadFile
+// believes whatever it is given, and a FIFO or /dev/zero are paths a player can
+// hand to -import; the limit is what makes "read it all, then check" safe.
+func readCapped(r io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, backup.MaxArchiveBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > backup.MaxArchiveBytes {
+		return nil, fmt.Errorf("larger than %d bytes", backup.MaxArchiveBytes)
+	}
+	return b, nil
 }
 
 // exportBackup writes the whole install to path.
@@ -188,9 +208,13 @@ func importBackup(s *store.JSON, themeDir, path string) error {
 		err error
 	)
 	if path == stdio {
-		b, err = io.ReadAll(os.Stdin)
+		b, err = readCapped(os.Stdin)
 	} else {
-		b, err = os.ReadFile(path)
+		var f *os.File
+		if f, err = os.Open(path); err == nil {
+			defer f.Close()
+			b, err = readCapped(f)
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)

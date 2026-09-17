@@ -50,12 +50,12 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           # Follow the toolchain in go.mod, as CI and the release do.
           go-version-file: go.mod
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
 
@@ -85,7 +85,14 @@ jobs:
       # ignored. `continue: true` applies the header and then lets the file be
       # served normally.
       #
-      # It sets one thing: the wasm caches for a year. boot.js appends
+      # It sets two things. A catch-all route sends the security headers:
+      # nosniff, a deny for framing, no-referrer, and a self-only CSP with the
+      # one escape wasm needs. Nothing the page loads is off-origin — the
+      # stylesheets, scripts, xterm.js and wasm all come from here — so a
+      # strict policy has nothing to break; verify the served headers against
+      # staging after a deploy, since no local check sees Vercel's routing.
+      #
+      # The second route: the wasm caches for a year. boot.js appends
       # ?v=<hash of the wasm>, so every build asks for a URL the browser has
       # never seen and an immutable year can never go stale. Everything else
       # keeps a constant filename and is left on Vercel's default of
@@ -97,6 +104,21 @@ jobs:
           mkdir -p .vercel/output/static
           cp -r web/dist/. .vercel/output/static/
           cp web/vercel-output.json .vercel/output/config.json
+
+      # The CLI is installed from tools/deploy's lockfile, not fetched by npx:
+      # a lockfile pins the whole dependency tree with integrity hashes, so the
+      # deploy runs the same bytes every time rather than trusting whatever the
+      # registry serves for a version string.
+      #
+      # It is installed into the runner's temp directory rather than the
+      # checkout: vercel's dependency tree contains Go source (its @vercel/fun
+      # runtimes), and a nested module anywhere under the repository makes
+      # `go vet ./...` and `go test ./...` refuse to walk it. The lockfile
+      # stays in the tree; the install does not.
+      - name: install the deploy CLI
+        run: |
+          cp tools/deploy/package.json tools/deploy/package-lock.json "$RUNNER_TEMP/"
+          npm ci --prefix "$RUNNER_TEMP"
 
       - name: deploy
         id: deploy
@@ -119,7 +141,7 @@ jobs:
 
           # The CLI prints the deployment URL on stdout and its progress on
           # stderr, so the URL can be captured without parsing anything.
-          url=$(npx --yes vercel@58.9.0 deploy --prebuilt $target --token "$VERCEL_TOKEN")
+          url=$("$RUNNER_TEMP/node_modules/.bin/vercel" deploy --prebuilt $target --token "$VERCEL_TOKEN")
           echo "url=$url" >>"$GITHUB_OUTPUT"
           echo "deployed $url" >>"$GITHUB_STEP_SUMMARY"
 

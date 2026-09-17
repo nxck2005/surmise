@@ -172,13 +172,16 @@ on every push and fail beside every good deploy.
 The staging address needs a Vercel login, because Deployment Protection covers
 everything except production. Production is public.
 
-Caching is set by `web/vercel-output.json`, which is copied to
-`.vercel/output/config.json`. It sets exactly one thing: `surmise.wasm` caches
-for a year, which is safe because `boot.js` requests it as
-`surmise.wasm?v=<hash>` and a new build asks for a URL the browser has never
-seen. Every other file keeps a constant name and stays on Vercel's revalidating
-default. Note that it is written as `routes`, not the `headers` key from
-`vercel.json` — the Build Output API has no `headers` key, and one put there is
-ignored without an error.
+`web/vercel-output.json`, copied to `.vercel/output/config.json`, sets two
+things. `surmise.wasm` caches for a year, which is safe because `boot.js`
+requests it as `surmise.wasm?v=<hash>` and a new build asks for a URL the
+browser has never seen; every other file keeps a constant name and stays on
+Vercel's revalidating default. And a catch-all route sends the security
+headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer`, and a self-only Content-Security-Policy with
+`'wasm-unsafe-eval'` — the one allowance WebAssembly needs. Nothing the page
+loads is off-origin. Note that both are written as `routes`, not the `headers`
+key from `vercel.json` — the Build Output API has no `headers` key, and one put
+there is ignored without an error.
 
 [xterm.js]: https://xtermjs.org

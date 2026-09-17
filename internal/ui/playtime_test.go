@@ -50,7 +50,8 @@ func TestPlaytimeIsBankedOnTheFinishingGuess(t *testing.T) {
 func TestDeletingAPuzzleKeepsItsPlaytime(t *testing.T) {
 	m := newModel(t)
 	playFor(t, m, 90*time.Second)
-	before := m.playtime()
+	m.openProfile(m.settingsOf())
+	before := m.profile.playtime
 
 	send(t, m, "esc")
 	openList(t, m)
@@ -59,7 +60,8 @@ func TestDeletingAPuzzleKeepsItsPlaytime(t *testing.T) {
 	if list, _ := m.store.List(); len(list) != 0 {
 		t.Fatalf("puzzle still listed after deletion: %v", list)
 	}
-	if got := m.playtime(); got != before {
+	m.openProfile(m.settingsOf())
+	if got := m.profile.playtime; got != before {
 		t.Errorf("playtime = %v after deleting the puzzle, want %v", got, before)
 	}
 }
@@ -75,7 +77,8 @@ func TestPlaytimeSeedsItselfFromExistingPuzzles(t *testing.T) {
 	s.PlaytimeMS = 0
 	m.saveSettings(s)
 
-	seeded := m.playtime()
+	m.openProfile(m.settingsOf())
+	seeded := m.profile.playtime
 	if seeded < 89*time.Second {
 		t.Fatalf("playtime = %v with no counter, want the saved puzzle's time", seeded)
 	}

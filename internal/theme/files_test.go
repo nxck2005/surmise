@@ -138,6 +138,78 @@ func TestWriteNewQuotesRefusedNamesInItsError(t *testing.T) {
 	}
 }
 
+// A theme body over the cap is skipped rather than written, and the honest
+// files in the same archive still land.
+func TestWriteNewRefusesAnOversizedTheme(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "themes")
+	added, skipped, err := WriteNew(dir, []File{
+		{Name: "big.toml", Body: strings.Repeat("a", MaxFileBytes+1)},
+		{Name: "small.toml", Body: "small\n"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "refused") {
+		t.Errorf("error = %v, want the oversized theme refused", err)
+	}
+	if added != 1 || skipped != 1 {
+		t.Errorf("added %d and skipped %d, want 1 and 1", added, skipped)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "big.toml")); !os.IsNotExist(err) {
+		t.Error("the oversized theme was written")
+	}
+}
+
+// A restore never follows a link: a symlink already wearing a theme's name is
+// left alone — dangling included — so a write cannot be steered out of the
+// directory by one that a hostile archive could not name anyway.
+func TestWriteNewNeverFollowsASymlink(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "themes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(base, "outside.toml")
+	if err := os.Symlink(target, filepath.Join(dir, "link.toml")); err != nil {
+		t.Skipf("symlinks are unavailable here: %v", err)
+	}
+
+	added, skipped, err := WriteNew(dir, []File{{Name: "link.toml", Body: "no\n"}})
+	if err != nil {
+		t.Fatalf("WriteNew: %v", err)
+	}
+	if added != 0 || skipped != 1 {
+		t.Errorf("added %d and skipped %d, want 0 and 1", added, skipped)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Error("a restore followed a symlink out of the themes directory")
+	}
+}
+
+// Reads do follow a symlink, on purpose: the themes directory is the player's
+// own, and linking a theme in from a dotfiles repository is a normal way to
+// keep one. The policy is "reads follow, writes never", and this pins the half
+// that is easy to break by tightening WriteNew.
+func TestFilesReadsASymlinkedTheme(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "themes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(base, "outside.toml")
+	if err := os.WriteFile(real, []byte("name = \"linked\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(dir, "link.toml")); err != nil {
+		t.Skipf("symlinks are unavailable here: %v", err)
+	}
+
+	files, err := Files(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Name != "link.toml" || files[0].Body != "name = \"linked\"\n" {
+		t.Errorf("Files = %+v, want the linked theme read", files)
+	}
+}
+
 // Nothing to restore writes nothing, and does not create a directory an install
 // with no themes never had.
 func TestWriteNewOfNothingDoesNothing(t *testing.T) {

@@ -210,6 +210,54 @@ func TestReadRefusesWhatItCannotTrust(t *testing.T) {
 	}
 }
 
+// An archive is the one untrusted file this app invites in, so its shape is
+// bounded before anything inside it is decoded.
+func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
+	base := Archive{Format: Format, Version: Version}
+	mk := func(a Archive) []byte {
+		t.Helper()
+		b, err := json.Marshal(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
+	t.Run("archive bytes", func(t *testing.T) {
+		if _, _, err := Read(make([]byte, MaxArchiveBytes+1)); err == nil {
+			t.Error("Read accepted a file larger than MaxArchiveBytes")
+		}
+	})
+	t.Run("too many records", func(t *testing.T) {
+		a := base
+		a.Puzzles = make([]json.RawMessage, maxPuzzles+1)
+		if _, _, err := Read(mk(a)); err == nil {
+			t.Error("Read accepted more records than a backup may hold")
+		}
+	})
+	t.Run("oversized record", func(t *testing.T) {
+		a := base
+		a.Puzzles = []json.RawMessage{json.RawMessage(`"` + strings.Repeat("a", store.MaxRecordBytes) + `"`)}
+		if _, _, err := Read(mk(a)); err == nil {
+			t.Error("Read accepted a record larger than store.MaxRecordBytes")
+		}
+	})
+	t.Run("too many themes", func(t *testing.T) {
+		a := base
+		a.Themes = make([]theme.File, maxThemes+1)
+		if _, _, err := Read(mk(a)); err == nil {
+			t.Error("Read accepted more themes than a backup may hold")
+		}
+	})
+	t.Run("oversized theme", func(t *testing.T) {
+		a := base
+		a.Themes = []theme.File{{Name: "big.toml", Body: strings.Repeat("a", theme.MaxFileBytes+1)}}
+		if _, _, err := Read(mk(a)); err == nil {
+			t.Error("Read accepted a theme larger than theme.MaxFileBytes")
+		}
+	})
+}
+
 // An id becomes a filename when an archive lands, so a record carrying
 // anything but a plain token is refused with the rest of an untrustworthy
 // file — before Apply is given the chance to write it.

@@ -305,35 +305,41 @@ func dailyStreaks(games []*game.Game, today daily.Day) map[int]dailyRun {
 }
 
 // walkDays applies the rules in dailyStreaks' comment to one mode's days.
+//
+// It visits the recorded days in date order and judges the gaps between them,
+// rather than iterating every calendar day from the first record to today. The
+// rules need only "is there a missing day before today between these two", so
+// the work is tied to the history rather than to the calendar — a hand-edited
+// date in the year 1 used to make every profile recomputation walk twenty
+// thousand centuries. The walk ends at today, or after the last record when -day
+// puts today behind days already played; either way the days involved are the
+// recorded ones plus the two gap checks below.
 func walkDays(days map[daily.Day]*game.Game, today daily.Day) dailyRun {
-	var first, last daily.Day
+	ordered := make([]daily.Day, 0, len(days))
 	for d := range days {
-		if first.IsZero() || d.Before(first) {
-			first = d
-		}
-		if last.IsZero() || last.Before(d) {
-			last = d
-		}
+		ordered = append(ordered, d)
 	}
-	if first.IsZero() {
+	if len(ordered) == 0 {
 		return dailyRun{}
 	}
-
-	// The walk ends at today, or at the last record when that is later — which
-	// -day makes possible, since it can put "today" behind days already played.
-	end := today
-	if end.Before(last) {
-		end = last
-	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Before(ordered[j]) })
 
 	var r dailyRun
-	for d := first; !end.Before(d); d = d.AddDays(1) {
-		g, played := days[d]
-		switch {
-		case !played:
-			if d.Before(today) {
+	for i, d := range ordered {
+		// A gap before this record. It resets the run when there really is a
+		// missing day between the two records and that first missing day is
+		// before today — "today is not missed until it is over". A record one
+		// day after the previous one leaves no gap, so a neutral day (still in
+		// play) is not mistaken for a miss.
+		if i > 0 {
+			firstMissing := ordered[i-1].AddDays(1)
+			if firstMissing.Before(d) && firstMissing.Before(today) {
 				r.current = 0
 			}
+		}
+
+		g := days[d]
+		switch {
 		case !g.Status.Done():
 			// still in play: neutral, as an open game is to streaks
 		case g.Status != game.Won:
@@ -346,6 +352,11 @@ func walkDays(days map[daily.Day]*game.Game, today daily.Day) dailyRun {
 				r.longest = r.current
 			}
 		}
+	}
+
+	// The tail: days after the last record and before today reset the run.
+	if ordered[len(ordered)-1].AddDays(1).Before(today) {
+		r.current = 0
 	}
 	return r
 }

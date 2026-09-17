@@ -9,8 +9,8 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/stats"
-	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/words"
 )
 
@@ -37,20 +37,16 @@ type profileScreen struct {
 
 func (m *profileScreen) resize(w, h int) { m.width, m.height = w, h }
 
-// reload recomputes the profile. The day comes from the root rather than from
-// the clock so that -day moves the daily streak the same way it moves the
-// board: the screen and the puzzle it describes agree on what today is. The
-// display name is a local setting supplied by the root, not identity attached
-// to any game. Playtime comes from the root for the same reason as the day: it
-// is read from the settings, which this screen does not reach.
-func (m *profileScreen) reload(s store.Store, today daily.Day, displayName string, playtime time.Duration) {
+// reload shows a history the caller has already read. Taking the games rather
+// than a store is what lets one pass over the saves feed both this summary and
+// the playtime floor — Model.openProfile is the caller that does it. The day
+// comes from the root rather than from the clock so that -day moves the daily
+// streak the same way it moves the board: the screen and the puzzle it
+// describes agree on what today is. The display name and playtime likewise
+// come from the root, which is where the settings live.
+func (m *profileScreen) reload(games []*game.Game, today daily.Day, displayName string, playtime time.Duration) {
 	m.displayName = sanitizeDisplayName(displayName)
 	m.playtime = playtime
-	games, err := s.All()
-	if err != nil {
-		m.err = err
-		return
-	}
 	m.err = nil
 	m.summary = stats.ComputeAt(games, today)
 }

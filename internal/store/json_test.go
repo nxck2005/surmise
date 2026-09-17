@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -451,6 +452,47 @@ func TestStoreIgnoresARecordThatDisagreesWithItsFile(t *testing.T) {
 	}
 	if _, err := s.Load(other); err == nil {
 		t.Error("Load of a record that disclaims its own file succeeded")
+	}
+}
+
+// A record is read through MaxRecordBytes: a planted or hand-edited file that
+// is far too big to be a puzzle is never pulled into memory whole.
+func TestStoreRefusesAnOversizedRecord(t *testing.T) {
+	s := newStore(t)
+	g := newGame(t, 5)
+	big := append([]byte(`"`), bytes.Repeat([]byte("a"), MaxRecordBytes)...)
+	big = append(big, '"')
+	if err := os.WriteFile(filepath.Join(s.dir, puzzleDir, g.ID+".json"), big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Load(g.ID); err == nil {
+		t.Error("Load accepted a record larger than MaxRecordBytes")
+	}
+	if list, err := s.List(); err != nil || len(list) != 0 {
+		t.Errorf("List = %v (err %v), want the oversized record ignored", list, err)
+	}
+}
+
+// The data directory is created 0700, like the records inside it are 0600:
+// history is the player's own, and nothing in it is meant to be world-readable.
+func TestDataDirectoryIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows has no POSIX mode bits to assert: Stat reports a synthetic
+		// 0777 for every directory, and the create mode is expressed through
+		// the ACL instead.
+		t.Skip("permission bits are not meaningful on Windows")
+	}
+	dir := t.TempDir()
+	if _, err := NewJSON(dir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, puzzleDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Errorf("puzzles directory mode = %o, want 700", got)
 	}
 }
 
