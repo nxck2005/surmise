@@ -76,11 +76,18 @@ func (b *backupScreen) reset() {
 	b.failure = ""
 }
 
-// saved reports a written archive.
-func (b *backupScreen) saved(where string) {
+// saved reports a written archive, and the linked themes the archive did not
+// carry. A backup is a copy meant to leave the machine, so an out-of-tree link
+// is left out rather than followed — see theme.Files — and the screen says so
+// rather than letting a theme go missing quietly.
+func (b *backupScreen) saved(where string, linked []string) {
 	b.waiting = false
 	b.failure = ""
 	b.report = []string{"saved to " + where}
+	if len(linked) > 0 {
+		b.report = append(b.report, fmt.Sprintf("left %s out: a backup does not follow links",
+			countOf(len(linked), "linked theme")))
+	}
 }
 
 // loaded reports a restore, in the terms a player would ask about it. It is the

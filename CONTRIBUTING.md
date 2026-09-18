@@ -58,7 +58,9 @@ map of the repository there is.
   through caps (`backup.MaxArchiveBytes`, `store.MaxRecordBytes`,
   `theme.MaxFileBytes`) applied *while* reading, not after. A new entry point
   that reads a file, stream or browser `File` needs one too. Theme files may be
-  symlinks, so reads follow them; writes use `O_EXCL` and never create or
+  symlinks: the picker follows one, but the file is statted and read through
+  the opened descriptor so the cap is the target's, a backup export skips
+  linked names and reports them, and writes use `O_EXCL` and never create or
   cross one.
 - **New dependencies need an argument.** The direct set is deliberately three
   Charm modules. The theme reader is hand-rolled, UUIDs come from
