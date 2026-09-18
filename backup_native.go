@@ -157,10 +157,15 @@ func readCapped(r io.Reader) ([]byte, error) {
 // month's backup would be the one part of it that destroys history.
 func exportBackup(s *store.JSON, themeDir, path string) error {
 	// A theme directory that cannot be read costs the themes, not the backup:
-	// the puzzles are what nothing else can replace.
-	themes, err := theme.Files(themeDir)
+	// the puzzles are what nothing else can replace. A linked theme is not
+	// followed into the archive — see theme.Files — and is said out loud
+	// rather than dropped quietly.
+	themes, linked, err := theme.Files(themeDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+	}
+	if len(linked) > 0 {
+		fmt.Fprintf(os.Stderr, "skipped %s: a backup carries regular files only\n", plural(len(linked), "linked theme"))
 	}
 
 	b, err := backup.Build(s, s.Settings(), themes, build.Get().String(), time.Now())

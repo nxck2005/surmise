@@ -332,6 +332,59 @@ func TestOversizedUserThemeIsListedWithAnError(t *testing.T) {
 	t.Fatal("the oversized theme is not listed at all")
 }
 
+// The picker does follow a theme linked in from a dotfiles repository — that
+// is the policy docs/THEMES.md states, and the half of it that is easy to
+// break by tightening the export path. Writes are the other half and never
+// follow one; see WriteNew.
+func TestOpenReadsASymlinkedTheme(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "themes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(base, "outside.toml")
+	if err := os.WriteFile(real, []byte("name = \"linked\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, filepath.Join(dir, "link.toml")); err != nil {
+		t.Skipf("symlinks are unavailable here: %v", err)
+	}
+
+	if _, ok := Open(dir).Get("linked"); !ok {
+		t.Error("the picker did not load a linked theme")
+	}
+}
+
+// The linker's own size is not the target's: a symlink is a few bytes, so the
+// cap has to be measured on the file the read would come from. This is the
+// case the pre-descriptor check missed — the target is a regular file over the
+// cap, and it is refused instead of being read whole.
+func TestOpenRefusesAnOversizedLinkedTheme(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "themes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(base, "huge.toml")
+	if err := os.WriteFile(target, []byte(strings.Repeat("a", MaxFileBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "huge.toml")); err != nil {
+		t.Skipf("symlinks are unavailable here: %v", err)
+	}
+
+	for _, e := range Open(dir).Entries() {
+		if e.Name != "huge" {
+			continue
+		}
+		if e.Err == nil {
+			t.Error("a link to an oversized file was listed without an error")
+		}
+		return
+	}
+	t.Fatal("the linked theme is not listed at all")
+}
+
 // New data directories are 0700, matching the 0600 the records inside them
 // carry.
 func TestEnsureDirCreatesAPrivateDirectory(t *testing.T) {

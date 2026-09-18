@@ -1685,7 +1685,7 @@ func (m *Model) saveBackup() {
 	if m.transfer == nil {
 		return
 	}
-	themes, err := theme.Files(m.themeLib.Dir())
+	themes, linked, err := theme.Files(m.themeLib.Dir())
 	if err != nil {
 		// One unreadable theme directory is not worth losing the puzzles over;
 		// the archive is still worth writing without it.
@@ -1701,7 +1701,7 @@ func (m *Model) saveBackup() {
 		m.backup.refused(err)
 		return
 	}
-	m.backup.saved(where)
+	m.backup.saved(where, linked)
 }
 
 // loadBackup asks the platform for a file. Transfer.Load may block for as long

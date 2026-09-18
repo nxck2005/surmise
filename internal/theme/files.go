@@ -3,6 +3,7 @@ package theme
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -53,27 +54,35 @@ func validName(name string) bool {
 // Files reads every theme in dir, sorted by name so two reads of an unchanged
 // directory are identical. A directory that is not there is not an error: an
 // install that never wrote a theme simply has none.
-func Files(dir string) ([]File, error) {
+//
+// A name that is a symlink is not read at all: it is returned in linked so the
+// caller can say what was left out. That is deliberately narrower than the
+// picker, which follows a link — see Library — because a backup is a copy meant
+// to leave the machine, and silently carrying whatever a link points at would
+// put files the player never chose into a file they may hand to somebody else.
+// Loading a dotfiles theme and copying an arbitrary out-of-tree file into a
+// portable archive are different trust decisions.
+func Files(dir string) (files []File, linked []string, err error) {
 	if dir == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, fmt.Errorf("theme: read %s: %w", dir, err)
+		return nil, nil, fmt.Errorf("theme: read %s: %w", dir, err)
 	}
 
-	var files []File
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 			continue
 		}
-		if info, err := e.Info(); err != nil || info.Size() > MaxFileBytes {
+		if e.Type()&fs.ModeSymlink != 0 {
+			linked = append(linked, e.Name())
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		b, err := readThemeFile(filepath.Join(dir, e.Name()))
 		if err != nil {
 			// One unreadable theme is not worth failing a whole backup over;
 			// the player still has every other one. This follows JSON.All,
@@ -83,7 +92,68 @@ func Files(dir string) ([]File, error) {
 		files = append(files, File{Name: e.Name(), Body: string(b)})
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
-	return files, nil
+	return files, linked, nil
+}
+
+// readThemeFile reads one theme, with MaxFileBytes applied while it is read.
+//
+// The cap has to be measured on the file the reads will come from, which is not
+// the same as the directory entry: a theme may be a symlink, and
+// fs.DirEntry.Info reports the link itself — a few bytes — while the target can
+// be any size. So the descriptor is opened once and statted, and the bytes come
+// from that same descriptor through a LimitReader, which is also what makes a
+// file that grows under the stat, or a special file like /dev/zero, stop at the
+// cap rather than being read whole.
+//
+// A target that is not a regular file is refused, and statted once before the
+// open as well: opening a FIFO for reading blocks until a writer appears, so a
+// planted one must be recognised by its mode before the open, not after. The
+// check is repeated on the descriptor because a swap between the two is the
+// only thing the first check cannot see.
+func readThemeFile(path string) ([]byte, error) {
+	before, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkThemeSize(before); err != nil {
+		return nil, err
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if err := checkThemeSize(info); err != nil {
+		return nil, err
+	}
+
+	b, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > MaxFileBytes {
+		return nil, fmt.Errorf("theme: file is larger than %d bytes", MaxFileBytes)
+	}
+	return b, nil
+}
+
+// checkThemeSize refuses a file that is not a plain one, or is too large to be
+// a theme. It takes fs.FileInfo rather than a path so the caller decides
+// whether that info came from before or after the open.
+func checkThemeSize(info fs.FileInfo) error {
+	if !info.Mode().IsRegular() {
+		return errors.New("theme: not a regular file")
+	}
+	if info.Size() > MaxFileBytes {
+		return fmt.Errorf("theme: file is larger than %d bytes", MaxFileBytes)
+	}
+	return nil
 }
 
 // WriteNew writes the themes that are not already there and leaves the rest

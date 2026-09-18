@@ -174,16 +174,7 @@ func (l *Library) loadDir(dir string) {
 		}
 		// path opens the file; safeText(path) is what anyone gets to look at.
 		path := filepath.Join(dir, e.Name())
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		if info.Size() > MaxFileBytes {
-			l.add(Entry{Name: fallbackName(e.Name()), Source: safeText(path),
-				Err: fmt.Errorf("theme: file is larger than %d bytes", MaxFileBytes)})
-			continue
-		}
-		b, err := os.ReadFile(path)
+		b, err := readThemeFile(path)
 		if err != nil {
 			l.add(Entry{Name: fallbackName(e.Name()), Source: safeText(path), Err: safeErr(err)})
 			continue

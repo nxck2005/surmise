@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -347,9 +348,12 @@ func TestSplashDuration(t *testing.T) {
 }
 
 // A hand-edited length outside the sane range is reported and falls back,
-// rather than hanging the launch behind a splash nobody can dismiss.
+// rather than hanging the launch behind a splash nobody can dismiss. The
+// largest int is the case the multiplication used to swallow: it wrapped
+// around the duration's width into a negative one, which passed the range
+// check and became a splash with no timer at all.
 func TestSplashDurationOutOfRange(t *testing.T) {
-	for _, ms := range []int{-1, int(2 * time.Minute / time.Millisecond)} {
+	for _, ms := range []int{-1, int(2 * time.Minute / time.Millisecond), math.MaxInt} {
 		s, dir := newStore(t)
 		if err := s.SaveSettings(store.Settings{SplashMillis: ms}); err != nil {
 			t.Fatal(err)

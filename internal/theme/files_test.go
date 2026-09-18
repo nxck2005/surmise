@@ -27,9 +27,12 @@ func TestFilesReadsBytesVerbatimAndSorted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := Files(dir)
+	files, linked, err := Files(dir)
 	if err != nil {
 		t.Fatalf("Files: %v", err)
+	}
+	if len(linked) != 0 {
+		t.Errorf("linked = %v, want nothing — none of these is a symlink", linked)
 	}
 	if len(files) != 2 {
 		t.Fatalf("read %d files, want the two themes: %+v", len(files), files)
@@ -45,12 +48,12 @@ func TestFilesReadsBytesVerbatimAndSorted(t *testing.T) {
 // An install that never wrote a theme has no directory, and that is not a
 // failure worth refusing a backup over.
 func TestFilesAcceptsNoDirectory(t *testing.T) {
-	files, err := Files(filepath.Join(t.TempDir(), "never-created"))
-	if err != nil || files != nil {
-		t.Errorf("Files of a missing directory = %v, %v; want nothing and no error", files, err)
+	files, linked, err := Files(filepath.Join(t.TempDir(), "never-created"))
+	if err != nil || files != nil || linked != nil {
+		t.Errorf("Files of a missing directory = %v, %v, %v; want nothing and no error", files, linked, err)
 	}
-	if files, err := Files(""); err != nil || files != nil {
-		t.Errorf("Files of no directory at all = %v, %v; want nothing and no error", files, err)
+	if files, linked, err := Files(""); err != nil || files != nil || linked != nil {
+		t.Errorf("Files of no directory at all = %v, %v, %v; want nothing and no error", files, linked, err)
 	}
 }
 
@@ -183,11 +186,12 @@ func TestWriteNewNeverFollowsASymlink(t *testing.T) {
 	}
 }
 
-// Reads do follow a symlink, on purpose: the themes directory is the player's
-// own, and linking a theme in from a dotfiles repository is a normal way to
-// keep one. The policy is "reads follow, writes never", and this pins the half
-// that is easy to break by tightening WriteNew.
-func TestFilesReadsASymlinkedTheme(t *testing.T) {
+// A link is not followed into a backup. Loading a theme through one is the
+// player's own business — Library still does — but a backup is a copy meant to
+// leave the machine, and carrying whatever the link points at would copy files
+// the player never chose into a file they may share. The name comes back so
+// the caller can say what was left out.
+func TestFilesSkipsASymlinkedTheme(t *testing.T) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "themes")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -201,12 +205,42 @@ func TestFilesReadsASymlinkedTheme(t *testing.T) {
 		t.Skipf("symlinks are unavailable here: %v", err)
 	}
 
-	files, err := Files(dir)
+	files, linked, err := Files(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 1 || files[0].Name != "link.toml" || files[0].Body != "name = \"linked\"\n" {
-		t.Errorf("Files = %+v, want the linked theme read", files)
+	if len(files) != 0 {
+		t.Errorf("Files = %+v, want a linked theme left out of a backup", files)
+	}
+	if len(linked) != 1 || linked[0] != "link.toml" {
+		t.Errorf("linked = %v, want the name reported so the caller can say it was left out", linked)
+	}
+}
+
+// The cap has to be measured on the file that would be read, not on the
+// directory entry: fs.DirEntry.Info reports a symlink's own size, a few bytes,
+// so a link to a large file used to pass the check and then be read whole. A
+// mode check alone would miss it too, because the target is a regular file.
+func TestFilesDoesNotReadThroughAnOversizedLink(t *testing.T) {
+	base := t.TempDir()
+	dir := filepath.Join(base, "themes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(base, "huge.toml")
+	if err := os.WriteFile(target, []byte(strings.Repeat("a", MaxFileBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "huge.toml")); err != nil {
+		t.Skipf("symlinks are unavailable here: %v", err)
+	}
+
+	files, linked, err := Files(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 || len(linked) != 1 {
+		t.Errorf("Files = %d themes, %d links; want the oversized target left unread", len(files), len(linked))
 	}
 }
 

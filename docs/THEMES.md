@@ -196,10 +196,16 @@ the theme is called after its file.
 A theme file may be at most 64 KiB, its `name` and `author` at most 128 bytes
 each, and a glyph at most 16 runes — far above anything readable in a list row
 or one tile. A file over a cap is listed with an error rather than read whole.
+The cap is measured on the file that would be read: a symlink is only a few
+bytes, so a linked theme's target is statted through the open file and read
+through a limit rather than trusted to be small because the link is.
 
 A theme file may be a symlink. The themes directory is your own, and linking a
-theme in from a dotfiles repository is a normal way to keep one, so reads —
-the picker, and a backup's export — follow links. A restore never does: it
+theme in from a dotfiles repository is a normal way to keep one, so the picker
+follows links. A backup's export does not: a backup is a copy meant to leave the
+machine, and following a link would put whatever it points at into a file you
+may hand to somebody else. A linked theme is left out of the archive, and the
+export says which name was skipped. A restore never follows a link either: it
 writes a new file exclusively and leaves an existing name, link included,
 exactly as it was.
 

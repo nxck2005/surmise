@@ -93,9 +93,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     # The only job that needs to write, so the token is widened here rather
-    # than at the top of the file.
+    # than at the top of the file. id-token is for the attestation: the
+    # provenance signature is bound to this workflow run by an OIDC token, not
+    # by the repository token.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -111,6 +115,15 @@ jobs:
           cd dist
           sha256sum * > checksums.txt
           cat checksums.txt
+
+      # Attached before the release is published, so a release that exists is
+      # one whose archives can be traced back to this workflow and commit:
+      # `gh attestation verify <archive> -R <repo>`. The subjects are read from
+      # the checksums file, so the attested digests are exactly the published
+      # ones and checksums.txt itself is not a subject.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
 
       - name: publish
         env:

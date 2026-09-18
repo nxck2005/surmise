@@ -51,6 +51,13 @@ each release also ships a `checksums.txt`:
 sha256sum -c checksums.txt --ignore-missing
 ```
 
+every archive also carries a build provenance attestation, tying the bytes to
+the release workflow and commit that produced them:
+
+```sh
+gh attestation verify surmise_<version>_<os>_<arch>.tar.gz -R nxck2005/surmise
+```
+
 ## why you'd want it
 
 **more options for word sizes.** play 4, 5 or 6 letters! shorter is

@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -189,9 +190,16 @@ func encodeSettings(v Settings) ([]byte, error) {
 	if v.Schema == 0 {
 		v.Schema = schemaVersion
 	}
+	// The counter saturates rather than overflowing, and the blob is held to
+	// the same bound its reader uses: the store must never write a settings
+	// file it would then refuse to read.
+	v.PlaytimeMS = clampPlaytime(v.PlaytimeMS)
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("store: encode settings: %w", err)
+	}
+	if len(b) > MaxRecordBytes {
+		return nil, fmt.Errorf("store: settings are larger than %d bytes", MaxRecordBytes)
 	}
 	return b, nil
 }
@@ -201,7 +209,35 @@ func decodeSettings(b []byte) Settings {
 	if err := json.Unmarshal(b, &out); err != nil || (out.Schema != 0 && out.Schema != schemaVersion) {
 		return Settings{}
 	}
+	// Heal a hand-edited counter rather than handing every later conversion a
+	// value that overflows it. See MaxPlaytimeMS.
+	out.PlaytimeMS = clampPlaytime(out.PlaytimeMS)
 	return out
+}
+
+// ValidateSettings reports whether v is within the bounds settings are written
+// and read under: a schema this build knows, a play counter that cannot
+// overflow a duration, and an encoded size no larger than MaxRecordBytes.
+//
+// It is the import side of those rules — internal/backup calls it before an
+// archive's preferences may fill anything in — and it refuses rather than
+// clamping, because a value out of range is not this app's output and Read
+// refuses the whole file over one bad record.
+func ValidateSettings(v Settings) error {
+	if v.Schema != 0 && v.Schema != schemaVersion {
+		return errors.New("schema version mismatch")
+	}
+	if v.PlaytimeMS < 0 || v.PlaytimeMS > MaxPlaytimeMS {
+		return errors.New("playtime is out of range")
+	}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode settings: %w", err)
+	}
+	if len(b) > MaxRecordBytes {
+		return fmt.Errorf("larger than %d bytes", MaxRecordBytes)
+	}
+	return nil
 }
 
 // summarise turns records into the browse list every store's List returns:

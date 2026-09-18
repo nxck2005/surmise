@@ -14,8 +14,9 @@ go test -race ./internal/...
 ```
 
 CI runs the tests on Linux, macOS and Windows, plus a WebAssembly build and a
-headless browser smoke test. `gofmt` and `go vet` are checked; run them before
-pushing.
+headless browser smoke test. `gofmt` and `go vet` are checked, along with
+known vulnerabilities in the Go module and the browser shell's npm
+dependencies (`govulncheck` and `npm audit`); run gofmt and vet before pushing.
 
 ## The traps
 
@@ -58,7 +59,9 @@ map of the repository there is.
   through caps (`backup.MaxArchiveBytes`, `store.MaxRecordBytes`,
   `theme.MaxFileBytes`) applied *while* reading, not after. A new entry point
   that reads a file, stream or browser `File` needs one too. Theme files may be
-  symlinks, so reads follow them; writes use `O_EXCL` and never create or
+  symlinks: the picker follows one, but the file is statted and read through
+  the opened descriptor so the cap is the target's, a backup export skips
+  linked names and reports them, and writes use `O_EXCL` and never create or
   cross one.
 - **New dependencies need an argument.** The direct set is deliberately three
   Charm modules. The theme reader is hand-rolled, UUIDs come from

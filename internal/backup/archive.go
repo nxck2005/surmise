@@ -159,6 +159,15 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 			return nil, nil, fmt.Errorf("backup: theme %d is larger than %d bytes", i+1, theme.MaxFileBytes)
 		}
 	}
+	// The settings section is the one part of the file with no per-field bound
+	// of its own, and an archive may devote most of its 64 MiB to one string.
+	// The same rules the settings store writes and reads under are applied
+	// here, before Apply can fill any of them in — see store.ValidateSettings.
+	if a.Settings != nil {
+		if err := store.ValidateSettings(*a.Settings); err != nil {
+			return nil, nil, fmt.Errorf("backup: settings: %w", err)
+		}
+	}
 
 	games := make([]*game.Game, 0, len(a.Puzzles))
 	seen := make(map[string]bool, len(a.Puzzles))
