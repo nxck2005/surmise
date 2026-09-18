@@ -169,6 +169,11 @@ on every push and fail beside every good deploy.
 | tag `v0.3.0` | production, `surmise.nxck.dev` |
 | tag `v0.3.0-rc1` | staging, by the same `*-*` test that marks a GitHub prerelease |
 
+Production is reached only by a non-prerelease tag, through the call from
+`release.yml`: a manual `workflow_dispatch` run always deploys to staging, even
+from a stable tag, so nothing can promote a build the release chain did not
+test.
+
 The staging address needs a Vercel login, because Deployment Protection covers
 everything except production. Production is public.
 
