@@ -3,6 +3,7 @@ package backup
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -254,6 +255,20 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 		a.Themes = []theme.File{{Name: "big.toml", Body: strings.Repeat("a", theme.MaxFileBytes+1)}}
 		if _, _, err := Read(mk(a)); err == nil {
 			t.Error("Read accepted a theme larger than theme.MaxFileBytes")
+		}
+	})
+	t.Run("oversized settings", func(t *testing.T) {
+		a := base
+		a.Settings = &store.Settings{DisplayName: strings.Repeat("a", store.MaxRecordBytes)}
+		if _, _, err := Read(mk(a)); err == nil || !strings.Contains(err.Error(), "settings") {
+			t.Errorf("Read of oversized settings = %v, want a settings refusal", err)
+		}
+	})
+	t.Run("playtime out of range", func(t *testing.T) {
+		a := base
+		a.Settings = &store.Settings{PlaytimeMS: math.MaxInt64}
+		if _, _, err := Read(mk(a)); err == nil || !strings.Contains(err.Error(), "playtime") {
+			t.Errorf("Read of an overflowing play counter = %v, want a settings refusal", err)
 		}
 	})
 }

@@ -95,11 +95,15 @@ const maxSplashDuration = time.Minute
 // parseSplashDuration reads a saved length in milliseconds. Zero is "nothing
 // chosen" and yields the default; anything outside the sane range is refused,
 // for the caller to report the way an unsupported -length is reported.
+//
+// The range is checked in milliseconds, before the multiplication: a huge
+// hand-edited or imported value must be reported as out of range rather than
+// wrapping around the duration's width into one that looks small.
 func parseSplashDuration(ms int) (time.Duration, bool) {
 	switch {
 	case ms == 0:
 		return splashDuration, true
-	case ms < 0 || time.Duration(ms)*time.Millisecond > maxSplashDuration:
+	case ms < 0 || ms > int(maxSplashDuration/time.Millisecond):
 		return splashDuration, false
 	default:
 		return time.Duration(ms) * time.Millisecond, true

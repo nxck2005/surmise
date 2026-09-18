@@ -1,6 +1,10 @@
 package store
 
-import "path/filepath"
+import (
+	"math"
+	"path/filepath"
+	"time"
+)
 
 // Settings is what the player has chosen, as opposed to what they have played.
 // Native builds keep it at the root of the data dir; KVStore uses the same
@@ -72,6 +76,28 @@ type Settings struct {
 	// which is also what an older settings file says, so stats.Playtime floors
 	// it with what the records can still prove.
 	PlaytimeMS int64 `json:"playtime_ms,omitempty"`
+}
+
+// MaxPlaytimeMS is the largest play counter the settings may hold. The counter
+// is milliseconds, and a time.Duration holds about 292 years of them: past that
+// the conversion on the profile — and behind -playtime — overflows and the
+// figure turns into nonsense. No install reaches the bound, so it is a validity
+// rule for what may be imported or hand-edited, not a limit on play.
+const MaxPlaytimeMS = int64(math.MaxInt64) / int64(time.Millisecond)
+
+// clampPlaytime is how every settings read and write saturates the counter: a
+// value past the bound is corrupt, and one that wrapped negative would take the
+// whole lifetime total with it. A negative value reads as "nothing played yet",
+// which is what the zero value already means.
+func clampPlaytime(ms int64) int64 {
+	switch {
+	case ms < 0:
+		return 0
+	case ms > MaxPlaytimeMS:
+		return MaxPlaytimeMS
+	default:
+		return ms
+	}
 }
 
 const settingsName = "settings.json"

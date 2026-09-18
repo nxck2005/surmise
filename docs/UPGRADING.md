@@ -38,6 +38,35 @@ the same challenge identity and answer, not that every non-answer guess remains
 accepted forever. A safety removal may explicitly retire an affected old code;
 silently mapping it to another answer is never allowed.
 
+## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
+
+**What changed.** The settings file is now held to the same 64 KiB bound on
+write that it is read under: an import that fills in a preference can no longer
+make the app write a `settings.json` its own reader would refuse. An archive's
+settings section is checked before anything is applied — the schema tag, the
+size, and the lifetime play counter, which is refused past the point a
+`time.Duration` can hold. A hand-edited counter past that point is clamped when
+the file is read, so the profile cannot show a negative total, and a giant saved
+splash length is reported out of range instead of wrapping into a small one.
+
+A theme loaded through a symlink is now statted and read through the opened
+file, so the 64 KiB cap applies to the link's target and holds while it is read.
+A backup's export no longer follows a symlinked theme: the name is left out and
+the export says so. The picker still loads a linked theme, and a restore still
+never creates or crosses one.
+
+**Why.** Both come from the 2026-09-18 security audit's release gate. A link to
+a large file was measured by the link's own few bytes, so its target could be
+read whole and carried into a portable backup. An archive could devote most of
+its 64 MiB to one preferences string, and a play counter past a duration's range
+turns every later figure into nonsense.
+
+**What you will notice.** Nothing, unless you keep a theme by symlink and back
+up: that theme is no longer in the archive (the export names it), and restoring
+it on another machine means copying the link's target. No setting, save, theme
+or archive written by a released build changes meaning, and nothing needs
+migrating.
+
 ## v0.5.4 → v0.6.0: saved records are validated
 
 **What changed.** A puzzle id must now be one of the two shapes this app has
