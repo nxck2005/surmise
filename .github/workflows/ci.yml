@@ -86,6 +86,24 @@ jobs:
           GOWORK=off go mod tidy
           git diff --exit-code go.mod go.sum
 
+      # Known-vulnerability scans, pinned like staticcheck so CI fails on a
+      # known-bad dependency rather than on a scanner that changed.
+      #
+      # govulncheck reports only what the module graph actually reaches, so a
+      # transitive package nobody calls does not fail the build. The npm audit
+      # covers the browser shell, whose only shipped dependencies are xterm.js
+      # and its fit addon, both pinned exactly. tools/deploy is deliberately
+      # out of scope: it is CI-only, nothing from it ships, and every upstream
+      # release of the CLI currently carries advisories in build runtimes this
+      # workflow never invokes (`deploy --prebuilt`).
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          govulncheck ./...
+
+      - name: npm audit
+        run: npm audit --prefix web --audit-level=high
+
       # The browser build has no platform in the test matrix, so without this
       # step it breaks silently the next time internal/ui is touched.
       - name: wasm

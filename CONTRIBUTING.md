@@ -14,8 +14,9 @@ go test -race ./internal/...
 ```
 
 CI runs the tests on Linux, macOS and Windows, plus a WebAssembly build and a
-headless browser smoke test. `gofmt` and `go vet` are checked; run them before
-pushing.
+headless browser smoke test. `gofmt` and `go vet` are checked, along with
+known vulnerabilities in the Go module and the browser shell's npm
+dependencies (`govulncheck` and `npm audit`); run gofmt and vet before pushing.
 
 ## The traps
 
