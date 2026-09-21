@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nxck2005/surmise/internal/challenge"
+	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 )
 
@@ -57,6 +58,9 @@ func encodeGame(g *game.Game) ([]byte, error) {
 		return nil, err
 	}
 	if err := challenge.ValidateGame(g); err != nil {
+		return nil, err
+	}
+	if err := daily.ValidateGame(g); err != nil {
 		return nil, err
 	}
 	if g.Schema == 0 {
@@ -109,6 +113,9 @@ func decodeRecord(label string, b []byte) (*game.Game, error) {
 	if err := challenge.ValidateGame(&g); err != nil {
 		return nil, fmt.Errorf("store: %s: %w", label, err)
 	}
+	if err := daily.ValidateGame(&g); err != nil {
+		return nil, fmt.Errorf("store: %s: %w", label, err)
+	}
 	return &g, nil
 }
 
@@ -156,6 +163,12 @@ type tombstoneRecord struct {
 // encodeTombstone renders the marker a deleted finished puzzle leaves behind.
 func encodeTombstone(g *game.Game) ([]byte, error) {
 	if err := g.Validate(); err != nil {
+		return nil, err
+	}
+	// A daily tombstone keeps its date, so the date has to answer for the id
+	// here too. The challenge marker is deliberately empty, so there is
+	// nothing left for challenge.ValidateGame to check.
+	if err := daily.ValidateGame(g); err != nil {
 		return nil, err
 	}
 	var challenge *game.ChallengeInfo

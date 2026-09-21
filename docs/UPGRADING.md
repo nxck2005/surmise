@@ -38,6 +38,62 @@ the same challenge identity and answer, not that every non-answer guess remains
 accepted forever. A safety removal may explicitly retire an affected old code;
 silently mapping it to another answer is never allowed.
 
+## v0.6.1 → v0.6.2: hardening from the 2026-09-21 audit
+
+**An archive's arrays are counted while they are decoded.** A backup names its
+puzzles and themes in two JSON arrays, and the count limits were only applied
+after the whole array had been read into memory: a hostile file could name two
+million empty puzzles in a few megabytes and spend roughly twenty-seven times
+its own size in allocations before the limits were consulted. The counts are
+now enforced element by element, as the file is decoded, so a file past a limit
+is refused at the limit rather than after it. The refusal names the same
+figure it always did, and every archive written by a released build still reads
+unchanged.
+
+**A backup is only written if this build could read it back.** The reader
+refuses an archive over 64 MiB, with more than 10,000 records, more than 256
+themes, a theme body or settings blob over its cap — but `Build` applied none
+of those, so a long history or a couple of imported theme packs could produce
+an export that its own import then refused. Export and the backup screen now
+check the same limits and say which one was hit instead of writing a file that
+cannot be restored. The limits themselves are unchanged; raising them stays a
+deliberate decision rather than something a write path quietly works around.
+
+**A daily record has to carry its own date.** A puzzle saved as the daily for a
+day is now held to the id that date and mode derive, wherever a record is read
+or written: an imported or hand-edited record that claims a real daily's id
+under a chosen date is refused, and so is a custom puzzle carrying a daily
+date. The daily streak walk also skips custom puzzles instead of counting a day
+they never played. No save written by a released build is affected — every
+daily has carried its derived id since dailies shipped, and the check needs no
+schema change.
+
+**A puzzle file has to be a regular file.** Opening a FIFO for reading blocks
+until a writer appears, and one planted at a puzzle's path hung every scan that
+touched the history — startup, the menu, the profile, the list. The store now
+refuses a file that is not a plain one by its mode, before opening it, so a
+planted pipe is skipped like any other unreadable record and a planted
+`settings.json` falls back to the defaults. Nothing this app writes is
+affected.
+
+**A puzzle's play time is bounded.** The per-puzzle `elapsedMs` is multiplied
+by a millisecond to render, so a hand-edited or imported value past what a
+`time.Duration` can hold wrapped `Elapsed()` negative and moved the profile's
+solve-time totals and averages. A saved puzzle's elapsed time is now held to
+the same bound the settings play counter has always had, on every read and
+write; no session this app records can come near it. The two figures are one
+constant now, so they cannot drift apart.
+
+**The backup button loads only this app's own dated files.** The newest backup
+was chosen by name, so anything ending in `.json` that sorted after the dated
+names was treated as the one to restore — a dropped file named `zzz.json`
+shadowed every real backup. A candidate now has to be a name this app writes
+(`surmise-backup-YYYY-MM-DD`, then `-2`, `-3`, …): a foreign name is left
+alone, and a directory holding only foreign files says there are no backups
+rather than loading one. The numbering is compared as a number too, so the
+tenth save of a day is newer than the ninth. `-import <path>` still takes any
+file the player names.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on

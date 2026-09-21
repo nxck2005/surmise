@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
@@ -49,6 +50,25 @@ func inProgress(t *testing.T, answer, guess string) *game.Game {
 	}
 	g.Answer = answer
 	if err := g.Guess(guess); err != nil {
+		t.Fatalf("Guess: %v", err)
+	}
+	return g
+}
+
+// wonDaily is a finished daily for a date, with the derived id the codec now
+// requires of anything labeled as a daily.
+func wonDaily(t *testing.T, date string) *game.Game {
+	t.Helper()
+	d, err := daily.ParseDay(date)
+	if err != nil {
+		t.Fatalf("ParseDay(%q): %v", date, err)
+	}
+	g, err := game.NewFrom(daily.ID(d, 5), "crane", 5)
+	if err != nil {
+		t.Fatalf("NewFrom: %v", err)
+	}
+	g.Daily = date
+	if err := g.Guess("crane"); err != nil {
 		t.Fatalf("Guess: %v", err)
 	}
 	return g
@@ -144,13 +164,77 @@ func TestBuildIsDeterministic(t *testing.T) {
 	}
 }
 
+// staticStore hands Build a fixed history, for the tests that are about Build's
+// own bounds rather than about a real store.
+type staticStore struct{ games []*game.Game }
+
+func (s staticStore) All() ([]*game.Game, error)      { return s.games, nil }
+func (s staticStore) Load(string) (*game.Game, error) { return nil, store.ErrNotFound }
+func (s staticStore) Save(*game.Game) error           { return nil }
+func (s staticStore) Delete(string) error             { return store.ErrNotFound }
+func (s staticStore) List() ([]store.Summary, error)  { return nil, nil }
+
+// A backup this build writes has to be one it can read back. Writing a file
+// whose own import refuses it is the failure the format exists to prevent, and
+// the player finds out only when they need the file. Every export path — the
+// flags and the screen — now gets a refusal naming the limit instead.
+func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
+	at := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+
+	t.Run("too many records", func(t *testing.T) {
+		g := wonGame(t, "crane")
+		many := make([]*game.Game, maxPuzzles+1)
+		for i := range many {
+			many[i] = g
+		}
+		_, err := Build(staticStore{games: many}, store.Settings{}, nil, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (10000)") {
+			t.Fatalf("Build = %v, want the record limit named", err)
+		}
+	})
+
+	t.Run("too many themes", func(t *testing.T) {
+		themes := make([]theme.File, maxThemes+1)
+		_, err := Build(newStore(t), store.Settings{}, themes, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (256)") {
+			t.Fatalf("Build = %v, want the theme limit named", err)
+		}
+	})
+
+	t.Run("oversized theme", func(t *testing.T) {
+		themes := []theme.File{{Name: "big.toml", Body: strings.Repeat("a", theme.MaxFileBytes+1)}}
+		_, err := Build(newStore(t), store.Settings{}, themes, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "larger than") {
+			t.Fatalf("Build = %v, want the theme size named", err)
+		}
+	})
+
+	t.Run("oversized settings", func(t *testing.T) {
+		settings := store.Settings{DisplayName: strings.Repeat("a", store.MaxRecordBytes)}
+		_, err := Build(newStore(t), settings, nil, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "larger than") {
+			t.Fatalf("Build = %v, want the settings size named", err)
+		}
+	})
+}
+
+// The output cap is the reader's, so its boundary is inclusive exactly as
+// Read's is: a file of exactly MaxArchiveBytes is read, one byte more is not.
+func TestCheckSizeBoundary(t *testing.T) {
+	if err := checkSize(MaxArchiveBytes); err != nil {
+		t.Errorf("checkSize(at the limit) = %v, want nil", err)
+	}
+	if err := checkSize(MaxArchiveBytes + 1); err == nil {
+		t.Error("checkSize(one past the limit) = nil, want a refusal")
+	}
+}
+
 // Tombstones are records. internal/stats reads them to tell a deleted day from
 // a day never played, so an archive that dropped them would restore a history
 // whose streaks were wrong.
 func TestArchiveCarriesTombstones(t *testing.T) {
 	s := newStore(t)
-	g := wonGame(t, "crane")
-	g.Daily = "2026-08-18"
+	g := wonDaily(t, "2026-08-18")
 	if err := s.Save(g); err != nil {
 		t.Fatal(err)
 	}
@@ -232,8 +316,9 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 	t.Run("too many records", func(t *testing.T) {
 		a := base
 		a.Puzzles = make([]json.RawMessage, maxPuzzles+1)
-		if _, _, err := Read(mk(a)); err == nil {
-			t.Error("Read accepted more records than a backup may hold")
+		_, _, err := Read(mk(a))
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (10000)") {
+			t.Errorf("Read of too many records = %v, want the record limit named", err)
 		}
 	})
 	t.Run("oversized record", func(t *testing.T) {
@@ -246,8 +331,9 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 	t.Run("too many themes", func(t *testing.T) {
 		a := base
 		a.Themes = make([]theme.File, maxThemes+1)
-		if _, _, err := Read(mk(a)); err == nil {
-			t.Error("Read accepted more themes than a backup may hold")
+		_, _, err := Read(mk(a))
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (256)") {
+			t.Errorf("Read of too many themes = %v, want the theme limit named", err)
 		}
 	})
 	t.Run("oversized theme", func(t *testing.T) {
@@ -271,6 +357,39 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 			t.Errorf("Read of an overflowing play counter = %v, want a settings refusal", err)
 		}
 	})
+}
+
+// The refusal above has to come from the element count, not from the array
+// having been materialized first. An archive naming two hundred thousand empty
+// puzzles is a megabyte of input and, decoded whole, allocates once per record
+// — hundreds of times the size of the refusal, which stops at the cap. The
+// assertion is a ratio rather than a constant so it does not depend on how
+// many allocations the decoder happens to spend per element: doubling the
+// array must not double the work.
+func TestReadDoesNotAmplifyAHostileArray(t *testing.T) {
+	body := func(n int) []byte {
+		return []byte(`{"format":"surmise.backup","version":1,"puzzles":[` +
+			strings.Repeat("null,", n-1) + `null]}`)
+	}
+
+	var err error
+	allocs := func(n int) float64 {
+		b := body(n)
+		return testing.AllocsPerRun(3, func() {
+			_, _, err = Read(b)
+		})
+	}
+	small, large := allocs(100_000), allocs(200_000)
+	if err == nil {
+		t.Fatal("Read accepted an archive naming more records than a backup may hold")
+	}
+	if !strings.Contains(err.Error(), "more than a backup may hold") {
+		t.Fatalf("error = %v, want the record limit named", err)
+	}
+	if large > small*1.5 {
+		t.Errorf("%.0f allocations for 200k records against %.0f for 100k; the refusal must not scale with the array",
+			large, small)
+	}
 }
 
 // An id becomes a filename when an archive lands, so a record carrying
@@ -344,6 +463,44 @@ func TestReadRefusesWordsWithControlCharacters(t *testing.T) {
 		if _, _, err := Read(body); err == nil {
 			t.Errorf("Read accepted a record with a control character in its %s", c.name)
 		}
+	}
+}
+
+// A daily's date and id are one fact; an imported record that carries a real
+// daily's identity under a chosen date is refused with the rest of an
+// untrustworthy archive. The store codec enforces it; this pins the import
+// path the audit reached it through.
+func TestReadRefusesADailyThatIsNotItsDate(t *testing.T) {
+	d := daily.DayOf(time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC))
+	g, err := game.NewFrom(daily.ID(d, 5), "crane", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Daily = d.String()
+	raw, err := store.EncodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Move the record to another valid id, leaving the date it claims behind.
+	other, err := game.New(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "`+other.ID+`"`), 1)
+	if bytes.Equal(patched, raw) {
+		t.Fatal("the record does not carry the id it was encoded with")
+	}
+	body, err := json.Marshal(Archive{
+		Format:  Format,
+		Version: Version,
+		Puzzles: []json.RawMessage{patched},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Read(body); err == nil || !strings.Contains(err.Error(), "does not match puzzle id") {
+		t.Errorf("Read of a daily under another id = %v, want a refusal", err)
 	}
 }
 

@@ -1,9 +1,9 @@
 package store
 
 import (
-	"math"
 	"path/filepath"
-	"time"
+
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // Settings is what the player has chosen, as opposed to what they have played.
@@ -83,7 +83,11 @@ type Settings struct {
 // the conversion on the profile — and behind -playtime — overflows and the
 // figure turns into nonsense. No install reaches the bound, so it is a validity
 // rule for what may be imported or hand-edited, not a limit on play.
-const MaxPlaytimeMS = int64(math.MaxInt64) / int64(time.Millisecond)
+//
+// It is game.MaxElapsedMS, not a second derivation of the same figure: a saved
+// puzzle's elapsed time is held to exactly this bound by game.Validate, and
+// the two must not be able to drift.
+const MaxPlaytimeMS = game.MaxElapsedMS
 
 // clampPlaytime is how every settings read and write saturates the counter: a
 // value past the bound is corrupt, and one that wrapped negative would take the

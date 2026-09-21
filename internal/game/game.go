@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"time"
 
@@ -386,6 +387,14 @@ func (g *Game) Attempts() int { return len(g.Guesses) }
 // Remaining is the number of guesses left.
 func (g *Game) Remaining() int { return max(g.MaxAttempts-len(g.Guesses), 0) }
 
+// MaxElapsedMS is the largest elapsed time a saved puzzle may hold. It is the
+// same physical bound store.MaxPlaytimeMS is held to: milliseconds multiplied
+// by time.Millisecond overflow a time.Duration past this figure, and the
+// profile's totals and averages — which sum Elapsed() — would turn into
+// nonsense. No install reaches it, so it is a validity rule for what may be
+// decoded or hand-edited, not a limit on play.
+const MaxElapsedMS = int64(math.MaxInt64) / int64(time.Millisecond)
+
 // Elapsed is total play time, including the session currently in progress if
 // one has been started with AddElapsed.
 func (g *Game) Elapsed() time.Duration {
@@ -466,6 +475,11 @@ func (g *Game) Validate() error {
 		return fmt.Errorf("game: maxAttempts %d does not match %d letters", g.MaxAttempts, g.Length)
 	case !g.Status.valid():
 		return fmt.Errorf("game: unknown status %q", g.Status)
+	case g.ElapsedMS < 0 || g.ElapsedMS > MaxElapsedMS:
+		// A duration cannot hold more milliseconds than this, so a value past
+		// the bound would wrap Elapsed() negative and take the profile's
+		// totals with it. See MaxElapsedMS.
+		return fmt.Errorf("game: elapsedMs %d is out of range", g.ElapsedMS)
 	}
 	for i, guess := range g.Guesses {
 		if len(guess) != g.Length || len(g.Marks[i]) != g.Length {

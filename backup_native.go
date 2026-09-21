@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -99,6 +100,12 @@ func backupName(now time.Time, n int) string {
 // date order, and a file copied in from another machine keeps its name while
 // its timestamp becomes the copy's. The name is what the player sees, so the
 // name is what decides.
+//
+// Only the names backupName writes are candidates. Anything else can be
+// dropped into the directory, and a foreign name sorted above every real
+// backup — so "load a backup" read the stranger's file with no signal that it
+// was not the player's. A file this app did not name is left alone; -import
+// takes an explicit path for anything else.
 func (f fileTransfer) Load() ([]byte, string, error) {
 	dir := filepath.Join(f.dir, backupDir)
 	entries, err := os.ReadDir(dir)
@@ -110,12 +117,18 @@ func (f fileTransfer) Load() ([]byte, string, error) {
 	}
 
 	newest := ""
+	var newestDay time.Time
+	newestN := 0
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+		if e.IsDir() {
 			continue
 		}
-		if e.Name() > newest {
-			newest = e.Name()
+		day, n, ok := parseBackupName(e.Name())
+		if !ok {
+			continue
+		}
+		if newest == "" || day.After(newestDay) || (day.Equal(newestDay) && n > newestN) {
+			newest, newestDay, newestN = e.Name(), day, n
 		}
 	}
 	if newest == "" {
@@ -133,6 +146,41 @@ func (f fileTransfer) Load() ([]byte, string, error) {
 		return nil, "", fmt.Errorf("read %s: %w", path, err)
 	}
 	return b, newest, nil
+}
+
+// parseBackupName splits a file name into the day it names and which backup of
+// that day it is. It accepts exactly what backupName writes — the product
+// name, "backup", a date, an optional -N for a second or later save of the
+// day, and .json — and nothing else. Load uses it as the filter that keeps a
+// stranger's file from being treated as a backup.
+func parseBackupName(name string) (time.Time, int, bool) {
+	rest, ok := strings.CutPrefix(name, brand.Name+"-backup-")
+	if !ok {
+		return time.Time{}, 0, false
+	}
+	rest, ok = strings.CutSuffix(rest, ".json")
+	if !ok {
+		return time.Time{}, 0, false
+	}
+	if day, err := time.Parse(time.DateOnly, rest); err == nil {
+		return day, 1, true
+	}
+	// A numbered backup: the date, then -2, -3, ... backupName never writes a
+	// -1 (the first save of a day is the plain name), so anything below 2 is a
+	// name this app does not produce.
+	i := strings.LastIndexByte(rest, '-')
+	if i < 0 {
+		return time.Time{}, 0, false
+	}
+	day, err := time.Parse(time.DateOnly, rest[:i])
+	if err != nil {
+		return time.Time{}, 0, false
+	}
+	n, err := strconv.Atoi(rest[i+1:])
+	if err != nil || n < 2 {
+		return time.Time{}, 0, false
+	}
+	return day, n, true
 }
 
 // readCapped reads a backup from a file or stream, refusing anything over

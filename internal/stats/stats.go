@@ -272,6 +272,9 @@ type dailyRun struct{ current, longest int }
 //     date on a tombstone is kept for;
 //   - a deleted win neither extends nor breaks it, so a day removed from the
 //     profile cannot lengthen a run either;
+//   - a custom puzzle is not a daily at all: it is left out like every other
+//     figure (game.CountsForStats), so its day reads as one nobody played —
+//     a break, unless it is today;
 //   - an unfinished daily is neutral, matching streaks ignoring a game still in
 //     play;
 //   - a day with no record at all resets it, unless it is today or later: today
@@ -280,6 +283,11 @@ type dailyRun struct{ current, longest int }
 func dailyStreaks(games []*game.Game, today daily.Day) map[int]dailyRun {
 	byMode := make(map[int]map[daily.Day]*game.Game)
 	for _, g := range games {
+		// The same predicate streaks and ComputeAt use, so a custom puzzle
+		// carrying a date cannot move a daily streak either.
+		if !g.CountsForStats() {
+			continue
+		}
 		if g.Daily == "" {
 			continue
 		}

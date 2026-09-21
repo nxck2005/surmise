@@ -106,6 +106,81 @@ func TestFileTransferLoadsTheNewestByName(t *testing.T) {
 	}
 }
 
+// A foreign file must not shadow the real backups. The newest was chosen by
+// name, so any .json dropped into the directory sorted above every dated one
+// and "load a backup" read the stranger's file. Only the names backupName
+// writes are candidates now.
+func TestFileTransferIgnoresFilesThisAppDidNotWrite(t *testing.T) {
+	dir := t.TempDir()
+	backups := filepath.Join(dir, backupDir)
+	if err := os.MkdirAll(backups, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"surmise-backup-2026-08-18.json":   "real",
+		"zzz-drop.json":                    "foreign",
+		"surmise-backup-notadate.json":     "foreign",
+		"surmise-backup-2026-08-18-1.json": "foreign", // backupName never writes -1
+		"other-backup-2026-09-01.json":     "foreign",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(backups, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	b, from, err := fileTransfer{dir: dir}.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if string(b) != "real" || from != "surmise-backup-2026-08-18.json" {
+		t.Errorf("Load = %q from %q, want the real backup", b, from)
+	}
+}
+
+// Nothing but foreign files is "no backups", not "the newest of them".
+func TestFileTransferWithOnlyForeignFilesSaysThereAreNone(t *testing.T) {
+	dir := t.TempDir()
+	backups := filepath.Join(dir, backupDir)
+	if err := os.MkdirAll(backups, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backups, "zzz-drop.json"), []byte("foreign"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := fileTransfer{dir: dir}.Load()
+	if err == nil || !strings.Contains(err.Error(), "no backups") {
+		t.Errorf("Load = %v, want a no-backups refusal", err)
+	}
+}
+
+// The numbering is read as a number, not as text: as text, the tenth backup of
+// a day ("-10") sorts before the ninth ("-9").
+func TestFileTransferNumbersBackupsNumerically(t *testing.T) {
+	dir := t.TempDir()
+	backups := filepath.Join(dir, backupDir)
+	if err := os.MkdirAll(backups, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"surmise-backup-2026-08-18-9.json":  "nine",
+		"surmise-backup-2026-08-18-10.json": "ten",
+	} {
+		if err := os.WriteFile(filepath.Join(backups, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	b, from, err := fileTransfer{dir: dir}.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if string(b) != "ten" || from != "surmise-backup-2026-08-18-10.json" {
+		t.Errorf("Load = %q from %q, want the tenth save", b, from)
+	}
+}
+
 // Nothing to load says where a backup would go, rather than reporting a missing
 // directory the player has never been told about.
 func TestFileTransferWithNoBackupsSaysWhereTheyGo(t *testing.T) {
@@ -139,5 +214,41 @@ func TestBackupNameIsDated(t *testing.T) {
 	}
 	if got := backupName(day, 3); got != "surmise-backup-2026-08-18-3.json" {
 		t.Errorf("backupName for a third save = %q", got)
+	}
+}
+
+// parseBackupName is the boundary between "a file this app wrote" and "a file
+// that happens to be here": it accepts exactly what backupName produces, so
+// the filter and the writer cannot drift apart.
+func TestParseBackupName(t *testing.T) {
+	accept := map[string]struct {
+		date string
+		n    int
+	}{
+		"surmise-backup-2026-08-18.json":    {"2026-08-18", 1},
+		"surmise-backup-2026-08-18-2.json":  {"2026-08-18", 2},
+		"surmise-backup-2026-08-18-10.json": {"2026-08-18", 10},
+	}
+	for name, want := range accept {
+		day, n, ok := parseBackupName(name)
+		if !ok || day.Format(time.DateOnly) != want.date || n != want.n {
+			t.Errorf("parseBackupName(%q) = %v, %d, %v; want %s, %d, true", name, day, n, ok, want.date, want.n)
+		}
+	}
+
+	for _, name := range []string{
+		"notes.txt",
+		"zzz-drop.json",
+		"surmise-backup-notadate.json",
+		"surmise-backup-2026-13-01.json",
+		"surmise-backup-2026-08-18-1.json", // backupName's first save has no number
+		"surmise-backup-2026-08-18-0.json",
+		"surmise-backup-2026-08-18.JSON",
+		"other-backup-2026-08-18.json",
+		"surmise-backup-2026-08-18.json.bak",
+	} {
+		if _, _, ok := parseBackupName(name); ok {
+			t.Errorf("parseBackupName(%q) accepted a name this app does not write", name)
+		}
 	}
 }
