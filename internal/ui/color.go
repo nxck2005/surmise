@@ -28,7 +28,18 @@ var colors = colorprofile.TrueColor
 
 // setColorProfile records what the terminal told us. A test that changes it
 // must restore it, as one that calls setTheme must.
-func setColorProfile(p colorprofile.Profile) { colors = p }
+//
+// Changing it drops the panel's cached rule material: the gradient is exactly
+// what a shallow terminal cannot show, so what was rendered under the old depth
+// is not the frame this one wants. It is one width's worth of strings, and
+// getting it wrong would paint a stale border for the rest of the session.
+func setColorProfile(p colorprofile.Profile) {
+	if p == colors {
+		return
+	}
+	colors = p
+	st.panel = nil
+}
 
 // rich reports whether a gradient is worth drawing. Below 256 colours a blend
 // quantises to a handful of steps and reads as banding rather than as a

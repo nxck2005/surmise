@@ -335,6 +335,38 @@ func TestLetterStatesKeepsBestMark(t *testing.T) {
 	}
 }
 
+// A caller with a map of its own gets the same answer, and the fill clears it
+// first: a letter left from the board it was last filled from would be a mark
+// this game never made. The keyboard is the caller that does this every frame.
+func TestFillLetterStatesClearsAndRefills(t *testing.T) {
+	g := newFixed(t, "crane")
+	if err := g.Guess("acorn"); err != nil {
+		t.Fatal(err)
+	}
+
+	reused := map[byte]Mark{'z': Correct}
+	before := g.LetterStates()
+	g.FillLetterStates(reused)
+
+	if len(reused) != len(before) {
+		t.Fatalf("reused map holds %d letters, want %d", len(reused), len(before))
+	}
+	for c, want := range before {
+		if reused[c] != want {
+			t.Errorf("letter %c = %v, want %v", c, reused[c], want)
+		}
+	}
+	if _, stale := reused['z']; stale {
+		t.Error("a letter from the previous fill survived")
+	}
+
+	// Filling the very same map again is idempotent rather than accumulating.
+	g.FillLetterStates(reused)
+	if len(reused) != len(before) {
+		t.Errorf("a second fill left %d letters, want %d", len(reused), len(before))
+	}
+}
+
 func TestValidateRejectsCorruptState(t *testing.T) {
 	tests := []struct {
 		name  string

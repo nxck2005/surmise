@@ -218,19 +218,47 @@ const legendSample = "A"
 // drift from the tiles it describes: a [style.tile.correct] override or a wider
 // tile_width moves both together. There is no click target here, hence no
 // hitMap: the legend is a label, not a control.
-func renderLegend() string {
+//
+// st.legendText is the reader: it is a function of the theme alone, and the
+// board asks for it (and its width) on every frame, so it is rendered once per
+// style set.
+func (s *styles) renderLegend() string {
 	groups := []string{
-		legendEntry(st.tileCorrect, "correct spot"),
-		legendEntry(st.tilePresent, "wrong spot"),
-		legendEntry(st.tileAbsent, "not in word"),
+		s.legendEntry(s.tileCorrect, "correct spot"),
+		s.legendEntry(s.tilePresent, "wrong spot"),
+		s.legendEntry(s.tileAbsent, "not in word"),
 	}
-	return strings.Join(groups, st.help.Render(st.glyph.Separator))
+	return strings.Join(groups, s.help.Render(s.glyph.Separator))
+}
+
+// legendText is the colour key for this style set, rendered on first use and
+// kept. A theme change builds a new set and with it a new key, so nothing here
+// can outlive the colours it explains.
+func (s *styles) legendText() string {
+	if !s.legend.ready {
+		s.legend.text = s.renderLegend()
+		s.legend.width = lipgloss.Width(s.legend.text)
+		s.legend.ready = true
+	}
+	return s.legend.text
+}
+
+// legendWidth is how wide the key draws, without rendering it again. It is what
+// gameScreen's ladder consults on every layout — twice a frame, once from the
+// screen and once from the help bar — before the key itself is ever drawn.
+func (s *styles) legendWidth() int {
+	s.legendText()
+	return s.legend.width
 }
 
 // legendEntry is one swatch and its label, sharing the board's tile gutter so
 // the filled background does not run into the text.
 func legendEntry(tile lipgloss.Style, label string) string {
-	return joinTiles([]string{tile.Render(legendSample), st.muted.Render(label)})
+	return st.legendEntry(tile, label)
+}
+
+func (s *styles) legendEntry(tile lipgloss.Style, label string) string {
+	return joinTiles([]string{tile.Render(legendSample), s.muted.Render(label)})
 }
 
 // keyboardRows is the QWERTY layout used for the letter-state display.
@@ -244,11 +272,6 @@ var keyboardRows = []string{"qwertyuiop", "asdfghjkl", "zxcvbnm"}
 // renderKeyboard shows the best-known state of every letter, which is the
 // player's main aid for narrowing down the answer. Every cap is clickable.
 func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Time, gap int) string {
-	// Width of the widest row, used to centre the shorter ones beneath it.
-	// Measured without the hit map so the throwaway render marks nothing, and
-	// without the animation so a pulsing cap cannot change the measurement.
-	width := lipgloss.Width(renderKeyboardRow(keyboardRows[0], states, nil, nil, now))
-
 	rows := make([]string, len(keyboardRows))
 	for i, letters := range keyboardRows {
 		row := renderKeyboardRow(letters, states, h, a, now)
@@ -259,7 +282,19 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Tim
 				renderCommandKey(st.glyph.Delete, action{kind: actBackspace}, h, a, now),
 			})
 		}
-		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(row)
+		rows[i] = row
+	}
+
+	// Width of the widest row, used to centre the shorter ones beneath it. Row 0
+	// is the widest the keyboard gets — 59 cells at the default metrics — and it
+	// is the row just rendered, so it is measured rather than rendered a second
+	// time to be measured. That is only sound because a marker is zero-width to
+	// the measurement and the animation and hover cues are repaints: both are
+	// pinned by tests (TestMarkersMeasureAsZeroWidth, and the board's own
+	// settled-frame and layout checks).
+	width := lipgloss.Width(rows[0])
+	for i := range rows {
+		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(rows[i])
 	}
 	return stackSpaced(rows, gap)
 }

@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/nxck2005/surmise/internal/brand"
@@ -216,11 +217,24 @@ func (s *JSON) saveTombstone(g *game.Game) error {
 	return writeFileAtomic(path, b)
 }
 
-// All returns every readable record, tombstones included — stats need them to
-// see where a deleted puzzle broke a streak, and they are the one caller that
-// does. Unreadable files are skipped rather than failing the whole call, so one
-// bad save cannot lock the player out of their history.
-func (s *JSON) All() ([]*game.Game, error) {
+// puzzleIDFromName reports whether a directory entry names a puzzle record, and
+// returns the id it names. Both All and IDs go through it, so the two cannot
+// disagree about what a puzzle in the directory is: a name that is not a plain
+// id this app could have written is not one, and neither is a directory.
+//
+// A file whose *contents* will not decode is still a record here — it occupies
+// the name, and an identity that exists must not read as absent (see IDs).
+func puzzleIDFromName(e fs.DirEntry) (string, bool) {
+	if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+		return "", false
+	}
+	id := strings.TrimSuffix(e.Name(), ".json")
+	return id, game.ValidID(id)
+}
+
+// readDir lists the puzzle directory, treating a missing one as empty — the
+// state every install is in before its first save.
+func (s *JSON) readDir() ([]fs.DirEntry, error) {
 	entries, err := os.ReadDir(filepath.Join(s.dir, puzzleDir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -228,13 +242,47 @@ func (s *JSON) All() ([]*game.Game, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: list puzzles: %w", err)
 	}
+	return entries, nil
+}
+
+// IDs returns the id of every puzzle record on disk without opening one. A
+// deleted finished puzzle is still a file, so its id stays in the list even
+// though List and Load hide it — the code it wears is deliberately not freed
+// for reuse (see takenCodes in internal/ui).
+func (s *JSON) IDs() ([]string, error) {
+	entries, err := s.readDir()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if id, ok := puzzleIDFromName(e); ok {
+			ids = append(ids, id)
+		}
+	}
+	// The listing is sorted by name already, but the contract is the id order
+	// rather than whatever the filesystem hands back.
+	sort.Strings(ids)
+	return ids, nil
+}
+
+// All returns every readable record, tombstones included — stats need them to
+// see where a deleted puzzle broke a streak, and they are the one caller that
+// does. Unreadable files are skipped rather than failing the whole call, so one
+// bad save cannot lock the player out of their history.
+func (s *JSON) All() ([]*game.Game, error) {
+	entries, err := s.readDir()
+	if err != nil {
+		return nil, err
+	}
 
 	games := make([]*game.Game, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+		id, ok := puzzleIDFromName(e)
+		if !ok {
 			continue
 		}
-		g, err := s.load(strings.TrimSuffix(e.Name(), ".json"))
+		g, err := s.load(id)
 		if err != nil {
 			continue
 		}

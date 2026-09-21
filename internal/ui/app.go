@@ -75,6 +75,17 @@ type backupFileMsg struct {
 	err  error
 }
 
+// backupAppliedMsg carries the merge itself back from its command. A restore
+// writes every record it adds through the store, and on a real disk that is one
+// durable save per puzzle — seconds of work at a large history, which is why it
+// is a tea.Cmd and not something Update waits for. The UI-owned half of the
+// restore (preferences, theme files, the report) still happens in Update: the
+// command must not close over the model.
+type backupAppliedMsg struct {
+	res backup.Result
+	err error
+}
+
 func tick() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
@@ -194,6 +205,17 @@ type Model struct {
 	hits  *hitMap
 	hover action
 
+	// reuse is a one-shot request to hand the next View the frame the last one
+	// produced, made only by a mouse motion that provably changed nothing the
+	// frame is made of. Update retires it at the start of every message, so any
+	// other message — a tick, a keystroke, an animation frame — composes as
+	// usual, and View consumes it, so two Views in a row cannot both serve the
+	// same bytes. lastView is what there is to serve; haveView says whether a
+	// frame has been composed at all.
+	reuse    bool
+	lastView tea.View
+	haveView bool
+
 	// anim is what the board is animating, and how strongly. It lives on the
 	// root because two screens read it — the board draws the reveal, the panel
 	// draws the win accent — and because a screen change has to be able to
@@ -284,11 +306,19 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
 	}
-	m.applyStartupTheme(opts.Theme)
-	m.applyStartupLength(opts.Length)
+	// One read of the saved preferences for the whole of startup. Each resolver
+	// below falls back to the same small file when nobody has overridden it —
+	// theme, mode, splash and motion each used to ask for it separately, which
+	// was four decodes of the same bytes before the first frame.
+	//
+	// The snapshot is startup's only: settingsOf keeps reading the store for
+	// the rest of the session, because a preference can change under it.
+	saved := m.settingsOf()
+	m.applyStartupTheme(opts.Theme, saved)
+	m.applyStartupLength(opts.Length, saved)
 	m.applyStartupDay(opts.Day)
-	m.applyStartupSplash(opts.Splash)
-	m.applyStartupMotion(opts.Motion)
+	m.applyStartupSplash(opts.Splash, saved)
+	m.applyStartupMotion(opts.Motion, saved)
 
 	if opts.Challenge != "" {
 		m.challenge = newChallengeJoin(opts.Challenge)
@@ -551,12 +581,13 @@ func (m *Model) skipToResult() bool {
 // applyStartupTheme resolves which theme to open with: an explicit override
 // first, then whatever was saved, then the default. A name that resolves to
 // nothing is reported rather than swallowed, so a typo in -theme is visible.
-func (m *Model) applyStartupTheme(override string) {
+//
+// saved is the startup snapshot of the preferences, read once by New; the
+// override still wins over it.
+func (m *Model) applyStartupTheme(override string, saved store.Settings) {
 	want := override
 	if want == "" {
-		if ss, ok := m.store.(settingsStore); ok {
-			want = ss.Settings().Theme
-		}
+		want = saved.Theme
 	}
 
 	t, ok := m.themeLib.Resolve(want)
@@ -572,12 +603,12 @@ func (m *Model) applyStartupTheme(override string) {
 // saved choice, then the built-in default. An unsupported length is reported
 // rather than silently corrected — a typo in -length should be visible — but is
 // never fatal, and a saved zero simply means nothing was ever chosen.
-func (m *Model) applyStartupLength(override int) {
+func (m *Model) applyStartupLength(override int, saved store.Settings) {
 	m.length = defaultLength
 
 	want := override
 	if want == 0 {
-		want = m.settingsOf().Length
+		want = saved.Length
 	}
 	switch {
 	case want == 0:
@@ -614,9 +645,7 @@ func (m *Model) applyStartupDay(override string) {
 // "No splash" is carried as no art rather than as a flag, so there is one thing
 // to check: raiseSplash puts up whatever art there is, and an empty banner
 // simply never fits.
-func (m *Model) applyStartupSplash(override string) {
-	s := m.settingsOf()
-
+func (m *Model) applyStartupSplash(override string, s store.Settings) {
 	mode, ok := parseSplashMode(s.SplashDismiss)
 	if !ok {
 		m.err = fmt.Errorf("no splash setting %q — using %s", s.SplashDismiss, mode.setting())
@@ -670,7 +699,7 @@ func (m *Model) applyStartupSplash(override string) {
 // The environment is consulted only when nobody has chosen: a player who has
 // been to the settings screen has said what they want, and a $NO_MOTION left in
 // a shell profile must not overrule them.
-func (m *Model) applyStartupMotion(override string) {
+func (m *Model) applyStartupMotion(override string, s store.Settings) {
 	if override != "" {
 		want, ok := parseMotion(override)
 		if !ok {
@@ -680,7 +709,7 @@ func (m *Model) applyStartupMotion(override string) {
 		return
 	}
 
-	saved := m.settingsOf().Motion
+	saved := s.Motion
 	if saved != "" {
 		want, ok := parseMotion(saved)
 		if !ok {
@@ -832,7 +861,13 @@ func (m *Model) pushSize() {
 // Update is a thin wrapper so the animation chain is armed in exactly one
 // place. Any handler below may start an effect, and animCmd is idempotent, so
 // no branch can forget to arm one and none can arm a second.
+//
+// It also retires a frame-reuse request. The request is one-shot and belongs to
+// the message that made it — the motion branch below — so anything else that
+// arrives here means the frame has to be composed from the state this message
+// leaves behind.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.reuse = false
 	model, cmd := m.update(msg)
 	// Batch drops nils, the same property Init relies on.
 	return model, tea.Batch(cmd, m.animCmd())
@@ -911,7 +946,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.screen != screenBackup {
 			return m, nil
 		}
-		m.applyBackup(msg)
+		return m, m.applyBackup(msg)
+
+	case backupAppliedMsg:
+		// The merge is written; what is left is what the UI owns. It runs on
+		// the UI goroutine, so it may touch the model — which the command that
+		// produced this must not have.
+		m.finishBackup(msg)
 		return m, nil
 
 	case tea.ColorProfileMsg:
@@ -946,7 +987,16 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMotionMsg:
-		m.handleMotion(msg.X, msg.Y)
+		// A motion that changed nothing the frame draws — the pointer still on
+		// the target it was on, and that target's row already selected — has
+		// nothing to redraw. Asking the next View to hand back the frame that is
+		// already on the terminal is the whole optimisation: the renderer would
+		// drop an identical frame anyway, but only after View had composed it.
+		if m.handleMotion(msg.X, msg.Y) {
+			return m, nil
+		}
+		m.reuse = true
+		return m, nil
 
 	case tea.MouseWheelMsg:
 		// The puzzle list and the theme list are the only things long enough
@@ -971,37 +1021,52 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleMotion records what the pointer is over so the next render can
 // highlight it. On the menu and the puzzle list the selection follows the
 // pointer as well, which is what makes one click enough to act.
-func (m *Model) handleMotion(x, y int) {
+//
+// It reports whether anything a frame is made of changed. Hover identity is not
+// enough on its own: the keyboard can have moved a selection since the last
+// frame, and a pointer still resting inside the row it was last over has to put
+// the selection back — that is what "the selection follows the pointer" means,
+// and a motion that skipped it because the hover looked the same would leave the
+// two disagreeing. Every pointer-following screen's own point method reports
+// whether it moved anything, so the answer comes from the screen that owns the
+// cursor rather than from a second copy of its rules here.
+func (m *Model) handleMotion(x, y int) (changed bool) {
 	a, _ := m.hits.at(x, y) // off any target, a is the zero action: no hover
-	m.hover = a
 
+	moved := false
 	switch a.kind {
 	case actMenuChoice:
-		m.menu.point(a.index)
+		moved = m.menu.point(a.index)
 	case actListRow, actDeletePuzzle:
 		// The delete button carries the row it refers to, so hovering it keeps
 		// the selection and the prompt talking about the same puzzle.
-		m.list.point(a.index)
+		moved = m.list.point(a.index)
 	case actDailyRow:
-		m.daily.point(a.index)
+		moved = m.daily.point(a.index)
 	case actBackupSave:
-		m.backup.point(backupRowSave)
+		moved = m.backup.point(backupRowSave)
 	case actBackupLoad:
-		m.backup.point(backupRowLoad)
+		moved = m.backup.point(backupRowLoad)
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
-		m.themes.point(a.index)
+		moved = m.themes.point(a.index)
 	case actFieldEdit, actFieldDone:
-		m.pointField(a.index)
+		moved = m.pointField(a.index)
 	case actSettingNext, actSettingPrev:
-		m.settings.point(a.index)
+		moved = m.settings.point(a.index)
 	case actCustomNext, actCustomPrev:
-		m.custom.point(a.index)
+		moved = m.custom.point(a.index)
 	case actSocialChoice:
-		m.social.point(a.index)
+		moved = m.social.point(a.index)
 	case actSprintNext, actSprintPrev:
-		m.sprints.point(a.index)
+		moved = m.sprints.point(a.index)
 	}
+
+	if a == m.hover && !moved {
+		return false
+	}
+	m.hover = a
+	return true
 }
 
 // activeField is the text field the active screen is editing, or nil. It is
@@ -1047,16 +1112,18 @@ func (m *Model) fieldAt(row int) *textField {
 }
 
 // pointField moves the active screen's cursor to a field's row, so that
-// clicking a field selects it exactly as arrowing onto it would.
-func (m *Model) pointField(row int) {
+// clicking a field selects it exactly as arrowing onto it would. It reports
+// whether that moved the cursor, the same as the screens' own point methods.
+func (m *Model) pointField(row int) bool {
 	switch m.screen {
 	case screenSettings:
-		m.settings.point(row)
+		return m.settings.point(row)
 	case screenCustom:
-		m.custom.point(row)
+		return m.custom.point(row)
 	case screenChallenge:
 		// The entry screen has only one field, so there is no cursor to move.
 	}
+	return false
 }
 
 // fieldCommitted is what a screen does when one of its fields has actually
@@ -1369,6 +1436,11 @@ func (m *Model) dispatch(a action) tea.Cmd {
 // back is what esc does: leave the board, saving on the way out, and return to
 // the menu.
 func (m *Model) back() tea.Cmd {
+	// A restore in flight owns the screen until it lands: leaving would put a
+	// list or a board on top of a store that is still being written to.
+	if m.screen == screenBackup && m.backup.restoring {
+		return nil
+	}
 	// Whatever was animating belongs to the screen being left.
 	m.anim.clear()
 	m.pendingResult = false
@@ -1653,6 +1725,14 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 }
 
 func (m *Model) updateBackup(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// A restore in flight owns the screen. It is writing records one durable
+	// save at a time, and leaving would put a list or a board on top of a store
+	// that is still changing under it. ctrl+c is answered above this switch, so
+	// quitting is still possible; the import is add-only and each save is
+	// atomic, so a partial one is already safe.
+	if m.backup.restoring {
+		return m, nil
+	}
 	if key := msg.String(); key == "esc" || key == "q" {
 		return m, m.back()
 	}
@@ -1666,6 +1746,9 @@ func (m *Model) updateBackup(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // doBackup runs one of the screen's two actions. Both the key path and the
 // click path land here, so a row and its button cannot drift apart.
 func (m *Model) doBackup(row int) tea.Cmd {
+	if m.backup.restoring {
+		return nil
+	}
 	switch row {
 	case backupRowSave:
 		m.saveBackup()
@@ -1719,28 +1802,45 @@ func (m *Model) loadBackup() tea.Cmd {
 	}
 }
 
-// applyBackup merges a file the platform handed back.
+// applyBackup takes a file the platform handed back and starts merging it.
 //
 // Everything about the merge itself belongs to internal/backup; what is here is
-// only what the UI owns — writing the preferences back, putting the themes on
-// disk, and applying a theme the archive filled in so the player sees it now
-// rather than after a restart.
-func (m *Model) applyBackup(msg backupFileMsg) {
+// only the split between what has to happen off the UI loop and what must not.
+// Apply is one durable Store.Save per new record — at a large history that is
+// seconds on a real disk, and running it inline froze the interface for all of
+// them. So Update hands back a command, and the UI-owned half of the restore
+// arrives as a backupAppliedMsg on the loop that owns the model.
+//
+// The command may not close over m: commands run on another goroutine. It
+// captures the three immutable things Apply needs instead.
+func (m *Model) applyBackup(msg backupFileMsg) tea.Cmd {
 	switch {
 	case msg.err != nil:
 		m.backup.refused(msg.err)
-		return
+		return nil
 	case len(msg.b) == 0:
 		// A picker closed without choosing. Not a failure.
 		m.backup.cancelled()
-		return
+		return nil
 	}
 
-	res, err := backup.Apply(msg.b, m.store, m.settingsOf())
-	if err != nil {
-		m.backup.refused(err)
+	m.backup.applying()
+	body, s, current := msg.b, m.store, m.settingsOf()
+	return func() tea.Msg {
+		res, err := backup.Apply(body, s, current)
+		return backupAppliedMsg{res: res, err: err}
+	}
+}
+
+// finishBackup does the UI-owned half of a restore: report a refusal, write the
+// merged preferences, put the themes on disk, and apply a theme the archive
+// filled in so the player sees it now rather than after a restart.
+func (m *Model) finishBackup(msg backupAppliedMsg) {
+	if msg.err != nil {
+		m.backup.refused(msg.err)
 		return
 	}
+	res := msg.res
 
 	if len(res.SettingsFilled) > 0 || res.PlaytimeAdded > 0 {
 		m.saveSettings(res.Settings)
@@ -1860,14 +1960,19 @@ func (m *Model) openDaily(length int) tea.Cmd {
 // dailySpent reports whether a daily was played and then deleted. It asks the
 // store rather than the daily screen's rows, so the guard holds on any path
 // that reaches a puzzle, not only the one that has just rendered the list.
+//
+// This is called only after Load has already reported ErrNotFound, which means
+// the id either holds a tombstone or holds nothing at all — so the question is
+// "does this id exist", and an id-only read answers it without decoding the
+// player's history.
 func dailySpent(s store.Store, id string) (bool, error) {
-	saved, err := s.All()
+	ids, err := s.IDs()
 	if err != nil {
 		return false, err
 	}
-	for _, g := range saved {
-		if g.ID == id {
-			return g.Deleted, nil
+	for _, have := range ids {
+		if have == id {
+			return true, nil
 		}
 	}
 	return false, nil
@@ -2142,7 +2247,32 @@ func (m *Model) quit() tea.Cmd {
 	return tea.Quit
 }
 
+// View composes the frame. It is called for every message the framework
+// processes, so it is where a provably unchanged frame is worth not building:
+// see the reuse handshake below and handleMotion.
 func (m *Model) View() tea.View {
+	// A one-shot request from the motion branch: the last Update proved nothing
+	// the frame is made of changed, so the bytes already on the terminal are the
+	// frame. Consumed here — the request belongs to the View that follows its
+	// Update, and a later direct View call must compose rather than serve bytes
+	// from an unknown moment. The hit map is deliberately left as it is: it
+	// describes exactly this frame, which is what a click on it must resolve
+	// through.
+	if m.reuse && m.haveView {
+		m.reuse = false
+		return m.lastView
+	}
+	m.reuse = false
+
+	v := m.compose()
+	m.lastView, m.haveView = v, true
+	return v
+}
+
+// compose builds the whole frame from the current state. It is split out of
+// View so the reuse path above can hand back the previous frame without
+// reaching it.
+func (m *Model) compose() tea.View {
 	var v tea.View
 	v.AltScreen = true
 	// Read from the active style set every frame, so switching theme in the
@@ -2210,13 +2340,32 @@ func (m *Model) frame(h *hitMap) string {
 	// blinking — and it lands back on the border colour it started from, which
 	// is the settled frame. On a terminal that cannot blend, the run is flat in
 	// the accent and this is the hard swap it always was.
-	border := st.border
+	// Box the content in a rounded, titled panel (btop-style) and centre that
+	// panel in the terminal. The border hugs the content, not the terminal
+	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
+	// panel is emitted on its own.
+	//
+	// A solved board accents the whole frame for a moment: the same runes at the
+	// same width, in the colour the theme already uses for emphasis. The accent
+	// rises and falls across that moment rather than switching on and off, so
+	// the frame answers a win the way the tiles do — by turning, not by
+	// blinking — and it lands back on the border colour it started from, which
+	// is the settled frame. On a terminal that cannot blend, the run is flat in
+	// the accent and this is the hard swap it always was.
+	//
+	// That per-frame colour is why the two draws are separate functions: the
+	// ordinary frame is the same material every time and is cached, and only the
+	// accent pays to render its rule afresh.
+	title, status, corner := m.screenTitle(), m.screenStatus(), m.closeBox(h)
+	panel := ""
 	if p, winning := m.anim.winning(timeNow()); winning {
 		lit := blend(winSteps, st.border.GetForeground(), st.accent.GetForeground())
 		strength := min(p/winRampIn, (1-p)/winRampOut, 1)
-		border = st.border.Foreground(colorAt(lit, int(max(strength, 0)*float64(winSteps-1))))
+		border := st.border.Foreground(colorAt(lit, int(max(strength, 0)*float64(winSteps-1))))
+		panel = renderPanelLit(title, status, corner, content, border)
+	} else {
+		panel = renderPanel(title, status, corner, content)
 	}
-	panel := renderPanel(m.screenTitle(), m.screenStatus(), m.closeBox(h), content, border)
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center, panel)
@@ -2473,11 +2622,15 @@ func (m *menuScreen) update(msg tea.KeyPressMsg) (choice, bool) {
 	return choice{}, false
 }
 
-// point selects a row, for the pointer to move the cursor with.
-func (m *menuScreen) point(i int) {
-	if i >= 0 && i < len(m.choices) {
-		m.cursor = i
+// point selects a row, for the pointer to move the cursor with. It reports
+// whether that changed anything: a pointer already on the selected row has
+// nothing to redraw, and the root uses the answer to skip composing a frame.
+func (m *menuScreen) point(i int) bool {
+	if i < 0 || i >= len(m.choices) || m.cursor == i {
+		return false
 	}
+	m.cursor = i
+	return true
 }
 
 func (m *menuScreen) view(h *hitMap) string {

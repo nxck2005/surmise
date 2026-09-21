@@ -83,12 +83,14 @@ func TestBlendSurvivesSillyInput(t *testing.T) {
 }
 
 // The rule is a gradient on a terminal that can show one, and exactly the frame
-// this app drew before on one that cannot.
+// this app drew before on one that cannot. Both draws are covered: the cached
+// ordinary frame and the accent's uncached one, which must agree when they are
+// given the same colour.
 func TestPanelRuleGradesOnlyWhenItCan(t *testing.T) {
 	// Wide enough that a gradient has somewhere to go.
 	panel := func(p colorprofile.Profile) string {
 		withColorProfile(t, p)
-		return renderPanel("title", "", "×", strings.Repeat("x", 60), st.border)
+		return renderPanel("title", "", "×", strings.Repeat("x", 60))
 	}
 
 	rich, _, _ := strings.Cut(panel(colorprofile.TrueColor), "\n")
@@ -108,14 +110,74 @@ func TestPanelRuleGradesOnlyWhenItCan(t *testing.T) {
 	}
 }
 
+// The ordinary frame draws from a cache; the win accent cannot, because its
+// colour changes every frame. They are the same renderer wearing two hats, and
+// this is what says so: handed the same border style, they must produce the same
+// bytes at every colour depth and every width, or the cached frame is not the
+// frame the app drew before it existed.
+func TestPanelCacheMatchesTheUncachedRule(t *testing.T) {
+	for _, p := range []colorprofile.Profile{colorprofile.TrueColor, colorprofile.ANSI256, colorprofile.ANSI} {
+		withColorProfile(t, p)
+		for _, width := range []int{0, 1, 12, 60, 200} {
+			body := strings.Repeat("x", width)
+			cached := renderPanel("title", "2/6", "×", body)
+			lit := renderPanelLit("title", "2/6", "×", body, st.border)
+			if cached != lit {
+				t.Errorf("at %v and width %d the cached panel differs from the uncached one:\n%q\n---\n%q",
+					p, width, cached, lit)
+			}
+		}
+	}
+}
+
+// The cache belongs to the style set, so a theme change cannot leave the old
+// palette's rule on the frame: setTheme builds a new set with a new cache.
+func TestPanelRuleFollowsTheTheme(t *testing.T) {
+	withColorProfile(t, colorprofile.TrueColor)
+
+	before := renderPanel("title", "", "×", strings.Repeat("x", 60))
+	withTheme(t, themed(t, `
+accent = "#ff00ff"
+muted = "#00ff00"
+`))
+	after := renderPanel("title", "", "×", strings.Repeat("x", 60))
+
+	if before == after {
+		t.Error("the rule kept the previous theme's colours")
+	}
+	// And it is the new palette that is on it, not just any change: the muted
+	// border colour the gradient eases back to is the theme's.
+	if !strings.Contains(after, "\x1b[38;2;0;255;0m") {
+		t.Errorf("the rule does not use the new border colour:\n%q", after)
+	}
+}
+
+// A colour-profile change is the other way the cached material goes stale: the
+// gradient is exactly what a terminal without the depth for it does not want, so
+// the material rendered under the old profile has to go.
+func TestPanelRuleFollowsTheColourProfile(t *testing.T) {
+	withColorProfile(t, colorprofile.TrueColor)
+	rich := renderPanel("title", "", "×", strings.Repeat("x", 60))
+
+	withColorProfile(t, colorprofile.ANSI)
+	poor := renderPanel("title", "", "×", strings.Repeat("x", 60))
+
+	if sgr.ReplaceAllString(rich, "") != sgr.ReplaceAllString(poor, "") {
+		t.Error("the profile change moved the rule")
+	}
+	if got := countColors(poor); got > 2 {
+		t.Errorf("the rule kept %d colours on a 16-colour terminal, want it flat", got)
+	}
+}
+
 // The status is inlaid like the close box, so it has to be measured like one —
 // and given up rather than allowed to eat the rule.
 func TestPanelDropsAStatusItCannotAfford(t *testing.T) {
 	withColorProfile(t, colorprofile.TrueColor)
 
 	const status = "a status far wider than this panel"
-	narrow := renderPanel("title", status, "×", "body", st.border)
-	plain := renderPanel("title", "", "×", "body", st.border)
+	narrow := renderPanel("title", status, "×", "body")
+	plain := renderPanel("title", "", "×", "body")
 
 	if strings.Contains(sgr.ReplaceAllString(narrow, ""), status) {
 		t.Errorf("a status wider than the rule was drawn anyway:\n%s", narrow)
@@ -127,11 +189,11 @@ func TestPanelDropsAStatusItCannotAfford(t *testing.T) {
 
 	// Wide enough, and it appears — without widening the panel, which is sized
 	// by its content.
-	wide := renderPanel("title", "2/6", "×", strings.Repeat("x", 60), st.border)
+	wide := renderPanel("title", "2/6", "×", strings.Repeat("x", 60))
 	if !strings.Contains(sgr.ReplaceAllString(wide, ""), "2/6") {
 		t.Errorf("a status the rule could afford was dropped:\n%s", wide)
 	}
-	if want := lipgloss.Width(renderPanel("title", "", "×", strings.Repeat("x", 60), st.border)); lipgloss.Width(wide) != want {
+	if want := lipgloss.Width(renderPanel("title", "", "×", strings.Repeat("x", 60))); lipgloss.Width(wide) != want {
 		t.Errorf("the status widened the panel: %d, want %d", lipgloss.Width(wide), want)
 	}
 }

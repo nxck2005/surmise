@@ -108,6 +108,69 @@ func TestUnsupportedLengthFallsBackAndReports(t *testing.T) {
 	}
 }
 
+// --- reading them ---
+
+// countingStore counts how often the model asks for the saved preferences.
+// Startup resolves the theme, the mode, the splash and the motion from the same
+// file, and each of those used to read it: four decodes of the same bytes before
+// the first frame.
+type countingStore struct {
+	store.Store
+	settingsStore
+	reads int
+}
+
+func (c *countingStore) Settings() store.Settings {
+	c.reads++
+	return c.settingsStore.Settings()
+}
+
+// Every one of the four startup choices falls back to the saved file here — no
+// override, and no saved value that is empty — which is the case that read it
+// four times. It must be read once: the snapshot is passed down, and settingsOf
+// is left alone for the rest of the session.
+func TestStartupReadsSettingsOnce(t *testing.T) {
+	s, _ := newStore(t)
+	if err := s.SaveSettings(store.Settings{
+		Theme:        "nord",
+		Length:       6,
+		Motion:       motionPronouncedName,
+		Splash:       splashOn,
+		SplashArt:    banner.Default().Name,
+		SplashMillis: 1200,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &countingStore{Store: s, settingsStore: s}
+	m := New(c, nil, Options{}) // no overrides at all
+
+	if c.reads != 1 {
+		t.Errorf("startup read the saved settings %d times, want 1", c.reads)
+	}
+	// And the snapshot really is what resolved each of them.
+	if m.themeName != "nord" {
+		t.Errorf("theme = %q, want the saved nord", m.themeName)
+	}
+	if m.game == nil || m.game.g.Length != 6 {
+		t.Errorf("opened on the saved length? want 6")
+	}
+	if m.anim.motion != motionPronounced {
+		t.Errorf("motion = %v, want the saved pronounced", m.anim.motion)
+	}
+	if m.splash.art.Name != banner.Default().Name {
+		t.Errorf("splash art = %q, want the saved %q", m.splash.art.Name, banner.Default().Name)
+	}
+
+	// After startup the store is read again on demand: a preference can change
+	// while the session runs, so settingsOf must not be a copy of the snapshot.
+	before := c.reads
+	_ = m.settingsOf()
+	if c.reads != before+1 {
+		t.Errorf("settingsOf did not read the store again (%d reads)", c.reads-before)
+	}
+}
+
 // --- the screen ---
 
 func TestSettingsScreenPersistsChoices(t *testing.T) {

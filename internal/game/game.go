@@ -414,17 +414,33 @@ func (g *Game) AddElapsed(d time.Duration) {
 // LetterStates returns the best mark seen so far for each letter guessed,
 // which is what the on-screen keyboard displays. Correct beats Present beats
 // Absent, so a letter never appears to downgrade as the game goes on.
+//
+// It is FillLetterStates with a map of its own, for callers that have none to
+// reuse.
 func (g *Game) LetterStates() map[byte]Mark {
 	states := make(map[byte]Mark, 26)
+	g.FillLetterStates(states)
+	return states
+}
+
+// FillLetterStates fills dst with the best mark seen so far for each letter
+// guessed. The canonical loop lives here so LetterStates and a caller that
+// keeps a map of its own cannot drift apart.
+//
+// dst is cleared first. It is meant to be a map a caller holds and refills, and
+// a letter left over from the board it was last filled from would be a mark for
+// a guess this game never made — so the clearing is part of the contract rather
+// than the caller's job.
+func (g *Game) FillLetterStates(dst map[byte]Mark) {
+	clear(dst)
 	for i, guess := range g.Guesses {
 		for j := range guess {
 			c := guess[j]
-			if prev, ok := states[c]; !ok || g.Marks[i][j] > prev {
-				states[c] = g.Marks[i][j]
+			if prev, ok := dst[c]; !ok || g.Marks[i][j] > prev {
+				dst[c] = g.Marks[i][j]
 			}
 		}
 	}
-	return states
 }
 
 // Validate checks that a decoded Game is internally consistent. The store uses

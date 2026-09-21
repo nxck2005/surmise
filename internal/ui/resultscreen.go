@@ -72,7 +72,7 @@ func (m *resultScreen) view(_ *hitMap) string {
 		sections = append(sections, "",
 			st.muted.Render("answer ")+word.Render(strings.ToUpper(g.Answer)))
 	}
-	sections = append(sections, "", renderLegend())
+	sections = append(sections, "", st.legendText())
 
 	switch {
 	case m.notice != "":

@@ -10,6 +10,7 @@ import (
 	"github.com/nxck2005/surmise/internal/backup"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/theme"
 )
 
 // The backup screen, driven the way a player drives it.
@@ -79,18 +80,19 @@ func playOne(t *testing.T, m *Model, answer string) *game.Game {
 }
 
 // drain runs a command and feeds what it returns back into the model, which is
-// what the framework does. The load path is a command, so a test that does not
-// do this proves nothing about it.
+// what the framework does — and keeps going while the model answers with
+// another command. The load path is two of them now (the picker, then the
+// merge), so a test that stopped after the first would prove nothing about
+// either. Motion is off in these tests, so nothing here arms a timer.
 func drain(t *testing.T, m *Model, cmd tea.Cmd) {
 	t.Helper()
-	if cmd == nil {
-		return
+	for cmd != nil {
+		msg := cmd()
+		if msg == nil {
+			return
+		}
+		_, cmd = m.Update(msg)
 	}
-	msg := cmd()
-	if msg == nil {
-		return
-	}
-	m.Update(msg)
 }
 
 // A build that cannot move files is offered no backup row, rather than one that
@@ -276,7 +278,13 @@ func TestBackupFileArrivingLateIsDropped(t *testing.T) {
 
 	m.screen = screenMenu // the player went back while the picker was open
 	if cmd != nil {
-		m.Update(cmd())
+		_, late := m.Update(cmd())
+		if late != nil {
+			t.Error("a file that arrived after the screen was left started a merge")
+		}
+	}
+	if m.backup.restoring {
+		t.Error("a dropped file left the screen restoring")
 	}
 
 	games, err := m.store.All()
@@ -285,6 +293,205 @@ func TestBackupFileArrivingLateIsDropped(t *testing.T) {
 	}
 	if len(games) != 0 {
 		t.Errorf("a file that arrived after the screen was left restored %d records", len(games))
+	}
+}
+
+// The merge itself runs as a command, not inside Update: it is one durable
+// Store.Save per new record, and on a real disk that is seconds of frozen
+// interface at a large history. What Update gets back is a report.
+func TestBackupLoadAppliesThroughACommand(t *testing.T) {
+	source := backupModel(t, &fakeTransfer{})
+	won := playOne(t, source, "crane")
+	send(t, source, "enter")
+	archive := source.transfer.(*fakeTransfer).saved
+
+	m := backupModel(t, &fakeTransfer{offer: archive, offerAs: "mine.json"})
+	m.backup.point(backupRowLoad)
+
+	// The picker's own command answers with the file.
+	_, picker := m.Update(key("enter"))
+	if picker == nil {
+		t.Fatal("the picker was not asked for a file")
+	}
+	file, ok := picker().(backupFileMsg)
+	if !ok {
+		t.Fatalf("the picker returned %T, want a backupFileMsg", picker())
+	}
+
+	// Handing the file back must start the merge rather than perform it: the
+	// screen says what it is waiting on, and nothing has reached the store yet.
+	_, apply := m.Update(file)
+	if apply == nil {
+		t.Fatal("the file was applied inside Update instead of as a command")
+	}
+	if !m.backup.restoring {
+		t.Error("the screen does not say a restore is under way")
+	}
+	if games, err := m.store.All(); err != nil || len(games) != 0 {
+		t.Fatalf("the store changed before the command ran: %d records, %v", len(games), err)
+	}
+	if frame := m.View().Content; !strings.Contains(frame, "restoring…") {
+		t.Errorf("the screen does not say it is restoring:\n%s", frame)
+	}
+
+	// Running it is what merges, and what comes back is the report.
+	applied, ok := apply().(backupAppliedMsg)
+	if !ok {
+		t.Fatalf("the merge command returned %T, want a backupAppliedMsg", apply())
+	}
+	if applied.err != nil {
+		t.Fatalf("Apply: %v", applied.err)
+	}
+	if applied.res.PuzzlesAdded != 1 {
+		t.Errorf("added %d, want the archive's one puzzle", applied.res.PuzzlesAdded)
+	}
+
+	m.Update(applied)
+	if m.backup.restoring {
+		t.Error("the screen is still restoring after the report arrived")
+	}
+	got, err := m.store.Load(won.ID)
+	if err != nil {
+		t.Fatalf("the puzzle did not reach the store: %v", err)
+	}
+	if got.Answer != "crane" {
+		t.Errorf("answer = %q, want the board intact", got.Answer)
+	}
+}
+
+// While the merge is writing, the screen is closed: no second file, no second
+// action, and no leaving for a screen that would read or write the same store
+// underneath it.
+func TestRestoringRefusesToLeaveOrAct(t *testing.T) {
+	source := backupModel(t, &fakeTransfer{})
+	playOne(t, source, "crane")
+	send(t, source, "enter")
+	archive := source.transfer.(*fakeTransfer).saved
+
+	tr := &fakeTransfer{offer: archive, offerAs: "mine.json"}
+	m := backupModel(t, tr)
+	m.backup.point(backupRowLoad)
+	_, picker := m.Update(key("enter"))
+	_, apply := m.Update(picker())
+	if apply == nil {
+		t.Fatal("no merge command was returned")
+	}
+
+	// esc, q, the close box's action and both rows are all inert.
+	for _, k := range []string{"esc", "q"} {
+		if _, cmd := m.Update(key(k)); cmd != nil {
+			t.Errorf("%q returned a command while restoring", k)
+		}
+		if m.screen != screenBackup {
+			t.Fatalf("%q left the backup screen while restoring", k)
+		}
+	}
+	if _, cmd := m.Update(tea.MouseClickMsg{Button: tea.MouseLeft}); cmd != nil {
+		t.Error("a click returned a command while restoring")
+	}
+	if m.screen != screenBackup {
+		t.Fatal("a click left the backup screen while restoring")
+	}
+	if cmd := m.doBackup(backupRowSave); cmd != nil {
+		t.Error("a second action was started while restoring")
+	}
+	if _, cmd := m.Update(key("enter")); cmd != nil {
+		t.Error("enter started another action while restoring")
+	}
+	if tr.loadCall != 1 {
+		t.Errorf("the picker was asked for %d files, want 1", tr.loadCall)
+	}
+	if len(tr.saved) != 0 {
+		t.Error("save ran while a restore was writing")
+	}
+
+	// The merge still lands, and lands once: the screen is usable again after.
+	drain(t, m, apply)
+	if m.backup.restoring {
+		t.Error("the screen is still restoring after the report arrived")
+	}
+	games, err := m.store.All()
+	if err != nil || len(games) != 1 {
+		t.Errorf("All = %d records, %v; want the one the archive carried", len(games), err)
+	}
+	if m.screen != screenBackup {
+		t.Errorf("screen = %v, want the backup screen still", m.screen)
+	}
+}
+
+// A restore carries deletions as records, not as instructions: a tombstone in
+// the archive lands where the install has nothing, and a puzzle the install
+// already holds is left exactly as it is. Deleting is the one thing an import
+// must never do, and a tombstone is the record that looks most like it.
+func TestBackupLoadCarriesTombstonesWithoutDeletingAnything(t *testing.T) {
+	source := backupModel(t, &fakeTransfer{})
+	gone := playOne(t, source, "crane")
+	mine := playOne(t, source, "slate")
+	if err := source.store.Delete(gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	send(t, source, "enter")
+	archive := source.transfer.(*fakeTransfer).saved
+
+	m := backupModel(t, &fakeTransfer{offer: archive, offerAs: "mine.json"})
+	if err := m.store.Save(mine); err != nil {
+		t.Fatal(err)
+	}
+	m.backup.point(backupRowLoad)
+	_, cmd := m.Update(key("enter"))
+	drain(t, m, cmd)
+
+	games, err := m.store.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(games) != 2 {
+		t.Fatalf("the install holds %d records, want the local puzzle and the tombstone", len(games))
+	}
+	byID := map[string]*game.Game{}
+	for _, g := range games {
+		byID[g.ID] = g
+	}
+	if g := byID[mine.ID]; g == nil || g.Deleted || g.Answer != "slate" {
+		t.Errorf("the local puzzle came back as %+v, want it untouched", g)
+	}
+	if g := byID[gone.ID]; g == nil || !g.Deleted {
+		t.Errorf("the archive's tombstone landed as %+v, want a tombstone", g)
+	}
+	if got := strings.Join(m.backup.report, " "); !strings.Contains(got, "restored 1 puzzle, kept 1 puzzle already here") {
+		t.Errorf("report = %q, want it to name what was added and what was already here", got)
+	}
+}
+
+// The preferences half of a restore survives the move into a command: the
+// archive's answers to questions nobody had answered are written, and a theme it
+// filled in is put up now rather than at the next launch.
+func TestBackupLoadAppliesAFilledInTheme(t *testing.T) {
+	withTheme(t, theme.Default())
+
+	source := backupModel(t, &fakeTransfer{})
+	if err := source.store.(settingsStore).SaveSettings(store.Settings{Theme: "dracula"}); err != nil {
+		t.Fatal(err)
+	}
+	send(t, source, "enter")
+	archive := source.transfer.(*fakeTransfer).saved
+
+	m := backupModel(t, &fakeTransfer{offer: archive, offerAs: "mine.json"})
+	if m.themeName == "dracula" {
+		t.Fatal("the importing install already has the theme the archive names")
+	}
+	m.backup.point(backupRowLoad)
+	_, cmd := m.Update(key("enter"))
+	drain(t, m, cmd)
+
+	if got := m.themeName; got != "dracula" {
+		t.Errorf("theme = %q, want the archive's answer applied now", got)
+	}
+	if got := m.settingsOf().Theme; got != "dracula" {
+		t.Errorf("saved theme = %q, want it written", got)
+	}
+	if st.theme == nil || st.theme.Name != "dracula" {
+		t.Errorf("the applied look is %v, want dracula", st.theme)
 	}
 }
 
