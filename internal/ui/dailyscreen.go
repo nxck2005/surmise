@@ -136,11 +136,14 @@ func (m *dailyScreen) move(delta int) {
 	m.cursor = min(max(m.cursor+delta, 0), len(m.rows)-1)
 }
 
-// point selects the row the pointer is over, so one click is enough to play.
-func (m *dailyScreen) point(row int) {
-	if row >= 0 && row < len(m.rows) {
-		m.cursor = row
+// point selects the row the pointer is over, so one click is enough to play. It
+// reports whether the selection moved.
+func (m *dailyScreen) point(row int) bool {
+	if row < 0 || row >= len(m.rows) || m.cursor == row {
+		return false
 	}
+	m.cursor = row
+	return true
 }
 
 func (m *dailyScreen) view(h *hitMap) string {

@@ -34,8 +34,13 @@ func (m *socialScreen) update(msg tea.KeyPressMsg) (choice int, selected, back b
 	return 0, false, false
 }
 
-func (m *socialScreen) point(row int) {
-	m.cursor = min(max(row, 0), socialRows-1)
+func (m *socialScreen) point(row int) bool {
+	row = min(max(row, 0), socialRows-1)
+	if m.cursor == row {
+		return false
+	}
+	m.cursor = row
+	return true
 }
 
 func (m *socialScreen) view(h *hitMap) string {

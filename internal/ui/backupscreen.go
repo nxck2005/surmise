@@ -179,11 +179,14 @@ func (b *backupScreen) update(msg tea.KeyPressMsg) (row int, act bool) {
 	return 0, false
 }
 
-// point selects a row, for the pointer to move the cursor with.
-func (b *backupScreen) point(i int) {
-	if i >= 0 && i < backupRows {
-		b.cursor = i
+// point selects a row, for the pointer to move the cursor with. It reports
+// whether the selection moved.
+func (b *backupScreen) point(i int) bool {
+	if i < 0 || i >= backupRows || b.cursor == i {
+		return false
 	}
+	b.cursor = i
+	return true
 }
 
 // backupBlurb is the rule, in the player's terms. It is on the screen rather

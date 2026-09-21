@@ -163,16 +163,18 @@ func (m *listScreen) scroll(delta int) {
 }
 
 // point selects the row the pointer is over. Hovering moves the selection, the
-// way it does on a web page, so a click has no separate "select" step.
-func (m *listScreen) point(row int) {
-	if row >= 0 && row < len(m.items) {
-		// Moving to a different row disarms: a prompt asking about the puzzle
-		// the pointer has just left would be answering for the wrong one.
-		if row != m.cursor {
-			m.confirmDelete = false
-		}
-		m.cursor = row
+// way it does on a web page, so a click has no separate "select" step. It
+// reports whether the rows changed — a pointer already on the selected row does
+// nothing, and saying so lets the root keep the frame it already drew.
+func (m *listScreen) point(row int) bool {
+	if row < 0 || row >= len(m.items) || row == m.cursor {
+		return false
 	}
+	// Moving to a different row disarms: a prompt asking about the puzzle
+	// the pointer has just left would be answering for the wrong one.
+	m.confirmDelete = false
+	m.cursor = row
+	return true
 }
 
 // clampOffset scrolls the window just far enough to keep the cursor visible.

@@ -120,10 +120,12 @@ func (m *customScreen) move(delta int) {
 	m.cursor = min(max(m.cursor+delta, 0), customRows-1)
 }
 
-func (m *customScreen) point(row int) {
-	if row >= 0 && row < customRows && m.enabled(row) {
-		m.cursor = row
+func (m *customScreen) point(row int) bool {
+	if row < 0 || row >= customRows || !m.enabled(row) || m.cursor == row {
+		return false
 	}
+	m.cursor = row
+	return true
 }
 
 // cycle steps the row under the cursor. Changing the mode clears the word,

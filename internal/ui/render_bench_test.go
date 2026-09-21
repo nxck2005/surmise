@@ -60,6 +60,30 @@ func BenchmarkBoardFrame(b *testing.B) {
 	}
 }
 
+// BenchmarkNoopMouseMotion is the message path a moving pointer walks: an Update
+// that changes nothing, then the View the framework calls after every message.
+// The pointer is parked in the middle of a keycap, so every iteration but the
+// first is the case the reuse handshake exists for.
+func BenchmarkNoopMouseMotion(b *testing.B) {
+	m := benchBoardModel(b)
+	r, ok := m.hits.find(action{kind: actLetter, letter: 'q'})
+	if !ok {
+		b.Fatal("no keycap on the frame")
+	}
+	x, y := r.x+r.w/2, r.y+r.h/2
+	m.Update(tea.MouseMotionMsg{X: x, Y: y}) // the motion that parks the pointer
+	m.View()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.Update(tea.MouseMotionMsg{X: x, Y: y})
+		m.View()
+	}
+}
+
+// BenchmarkMenuFrame renders the menu, which is the screen a player sits on
+// while a backup or a restore is running.
 func BenchmarkMenuFrame(b *testing.B) {
 	s, err := store.NewJSON(b.TempDir())
 	if err != nil {

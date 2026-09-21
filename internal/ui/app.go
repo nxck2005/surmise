@@ -205,6 +205,17 @@ type Model struct {
 	hits  *hitMap
 	hover action
 
+	// reuse is a one-shot request to hand the next View the frame the last one
+	// produced, made only by a mouse motion that provably changed nothing the
+	// frame is made of. Update retires it at the start of every message, so any
+	// other message — a tick, a keystroke, an animation frame — composes as
+	// usual, and View consumes it, so two Views in a row cannot both serve the
+	// same bytes. lastView is what there is to serve; haveView says whether a
+	// frame has been composed at all.
+	reuse    bool
+	lastView tea.View
+	haveView bool
+
 	// anim is what the board is animating, and how strongly. It lives on the
 	// root because two screens read it — the board draws the reveal, the panel
 	// draws the win accent — and because a screen change has to be able to
@@ -850,7 +861,13 @@ func (m *Model) pushSize() {
 // Update is a thin wrapper so the animation chain is armed in exactly one
 // place. Any handler below may start an effect, and animCmd is idempotent, so
 // no branch can forget to arm one and none can arm a second.
+//
+// It also retires a frame-reuse request. The request is one-shot and belongs to
+// the message that made it — the motion branch below — so anything else that
+// arrives here means the frame has to be composed from the state this message
+// leaves behind.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.reuse = false
 	model, cmd := m.update(msg)
 	// Batch drops nils, the same property Init relies on.
 	return model, tea.Batch(cmd, m.animCmd())
@@ -970,7 +987,16 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMotionMsg:
-		m.handleMotion(msg.X, msg.Y)
+		// A motion that changed nothing the frame draws — the pointer still on
+		// the target it was on, and that target's row already selected — has
+		// nothing to redraw. Asking the next View to hand back the frame that is
+		// already on the terminal is the whole optimisation: the renderer would
+		// drop an identical frame anyway, but only after View had composed it.
+		if m.handleMotion(msg.X, msg.Y) {
+			return m, nil
+		}
+		m.reuse = true
+		return m, nil
 
 	case tea.MouseWheelMsg:
 		// The puzzle list and the theme list are the only things long enough
@@ -995,37 +1021,52 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleMotion records what the pointer is over so the next render can
 // highlight it. On the menu and the puzzle list the selection follows the
 // pointer as well, which is what makes one click enough to act.
-func (m *Model) handleMotion(x, y int) {
+//
+// It reports whether anything a frame is made of changed. Hover identity is not
+// enough on its own: the keyboard can have moved a selection since the last
+// frame, and a pointer still resting inside the row it was last over has to put
+// the selection back — that is what "the selection follows the pointer" means,
+// and a motion that skipped it because the hover looked the same would leave the
+// two disagreeing. Every pointer-following screen's own point method reports
+// whether it moved anything, so the answer comes from the screen that owns the
+// cursor rather than from a second copy of its rules here.
+func (m *Model) handleMotion(x, y int) (changed bool) {
 	a, _ := m.hits.at(x, y) // off any target, a is the zero action: no hover
-	m.hover = a
 
+	moved := false
 	switch a.kind {
 	case actMenuChoice:
-		m.menu.point(a.index)
+		moved = m.menu.point(a.index)
 	case actListRow, actDeletePuzzle:
 		// The delete button carries the row it refers to, so hovering it keeps
 		// the selection and the prompt talking about the same puzzle.
-		m.list.point(a.index)
+		moved = m.list.point(a.index)
 	case actDailyRow:
-		m.daily.point(a.index)
+		moved = m.daily.point(a.index)
 	case actBackupSave:
-		m.backup.point(backupRowSave)
+		moved = m.backup.point(backupRowSave)
 	case actBackupLoad:
-		m.backup.point(backupRowLoad)
+		moved = m.backup.point(backupRowLoad)
 	case actThemeRow:
 		// Hovering a theme previews it, the same as arrowing onto it.
-		m.themes.point(a.index)
+		moved = m.themes.point(a.index)
 	case actFieldEdit, actFieldDone:
-		m.pointField(a.index)
+		moved = m.pointField(a.index)
 	case actSettingNext, actSettingPrev:
-		m.settings.point(a.index)
+		moved = m.settings.point(a.index)
 	case actCustomNext, actCustomPrev:
-		m.custom.point(a.index)
+		moved = m.custom.point(a.index)
 	case actSocialChoice:
-		m.social.point(a.index)
+		moved = m.social.point(a.index)
 	case actSprintNext, actSprintPrev:
-		m.sprints.point(a.index)
+		moved = m.sprints.point(a.index)
 	}
+
+	if a == m.hover && !moved {
+		return false
+	}
+	m.hover = a
+	return true
 }
 
 // activeField is the text field the active screen is editing, or nil. It is
@@ -1071,16 +1112,18 @@ func (m *Model) fieldAt(row int) *textField {
 }
 
 // pointField moves the active screen's cursor to a field's row, so that
-// clicking a field selects it exactly as arrowing onto it would.
-func (m *Model) pointField(row int) {
+// clicking a field selects it exactly as arrowing onto it would. It reports
+// whether that moved the cursor, the same as the screens' own point methods.
+func (m *Model) pointField(row int) bool {
 	switch m.screen {
 	case screenSettings:
-		m.settings.point(row)
+		return m.settings.point(row)
 	case screenCustom:
-		m.custom.point(row)
+		return m.custom.point(row)
 	case screenChallenge:
 		// The entry screen has only one field, so there is no cursor to move.
 	}
+	return false
 }
 
 // fieldCommitted is what a screen does when one of its fields has actually
@@ -2204,7 +2247,32 @@ func (m *Model) quit() tea.Cmd {
 	return tea.Quit
 }
 
+// View composes the frame. It is called for every message the framework
+// processes, so it is where a provably unchanged frame is worth not building:
+// see the reuse handshake below and handleMotion.
 func (m *Model) View() tea.View {
+	// A one-shot request from the motion branch: the last Update proved nothing
+	// the frame is made of changed, so the bytes already on the terminal are the
+	// frame. Consumed here — the request belongs to the View that follows its
+	// Update, and a later direct View call must compose rather than serve bytes
+	// from an unknown moment. The hit map is deliberately left as it is: it
+	// describes exactly this frame, which is what a click on it must resolve
+	// through.
+	if m.reuse && m.haveView {
+		m.reuse = false
+		return m.lastView
+	}
+	m.reuse = false
+
+	v := m.compose()
+	m.lastView, m.haveView = v, true
+	return v
+}
+
+// compose builds the whole frame from the current state. It is split out of
+// View so the reuse path above can hand back the previous frame without
+// reaching it.
+func (m *Model) compose() tea.View {
 	var v tea.View
 	v.AltScreen = true
 	// Read from the active style set every frame, so switching theme in the
@@ -2554,11 +2622,15 @@ func (m *menuScreen) update(msg tea.KeyPressMsg) (choice, bool) {
 	return choice{}, false
 }
 
-// point selects a row, for the pointer to move the cursor with.
-func (m *menuScreen) point(i int) {
-	if i >= 0 && i < len(m.choices) {
-		m.cursor = i
+// point selects a row, for the pointer to move the cursor with. It reports
+// whether that changed anything: a pointer already on the selected row has
+// nothing to redraw, and the root uses the answer to skip composing a frame.
+func (m *menuScreen) point(i int) bool {
+	if i < 0 || i >= len(m.choices) || m.cursor == i {
+		return false
 	}
+	m.cursor = i
+	return true
 }
 
 func (m *menuScreen) view(h *hitMap) string {

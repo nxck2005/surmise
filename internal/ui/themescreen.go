@@ -138,13 +138,18 @@ func (m *themeScreen) move(delta int) {
 }
 
 // point selects the row under the pointer and previews it, so hovering the list
-// flips through themes exactly the way arrowing through it does.
-func (m *themeScreen) point(row int) {
-	if row >= 0 && row < len(m.entries) {
-		m.cursor = row
-		m.clampOffset()
-		m.preview()
+// flips through themes exactly the way arrowing through it does. It reports
+// whether that moved off the row already selected — and only then is the theme
+// re-applied, because re-previewing the same theme would rebuild every style for
+// a frame that cannot differ.
+func (m *themeScreen) point(row int) bool {
+	if row < 0 || row >= len(m.entries) || m.cursor == row {
+		return false
 	}
+	m.cursor = row
+	m.clampOffset()
+	m.preview()
+	return true
 }
 
 func (m *themeScreen) scroll(delta int) {

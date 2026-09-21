@@ -187,10 +187,12 @@ func (m *sprintScreen) move(delta int) {
 	m.cursor = min(max(m.cursor+delta, 0), sprintRows-1)
 }
 
-func (m *sprintScreen) point(row int) {
-	if row >= 0 && row < sprintRows {
-		m.cursor = row
+func (m *sprintScreen) point(row int) bool {
+	if row < 0 || row >= sprintRows || m.cursor == row {
+		return false
 	}
+	m.cursor = row
+	return true
 }
 
 func (m *sprintScreen) cycle(delta int) {

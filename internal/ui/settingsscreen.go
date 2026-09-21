@@ -186,11 +186,14 @@ func (m *settingsScreen) move(delta int) {
 // it does on the menu and the puzzle list. A disabled row marks no target, so
 // this is never called with one — the guard is here because point is the seam
 // the mouse comes through, and a stale hit map from the frame before the splash
-// was switched off would otherwise land on it.
-func (m *settingsScreen) point(row int) {
-	if row >= 0 && row < settingRows && m.enabled(row) {
-		m.cursor = row
+// was switched off would otherwise land on it. It reports whether the cursor
+// moved.
+func (m *settingsScreen) point(row int) bool {
+	if row < 0 || row >= settingRows || !m.enabled(row) || m.cursor == row {
+		return false
 	}
+	m.cursor = row
+	return true
 }
 
 // cycle steps the highlighted row's value. Both the arrow keys and the clicked
