@@ -295,11 +295,19 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
 	}
-	m.applyStartupTheme(opts.Theme)
-	m.applyStartupLength(opts.Length)
+	// One read of the saved preferences for the whole of startup. Each resolver
+	// below falls back to the same small file when nobody has overridden it —
+	// theme, mode, splash and motion each used to ask for it separately, which
+	// was four decodes of the same bytes before the first frame.
+	//
+	// The snapshot is startup's only: settingsOf keeps reading the store for
+	// the rest of the session, because a preference can change under it.
+	saved := m.settingsOf()
+	m.applyStartupTheme(opts.Theme, saved)
+	m.applyStartupLength(opts.Length, saved)
 	m.applyStartupDay(opts.Day)
-	m.applyStartupSplash(opts.Splash)
-	m.applyStartupMotion(opts.Motion)
+	m.applyStartupSplash(opts.Splash, saved)
+	m.applyStartupMotion(opts.Motion, saved)
 
 	if opts.Challenge != "" {
 		m.challenge = newChallengeJoin(opts.Challenge)
@@ -562,12 +570,13 @@ func (m *Model) skipToResult() bool {
 // applyStartupTheme resolves which theme to open with: an explicit override
 // first, then whatever was saved, then the default. A name that resolves to
 // nothing is reported rather than swallowed, so a typo in -theme is visible.
-func (m *Model) applyStartupTheme(override string) {
+//
+// saved is the startup snapshot of the preferences, read once by New; the
+// override still wins over it.
+func (m *Model) applyStartupTheme(override string, saved store.Settings) {
 	want := override
 	if want == "" {
-		if ss, ok := m.store.(settingsStore); ok {
-			want = ss.Settings().Theme
-		}
+		want = saved.Theme
 	}
 
 	t, ok := m.themeLib.Resolve(want)
@@ -583,12 +592,12 @@ func (m *Model) applyStartupTheme(override string) {
 // saved choice, then the built-in default. An unsupported length is reported
 // rather than silently corrected — a typo in -length should be visible — but is
 // never fatal, and a saved zero simply means nothing was ever chosen.
-func (m *Model) applyStartupLength(override int) {
+func (m *Model) applyStartupLength(override int, saved store.Settings) {
 	m.length = defaultLength
 
 	want := override
 	if want == 0 {
-		want = m.settingsOf().Length
+		want = saved.Length
 	}
 	switch {
 	case want == 0:
@@ -625,9 +634,7 @@ func (m *Model) applyStartupDay(override string) {
 // "No splash" is carried as no art rather than as a flag, so there is one thing
 // to check: raiseSplash puts up whatever art there is, and an empty banner
 // simply never fits.
-func (m *Model) applyStartupSplash(override string) {
-	s := m.settingsOf()
-
+func (m *Model) applyStartupSplash(override string, s store.Settings) {
 	mode, ok := parseSplashMode(s.SplashDismiss)
 	if !ok {
 		m.err = fmt.Errorf("no splash setting %q — using %s", s.SplashDismiss, mode.setting())
@@ -681,7 +688,7 @@ func (m *Model) applyStartupSplash(override string) {
 // The environment is consulted only when nobody has chosen: a player who has
 // been to the settings screen has said what they want, and a $NO_MOTION left in
 // a shell profile must not overrule them.
-func (m *Model) applyStartupMotion(override string) {
+func (m *Model) applyStartupMotion(override string, s store.Settings) {
 	if override != "" {
 		want, ok := parseMotion(override)
 		if !ok {
@@ -691,7 +698,7 @@ func (m *Model) applyStartupMotion(override string) {
 		return
 	}
 
-	saved := m.settingsOf().Motion
+	saved := s.Motion
 	if saved != "" {
 		want, ok := parseMotion(saved)
 		if !ok {
