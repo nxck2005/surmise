@@ -611,6 +611,24 @@ func TestTakenCodesReserveDeletedAndUnreadableRecords(t *testing.T) {
 	}
 }
 
+// The keyboard's state is refilled from the current board every frame, into a
+// map the screen keeps for the life of the board. What it must never be is
+// remembered across boards: a fresh puzzle that inherited the marks of the one
+// it replaced would grey out letters its board never saw.
+func TestKeyboardStateIsRebuiltForEachBoard(t *testing.T) {
+	m := gameModel(t)
+	send(t, m, "a", "b", "o", "u", "t", "enter")
+	if got := m.game.lettersOf(); len(got) == 0 {
+		t.Fatal("the keyboard has no state after a guess")
+	}
+
+	// Tab then enter replaces the board with a fresh one of the same length.
+	send(t, m, "tab", "enter")
+	if got := m.game.lettersOf(); len(got) != 0 {
+		t.Errorf("the new board's keyboard shows %v, want nothing: those are another board's guesses", got)
+	}
+}
+
 // Deleting takes two keys, not one: the first arms a prompt naming the puzzle.
 func TestDeleteFromListNeedsConfirming(t *testing.T) {
 	m := newModel(t)

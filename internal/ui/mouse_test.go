@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -99,6 +100,20 @@ func gameModel(t *testing.T) *Model {
 // composing a screen with hit regions must produce, once the markers are
 // stripped, exactly the bytes composing it without them does. If this passes,
 // mouse support cannot have shifted a single cell of the UI.
+//
+// The companion guarantee, used by anything that measures a marked string
+// without stripping it first (the keyboard's width is the one), is that the
+// marker itself is zero cells to the same measurement machinery.
+func TestMarkersMeasureAsZeroWidth(t *testing.T) {
+	for _, s := range []string{"Q", "  ⏎  ", st.tileCorrect.Render("A"), st.title.Render("surmise")} {
+		h := &hitMap{}
+		marked := h.mark(action{kind: actSubmit}, s)
+		if got, want := lipgloss.Width(marked), lipgloss.Width(s); got != want {
+			t.Errorf("marked %q measures %d cells, want %d", s, got, want)
+		}
+	}
+}
+
 func TestMarkersDoNotAffectLayout(t *testing.T) {
 	m := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
@@ -190,6 +205,35 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 				t.Error("markers left in the frame handed to the renderer")
 			}
 		})
+	}
+}
+
+// The keyboard is measured from the row it draws rather than from a second,
+// throwaway render of it. That is only sound while the things that ride on a
+// rendered cap — a hit marker, a hover, a keycap pulse — leave its width alone,
+// which is what this pins.
+func TestKeyboardMeasuresTheRowItDraws(t *testing.T) {
+	states := map[byte]game.Mark{'q': game.Correct, 'w': game.Present, 'e': game.Absent}
+	now := time.Now()
+
+	plain := renderKeyboardRow(keyboardRows[0], states, nil, nil, now)
+
+	// Marked: every cap carries an APC marker.
+	h := &hitMap{}
+	if marked := renderKeyboardRow(keyboardRows[0], states, h, nil, now); lipgloss.Width(marked) != lipgloss.Width(plain) {
+		t.Errorf("a marker moved the row: %d cells marked, %d plain",
+			lipgloss.Width(marked), lipgloss.Width(plain))
+	}
+	if len(h.zones) != len(keyboardRows[0]) {
+		t.Errorf("row 0 registered %d targets, want one per cap", len(h.zones))
+	}
+
+	// Hovered and pulsing: both are repaints of the cap, not new cells.
+	h.hover = action{kind: actLetter, letter: 'q'}
+	a := &anims{motion: motionPronounced, key: anim{kind: animKeycap, startedAt: now, letter: 'q'}}
+	if dressed := renderKeyboardRow(keyboardRows[0], states, h, a, now); lipgloss.Width(dressed) != lipgloss.Width(plain) {
+		t.Errorf("a hover or a pulse moved the row: %d cells, %d plain",
+			lipgloss.Width(dressed), lipgloss.Width(plain))
 	}
 }
 

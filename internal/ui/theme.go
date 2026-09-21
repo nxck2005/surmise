@@ -95,6 +95,37 @@ type styles struct {
 	// finished style is what lets it compose with a filled tile, a keycap and a
 	// help hint alike.
 	hoverAttrs theme.Override
+
+	// panel caches the normal border's styled runes, and legend caches the
+	// rendered colour key, each for this style set. Both are functions of the
+	// theme and the terminal's colour depth and of nothing else, and both used
+	// to be rebuilt on every frame; setTheme swaps the whole struct, so a theme
+	// change cannot leave anything stale behind. See panelRuleFor and
+	// legendText.
+	panel  *panelRule
+	legend legendCache
+}
+
+// panelRule is the panel's border material for one content width: every cell of
+// the top and bottom rules already rendered, and the two side glyphs.
+//
+// It exists because the rule is a gradient — blend works in Lab space, and each
+// cell used to be its own Style.Render — and none of it depends on what is on
+// the screen. The width is the cache's whole key: a panel only ever has one, and
+// a terminal resize re-renders once.
+type panelRule struct {
+	width  int
+	top    []string
+	bottom []string
+	left   string
+	right  string
+}
+
+// legendCache is the colour key for one style set, rendered on first use.
+type legendCache struct {
+	text  string
+	width int
+	ready bool
 }
 
 func newStyles(t *theme.Theme) *styles {
@@ -421,25 +452,89 @@ func bodyWidth(width int) int {
 }
 
 // renderPanel draws a rounded border around content with a title inlaid in the
-// top edge, btop-style. The border is built by hand rather than via lipgloss's
-// Border() so the title can sit inside the top rule. corner is an optional
-// segment inlaid at the right end of that rule — the close box — and may be
-// empty.
+// top edge, btop-style, in the theme's own border colour. The border is built by
+// hand rather than via lipgloss's Border() so the title can sit inside the top
+// rule. corner is an optional segment inlaid at the right end of that rule —
+// the close box — and may be empty.
 //
-// border is the style the rule is drawn in. It is a parameter rather than a
-// straight read of st.border because a win accents the whole frame for a
-// moment: same runes, same width, a different colour. Callers with nothing to
-// say pass st.border.
-func renderPanel(title, status, corner, content string, border lipgloss.Style) string {
+// It draws through the style set's cached rule material: the gradient and the
+// per-cell styling are a function of the width and the palette, and the panel is
+// on every frame. See panelRuleFor.
+func renderPanel(title, status, corner, content string) string {
+	lines, width := panelBody(content)
+	return drawPanel(title, status, corner, lines, width, st.panelRuleFor(width))
+}
+
+// renderPanelLit draws the same frame in a colour that changes from frame to
+// frame — the win accent easing across the border — so it cannot use the cache
+// and renders its rule material fresh. border is the style the rule is drawn in;
+// callers with nothing to say pass st.border to renderPanel instead.
+func renderPanelLit(title, status, corner, content string, border lipgloss.Style) string {
+	lines, width := panelBody(content)
+	return drawPanel(title, status, corner, lines, width, st.litPanelRule(width, border, st.accent.GetForeground()))
+}
+
+// panelBody pads the content and squares it off, and reports the width the rule
+// has to span. The padding and squaring are the part that genuinely depends on
+// the content, so they stay per-frame.
+func panelBody(content string) ([]string, int) {
 	inner := lipgloss.NewStyle().
 		Padding(st.metric.PanelPadY, st.metric.PanelPadX).
 		Render(content)
 	// Squaring the content off gives the border a straight right edge to follow.
 	lines := strings.Split(block(inner), "\n")
-	width := lipgloss.Width(lines[0])
+	return lines, lipgloss.Width(lines[0])
+}
 
-	b := st.borderRunes()
+// panelRuleFor returns the border material for a content width, rendering it
+// once per width for this style set. A theme change builds a new set, and the
+// colour-profile setter drops what is cached here, so nothing outlives the
+// palette or the depth it was drawn for.
+func (s *styles) panelRuleFor(width int) *panelRule {
+	if s.panel != nil && s.panel.width == width {
+		return s.panel
+	}
+	s.panel = s.litPanelRule(width, s.border, s.accent.GetForeground())
+	return s.panel
+}
 
+// litPanelRule renders the rule material for one width in a given border style,
+// uncached. The rules are drawn along a gradient rather than in one colour: lit
+// at the corners, easing to the border's own colour across the middle. Both
+// stops come from the palette, and on a terminal without the depth for it blend
+// returns the border colour flat — exactly the frame this app drew before.
+//
+// Only the horizontals take it. Running it down the sides as well would light
+// the whole frame at once, which is what a win does and what a win should keep
+// to itself.
+func (s *styles) litPanelRule(width int, border lipgloss.Style, accent color.Color) *panelRule {
+	b := s.borderRunes()
+	rule := blend(width+2, accent, border.GetForeground(), accent)
+	r := &panelRule{
+		width:  width,
+		top:    make([]string, width+2),
+		bottom: make([]string, width+2),
+	}
+	cell := func(i int, rune string) string {
+		return border.Foreground(colorAt(rule, i)).Render(rune)
+	}
+	r.top[0] = cell(0, b.TopLeft)
+	for i := range width {
+		r.top[i+1] = cell(i+1, b.Top)
+	}
+	r.top[width+1] = cell(width+1, b.TopRight)
+	r.bottom[0] = cell(0, b.BottomLeft)
+	for i := range width {
+		r.bottom[i+1] = cell(i+1, b.Bottom)
+	}
+	r.bottom[width+1] = cell(width+1, b.BottomRight)
+	r.left = border.Render(b.Left)
+	r.right = border.Render(b.Right)
+	return r
+}
+
+// drawPanel assembles the frame from prepared border material.
+func drawPanel(title, status, corner string, lines []string, width int, rule *panelRule) string {
 	label := " " + title + " "
 	// The status is inlaid the way the close box is, so it has to be measured
 	// the same way — and given up rather than allowed to eat the rule. A frame
@@ -456,54 +551,40 @@ func renderPanel(title, status, corner, content string, border lipgloss.Style) s
 		fill = 0
 	}
 
-	// The rules are drawn along a gradient rather than in one colour: lit at the
-	// corners, easing to the border's own colour across the middle. Both stops
-	// come from the palette, and on a terminal without the depth for it blend
-	// returns the border colour flat — exactly the frame this app drew before.
-	//
-	// Only the horizontals take it. Running it down the sides as well would
-	// light the whole frame at once, which is what a win does and what a win
-	// should keep to itself.
-	edgeColor := border.GetForeground()
-	rule := blend(width+2, st.accent.GetForeground(), edgeColor, st.accent.GetForeground())
-	edge := func(i int, s string) string {
-		return border.Foreground(colorAt(rule, i)).Render(s)
-	}
-
 	var top strings.Builder
-	top.WriteString(edge(0, b.TopLeft))
-	top.WriteString(edge(1, b.Top))
+	top.WriteString(rule.top[0])
+	top.WriteString(rule.top[1])
 	top.WriteString(st.panelTitle.Render(label))
 	// Where the fill starts, in rule coordinates: the two runes above plus the
 	// label. Colouring each rune by its real column is what makes the gradient
 	// continue through the inlays instead of restarting after them.
 	start := 2 + lipgloss.Width(label)
 	for i := range fill {
-		top.WriteString(edge(start+i, b.Top))
+		top.WriteString(rule.top[start+i])
 	}
 	// Muted rather than an element of its own: the status is a label on the
 	// frame, and a new themeable name would cost a theme.Elements entry and a
 	// docs/THEMES.md row for something every theme already colours.
 	top.WriteString(st.muted.Render(status))
 	top.WriteString(corner)
-	top.WriteString(edge(width+1, b.TopRight))
+	top.WriteString(rule.top[width+1])
 
 	var sb strings.Builder
 	sb.WriteString(top.String())
 	sb.WriteByte('\n')
 	for _, l := range lines {
-		sb.WriteString(border.Render(b.Left))
+		sb.WriteString(rule.left)
 		sb.WriteString(l)
-		sb.WriteString(border.Render(b.Right))
+		sb.WriteString(rule.right)
 		sb.WriteByte('\n')
 	}
 	// The bottom takes the same colour per column as the top, so the two rules
 	// read as one frame rather than as two that happen to match.
-	sb.WriteString(edge(0, b.BottomLeft))
+	sb.WriteString(rule.bottom[0])
 	for i := range width {
-		sb.WriteString(edge(i+1, b.Bottom))
+		sb.WriteString(rule.bottom[i+1])
 	}
-	sb.WriteString(edge(width+1, b.BottomRight))
+	sb.WriteString(rule.bottom[width+1])
 	return sb.String()
 }
 

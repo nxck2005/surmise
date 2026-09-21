@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"sort"
 	"strings"
 	"time"
@@ -169,11 +170,15 @@ func (m *profileScreen) renderDistribution() string {
 	var b strings.Builder
 	b.WriteString(st.muted.Render("guess distribution"))
 	b.WriteString("\n")
+	// The ramp is the same for every bar — it spans the full width, and a short
+	// bar simply stops early — so it is built once for the histogram rather than
+	// once per bar, and again per frame.
+	ramp := barRamp()
 	for _, a := range attempts {
 		n := dist[a]
 		fmt.Fprintf(&b, "%s %s %s\n",
 			st.muted.Render(fmt.Sprintf("%2d", a)),
-			renderBar(n, peak),
+			renderBar(n, peak, ramp),
 			st.text.Render(fmt.Sprint(n)))
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -189,18 +194,26 @@ const fullBlock = "█"
 
 var eighths = [...]string{"▏", "▎", "▍", "▌", "▋", "▊", "▉"}
 
+// barRamp is the gradient every bar of one histogram is drawn along: from the
+// theme's bar colour dimmed, up to the colour itself. Shading within the theme's
+// own bar colour rather than toward the accent is deliberate: the two are the
+// same colour in the default theme, and a ramp that vanished depending on the
+// palette would be worse than none.
+func barRamp() []color.Color {
+	full := st.bar.GetForeground()
+	return blend(distributionWidth, dim(full, 0.45), full)
+}
+
 // renderBar draws one histogram bar, shaded along its length from a dimmed bar
 // colour up to the bar colour itself, so a long bar arrives brighter than a
 // short one and the row reads as depth rather than as a block of paint.
 //
-// It shades within the theme's own bar colour rather than toward the accent:
-// the two are the same colour in the default theme, and a ramp that vanished
-// depending on the palette would be worse than none.
+// ramp is shared by every bar in the histogram, built once by barRamp.
 //
 // Sub-cell precision is only used when the theme kept the default bar glyph: a
 // theme that chose its own rune means it, and half of somebody else's glyph is
 // not a smaller version of it.
-func renderBar(n, peak int) string {
+func renderBar(n, peak int, ramp []color.Color) string {
 	if peak <= 0 {
 		return ""
 	}
@@ -217,10 +230,6 @@ func renderBar(n, peak int) string {
 		}
 	}
 
-	// The ramp spans the whole width, so every bar is shaded on the same scale
-	// and a short one simply stops early rather than being a squashed copy.
-	full := st.bar.GetForeground()
-	ramp := blend(distributionWidth, dim(full, 0.45), full)
 	var b strings.Builder
 	for i := range whole {
 		b.WriteString(st.bar.Foreground(colorAt(ramp, i)).Render(st.glyph.Bar))

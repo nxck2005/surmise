@@ -2272,13 +2272,32 @@ func (m *Model) frame(h *hitMap) string {
 	// blinking — and it lands back on the border colour it started from, which
 	// is the settled frame. On a terminal that cannot blend, the run is flat in
 	// the accent and this is the hard swap it always was.
-	border := st.border
+	// Box the content in a rounded, titled panel (btop-style) and centre that
+	// panel in the terminal. The border hugs the content, not the terminal
+	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
+	// panel is emitted on its own.
+	//
+	// A solved board accents the whole frame for a moment: the same runes at the
+	// same width, in the colour the theme already uses for emphasis. The accent
+	// rises and falls across that moment rather than switching on and off, so
+	// the frame answers a win the way the tiles do — by turning, not by
+	// blinking — and it lands back on the border colour it started from, which
+	// is the settled frame. On a terminal that cannot blend, the run is flat in
+	// the accent and this is the hard swap it always was.
+	//
+	// That per-frame colour is why the two draws are separate functions: the
+	// ordinary frame is the same material every time and is cached, and only the
+	// accent pays to render its rule afresh.
+	title, status, corner := m.screenTitle(), m.screenStatus(), m.closeBox(h)
+	panel := ""
 	if p, winning := m.anim.winning(timeNow()); winning {
 		lit := blend(winSteps, st.border.GetForeground(), st.accent.GetForeground())
 		strength := min(p/winRampIn, (1-p)/winRampOut, 1)
-		border = st.border.Foreground(colorAt(lit, int(max(strength, 0)*float64(winSteps-1))))
+		border := st.border.Foreground(colorAt(lit, int(max(strength, 0)*float64(winSteps-1))))
+		panel = renderPanelLit(title, status, corner, content, border)
+	} else {
+		panel = renderPanel(title, status, corner, content)
 	}
-	panel := renderPanel(m.screenTitle(), m.screenStatus(), m.closeBox(h), content, border)
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height,
 			lipgloss.Center, lipgloss.Center, panel)

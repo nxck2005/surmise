@@ -68,6 +68,12 @@ type gameScreen struct {
 	// much of itself it can afford to draw — see boardLayout. Zero means "not
 	// measured yet", which counts as unbounded.
 	width, height int
+
+	// letters is the keyboard's state map, allocated once with the screen and
+	// refilled from the current puzzle on every frame. It is one frame's worth
+	// of state recomputed from the guesses, never a cached answer: a stale entry
+	// would be a mark for a guess this board never made. See letters().
+	letters map[byte]game.Mark
 }
 
 // resize records the terminal size. The root calls it on every WindowSizeMsg
@@ -79,7 +85,20 @@ func (m *gameScreen) resize(w, h int) { m.width, m.height = w, h }
 //
 // The clock is not started here — startClock does that on the first letter.
 func newGameScreen(s store.Store, g *game.Game, saved bool) *gameScreen {
-	return &gameScreen{store: s, g: g, persisted: saved}
+	return &gameScreen{store: s, g: g, persisted: saved, letters: make(map[byte]game.Mark, 26)}
+}
+
+// lettersOf is the on-screen keyboard's state, filled into the screen's own map.
+// The fill clears it first, so the map is rebuilt from the current guesses every
+// frame rather than cached across them: what it costs is a scan of at most seven
+// short words, and what it buys is never explaining a wrong mark.
+func (m *gameScreen) lettersOf() map[byte]game.Mark {
+	if m.letters == nil {
+		// A screen built as a literal rather than by newGameScreen.
+		m.letters = make(map[byte]game.Mark, 26)
+	}
+	m.g.FillLetterStates(m.letters)
+	return m.letters
 }
 
 // enter arms the session clock for a board the player has just opened or
@@ -461,7 +480,7 @@ func (m *gameScreen) view(h *hitMap) string {
 	sections = append(sections,
 		renderBoard(g, m.typing, h, m.anim, now, l.tiles, l.boardGap),
 		"",
-		renderKeyboard(g.LetterStates(), h, m.anim, now, l.kbdGap),
+		renderKeyboard(m.lettersOf(), h, m.anim, now, l.kbdGap),
 		"",
 		m.statusLine(h),
 	)
@@ -469,7 +488,7 @@ func (m *gameScreen) view(h *hitMap) string {
 	// reference the player consults, not something to read past on the way to
 	// the board.
 	if l.legend {
-		sections = append(sections, "", renderLegend())
+		sections = append(sections, "", st.legendText())
 	}
 	// Centre the sections relative to each other so the header and status line
 	// sit under the middle of the board and keyboard rather than hugging the
@@ -586,11 +605,15 @@ func (l boardLayout) withTiles(tiles int) boardLayout {
 // wide theme can price the legend out of a terminal with rows to spare — and a
 // legend already gone for width buys no rows, so this is a precondition on the
 // top of the ladder rather than a rung of it.
+//
+// The width comes from the cached key rather than from rendering it: this runs
+// on every layout call, which is twice a frame, and the key used to be built
+// each time just to be measured.
 func (m *gameScreen) legendFitsWidth() bool {
 	if m.width <= 0 {
 		return true
 	}
-	return lipgloss.Width(renderLegend())+2*st.metric.PanelPadX+2 <= m.width
+	return st.legendWidth()+2*st.metric.PanelPadX+2 <= m.width
 }
 
 // tileRows is how tall a board tile is drawn. The board is one row tall by
