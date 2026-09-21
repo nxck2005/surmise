@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -124,6 +125,26 @@ func TestAllSkipsCorruptFiles(t *testing.T) {
 	}
 	if len(games) != 1 || games[0].ID != good.ID {
 		t.Errorf("All() = %v, want just the good puzzle", games)
+	}
+}
+
+// A file that is not a plain one is refused before it is opened. A directory
+// is the portable stand-in for the mode check; the FIFO case, which is the one
+// that actually blocks, is covered on unix in fifo_test.go.
+func TestReadLimitedRefusesANonRegularFile(t *testing.T) {
+	if _, err := readLimited(t.TempDir()); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("readLimited(directory) = %v, want a not-a-regular-file refusal", err)
+	}
+}
+
+func TestStoreRefusesADirectoryWhereARecordShouldBe(t *testing.T) {
+	s := newStore(t)
+	g := newGame(t, 5)
+	if err := os.MkdirAll(mustPath(t, s, g.ID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Load(g.ID); err == nil {
+		t.Error("Load accepted a directory as a puzzle")
 	}
 }
 

@@ -123,12 +123,37 @@ func (s *JSON) load(id string) (*game.Game, error) {
 // The one-byte overshoot is how "exactly at the limit" is told from "over it"
 // without a second read. A file that does not exist comes back as the open
 // error, so callers can still recognise fs.ErrNotExist.
+//
+// A file that is not a plain one is refused before it is opened. Opening a
+// FIFO for reading blocks until a writer appears, and a planted one would hang
+// every scan that read it — startup, the menu, the profile, the list — so the
+// mode has to be the warning. The check is repeated on the descriptor because
+// a file swapped between the stat and the open is the one thing the first
+// check cannot see; on a platform where that swap can block, closing it would
+// need an O_NONBLOCK open, which is deliberately not done here. The theme
+// reader carries the same accepted window (see theme.readThemeFile).
 func readLimited(path string) ([]byte, error) {
+	before, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
 
 	b, err := io.ReadAll(io.LimitReader(f, MaxRecordBytes+1))
 	if err != nil {

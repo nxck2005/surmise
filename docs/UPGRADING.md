@@ -68,6 +68,14 @@ they never played. No save written by a released build is affected — every
 daily has carried its derived id since dailies shipped, and the check needs no
 schema change.
 
+**A puzzle file has to be a regular file.** Opening a FIFO for reading blocks
+until a writer appears, and one planted at a puzzle's path hung every scan that
+touched the history — startup, the menu, the profile, the list. The store now
+refuses a file that is not a plain one by its mode, before opening it, so a
+planted pipe is skipped like any other unreadable record and a planted
+`settings.json` falls back to the defaults. Nothing this app writes is
+affected.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on
