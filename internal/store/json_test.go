@@ -148,6 +148,40 @@ func TestStoreRefusesADirectoryWhereARecordShouldBe(t *testing.T) {
 	}
 }
 
+// The audit's reproducer: a hand-edited elapsed value that overflows a
+// duration must not reach Elapsed() through the store. The codec refuses it,
+// so Load errors and All skips it, exactly as for any other corrupt field.
+func TestStoreRefusesAnElapsedTimeThatWouldOverflow(t *testing.T) {
+	s := newStore(t)
+	g := newGame(t, 5)
+	if err := s.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	path := mustPath(t, s, g.ID)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := bytes.Replace(raw, []byte(`"elapsedMs": 0`), []byte(`"elapsedMs": 9223372036854775807`), 1)
+	if bytes.Equal(patched, raw) {
+		t.Fatal("the record does not carry elapsedMs")
+	}
+	if err := os.WriteFile(path, patched, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Load(g.ID); err == nil {
+		t.Error("Load accepted an elapsed value that overflows a duration")
+	}
+	games, err := s.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(games) != 0 {
+		t.Errorf("All = %v, want the corrupt record skipped", games)
+	}
+}
+
 func TestSaveRejectsInvalidGame(t *testing.T) {
 	s := newStore(t)
 	g := newGame(t, 5)

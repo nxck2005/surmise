@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"testing"
 	"time"
@@ -359,6 +360,11 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 		{"digit in a guess", func(g *Game) { g.Guesses[1] = "ac0rn" }},
 		{"daily is not a date", func(g *Game) { g.Daily = "2026-13-01" }},
 		{"daily carries an escape", func(g *Game) { g.Daily = "2026-08-06\x1b" }},
+		// ElapsedMS is multiplied by time.Millisecond, so a value past a
+		// duration's range wraps Elapsed() negative and takes the profile's
+		// totals and averages with it. See MaxElapsedMS.
+		{"negative elapsed", func(g *Game) { g.ElapsedMS = -1 }},
+		{"elapsed past a duration", func(g *Game) { g.ElapsedMS = math.MaxInt64 }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -373,6 +379,16 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 				t.Error("Validate accepted corrupt game")
 			}
 		})
+	}
+}
+
+// The bound is inclusive: exactly a duration's worth of milliseconds is a
+// value the profile can still render, and it is the largest such value.
+func TestValidateAcceptsElapsedAtItsBound(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.ElapsedMS = MaxElapsedMS
+	if err := g.Validate(); err != nil {
+		t.Errorf("Validate at MaxElapsedMS: %v", err)
 	}
 }
 

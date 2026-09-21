@@ -76,6 +76,14 @@ planted pipe is skipped like any other unreadable record and a planted
 `settings.json` falls back to the defaults. Nothing this app writes is
 affected.
 
+**A puzzle's play time is bounded.** The per-puzzle `elapsedMs` is multiplied
+by a millisecond to render, so a hand-edited or imported value past what a
+`time.Duration` can hold wrapped `Elapsed()` negative and moved the profile's
+solve-time totals and averages. A saved puzzle's elapsed time is now held to
+the same bound the settings play counter has always had, on every read and
+write; no session this app records can come near it. The two figures are one
+constant now, so they cannot drift apart.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on
