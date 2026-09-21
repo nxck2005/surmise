@@ -84,6 +84,16 @@ the same bound the settings play counter has always had, on every read and
 write; no session this app records can come near it. The two figures are one
 constant now, so they cannot drift apart.
 
+**The backup button loads only this app's own dated files.** The newest backup
+was chosen by name, so anything ending in `.json` that sorted after the dated
+names was treated as the one to restore — a dropped file named `zzz.json`
+shadowed every real backup. A candidate now has to be a name this app writes
+(`surmise-backup-YYYY-MM-DD`, then `-2`, `-3`, …): a foreign name is left
+alone, and a directory holding only foreign files says there are no backups
+rather than loading one. The numbering is compared as a number too, so the
+tenth save of a day is newer than the ninth. `-import <path>` still takes any
+file the player names.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on
