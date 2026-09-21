@@ -1860,14 +1860,19 @@ func (m *Model) openDaily(length int) tea.Cmd {
 // dailySpent reports whether a daily was played and then deleted. It asks the
 // store rather than the daily screen's rows, so the guard holds on any path
 // that reaches a puzzle, not only the one that has just rendered the list.
+//
+// This is called only after Load has already reported ErrNotFound, which means
+// the id either holds a tombstone or holds nothing at all — so the question is
+// "does this id exist", and an id-only read answers it without decoding the
+// player's history.
 func dailySpent(s store.Store, id string) (bool, error) {
-	saved, err := s.All()
+	ids, err := s.IDs()
 	if err != nil {
 		return false, err
 	}
-	for _, g := range saved {
-		if g.ID == id {
-			return g.Deleted, nil
+	for _, have := range ids {
+		if have == id {
+			return true, nil
 		}
 	}
 	return false, nil

@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -558,6 +560,54 @@ func TestNewPuzzleGivesUpRerollingRatherThanFail(t *testing.T) {
 	}
 	if g == nil {
 		t.Fatal("no puzzle returned")
+	}
+}
+
+// Which codes are taken is a question about ids, and the answer has to be
+// "every record that exists", not "every record that reads". A deleted
+// finished puzzle keeps its code — reusing it would make two puzzles look like
+// one in a list that outlives the deletion — and so does a record whose bytes
+// will not decode, which is exactly the record a restore must not mistake for
+// absent. A name that is not a record is not one either.
+func TestTakenCodesReserveDeletedAndUnreadableRecords(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.NewJSON(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{Motion: motionOffName})
+	m.screen = screenMenu
+
+	// One live puzzle, one that will be deleted, and one whose bytes are
+	// corrupt. playSome solves them; the last two stop being readable.
+	ids := playSome(t, m, 3)
+	if err := s.Delete(ids[1]); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	corrupt := filepath.Join(dir, "puzzles", ids[2]+".json")
+	if err := os.WriteFile(corrupt, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A stray that has never been a record, so its name must not reserve a code.
+	stray, err := game.New(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "puzzles", "notes.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	taken, err := takenCodes(s)
+	if err != nil {
+		t.Fatalf("takenCodes: %v", err)
+	}
+	for _, id := range ids {
+		if !taken[game.Code(id)] {
+			t.Errorf("code %s of record %s is not reserved", game.Code(id), id)
+		}
+	}
+	if taken[game.Code(stray.ID)] {
+		t.Errorf("a record that does not exist reserved code %s", game.Code(stray.ID))
 	}
 }
 

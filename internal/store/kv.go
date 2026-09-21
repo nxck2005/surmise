@@ -60,6 +60,16 @@ var (
 
 func kvPuzzleKey(id string) string { return kvPuzzlePrefix + id }
 
+// puzzleIDFromKey reports whether a storage key names a puzzle record, and
+// returns the id it names. It is the key-space counterpart of JSON's
+// puzzleIDFromName: both All and IDs use it, so a foreign key — the settings
+// blob, a key from a future version, a hand-planted suffix — is not a puzzle to
+// either of them.
+func puzzleIDFromKey(key string) (string, bool) {
+	id, ok := strings.CutPrefix(key, kvPuzzlePrefix)
+	return id, ok && game.ValidID(id)
+}
+
 func (s *KVStore) Save(g *game.Game) error {
 	b, err := encodeRecord(g)
 	if err != nil {
@@ -128,6 +138,23 @@ func (s *KVStore) Delete(id string) error {
 	return s.kv.Delete(kvPuzzleKey(id))
 }
 
+// IDs returns the id of every stored puzzle record without reading a value.
+// A deleted finished puzzle is still a key, so its id stays in the list even
+// though List and Load hide it.
+func (s *KVStore) IDs() ([]string, error) {
+	keys := s.kv.Keys()
+	ids := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if id, ok := puzzleIDFromKey(k); ok {
+			ids = append(ids, id)
+		}
+	}
+	// Keys() has no defined order — that is part of the KV contract — so the
+	// id order the Store interface promises is imposed here.
+	sort.Strings(ids)
+	return ids, nil
+}
+
 // All returns every readable record, tombstones included — stats need them to
 // see where a deleted puzzle broke a streak. An unreadable value is skipped
 // rather than failing the whole call, so one bad record cannot lock the player
@@ -136,8 +163,8 @@ func (s *KVStore) All() ([]*game.Game, error) {
 	keys := s.kv.Keys()
 	games := make([]*game.Game, 0, len(keys))
 	for _, k := range keys {
-		id, ok := strings.CutPrefix(k, kvPuzzlePrefix)
-		if !ok || id == "" {
+		id, ok := puzzleIDFromKey(k)
+		if !ok {
 			continue
 		}
 		g, err := s.load(id)

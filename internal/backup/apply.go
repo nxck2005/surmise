@@ -74,17 +74,23 @@ func Apply(b []byte, s store.Store, current store.Settings) (Result, error) {
 		return Result{}, err
 	}
 
-	// One read of the whole store, not a Load per record: Load hides tombstones
-	// (it reports one as ErrNotFound, because nothing may resume a deletion), so
-	// asking it would read every deleted puzzle in the archive as absent and
-	// write a tombstone back over a puzzle the player still has.
-	existing, err := s.All()
+	// Ids, not a Load per record: Load hides tombstones (it reports one as
+	// ErrNotFound, because nothing may resume a deletion), so asking it would
+	// read every deleted puzzle in the archive as absent and write a tombstone
+	// back over a puzzle the player still has.
+	//
+	// Ids rather than All because this is identity work, and it is the safer
+	// read as well as the cheaper one: All skips a record it cannot decode,
+	// which would make a corrupt save look absent and let the import overwrite
+	// it. An id that exists is an id the archive does not touch, readable or
+	// not.
+	existing, err := s.IDs()
 	if err != nil {
 		return Result{}, fmt.Errorf("backup: read the current history: %w", err)
 	}
 	have := make(map[string]bool, len(existing))
-	for _, g := range existing {
-		have[g.ID] = true
+	for _, id := range existing {
+		have[id] = true
 	}
 
 	var out Result

@@ -32,7 +32,7 @@ func mustPath(t *testing.T, s *JSON, id string) string {
 	return p
 }
 
-func newGame(t *testing.T, length int) *game.Game {
+func newGame(t testing.TB, length int) *game.Game {
 	t.Helper()
 	g, err := game.New(length)
 	if err != nil {

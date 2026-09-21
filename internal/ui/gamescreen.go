@@ -404,14 +404,25 @@ func newPuzzleWith(s store.Store, length int, draw func(int) (*game.Game, error)
 
 // takenCodes is the set of codes already on disk. A read failure is reported,
 // since it means the list the player is about to see is unreliable too.
+//
+// It asks for ids rather than summaries: choosing a fresh puzzle needs one
+// six-digit hash per stored record and nothing else, and a full List is O(history)
+// of decode on every new board — which sprint mode, dealing a board every few
+// seconds, pays over and over.
+//
+// Only ids that exist are considered, so a deleted finished puzzle keeps its
+// code reserved. That is deliberate, and it is the one place this differs from
+// the old read: reusing the code of a puzzle the player deleted — one whose
+// tombstone is still on disk — is worse than a collision, because it makes the
+// two look like the same puzzle in a list that outlives both.
 func takenCodes(s store.Store) (map[string]bool, error) {
-	items, err := s.List()
+	ids, err := s.IDs()
 	if err != nil {
 		return nil, err
 	}
-	taken := make(map[string]bool, len(items))
-	for _, it := range items {
-		taken[game.Code(it.ID)] = true
+	taken := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		taken[game.Code(id)] = true
 	}
 	return taken, nil
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -173,6 +174,15 @@ func (s staticStore) Load(string) (*game.Game, error) { return nil, store.ErrNot
 func (s staticStore) Save(*game.Game) error           { return nil }
 func (s staticStore) Delete(string) error             { return store.ErrNotFound }
 func (s staticStore) List() ([]store.Summary, error)  { return nil, nil }
+
+func (s staticStore) IDs() ([]string, error) {
+	ids := make([]string, 0, len(s.games))
+	for _, g := range s.games {
+		ids = append(ids, g.ID)
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
 
 // A backup this build writes has to be one it can read back. Writing a file
 // whose own import refuses it is the failure the format exists to prevent, and

@@ -46,6 +46,29 @@ type Store interface {
 	Load(id string) (*game.Game, error)
 	// Delete removes a puzzle by id, or returns ErrNotFound.
 	Delete(id string) error
+	// IDs returns the id of every puzzle record the store holds, tombstones
+	// included, in ascending order.
+	//
+	// It is the identity-only read: no record is opened or decoded, so a caller
+	// that only needs to know *which* puzzles exist — a fresh board's code
+	// check, a restore's duplicate check, the daily screen's tombstone hunt —
+	// does not pay for the history it is asking about. That cost is the whole
+	// reason this method exists: All is O(records) of JSON decode, and a
+	// browser pays a localStorage crossing per record on top.
+	//
+	// The semantics are exactly "what would All see, identity only":
+	//
+	//   - a record that cannot be decoded still occupies storage, so its id is
+	//     returned (an unreadable file is not a licence to overwrite it);
+	//   - a deleted finished puzzle's tombstone is a record, so its id is
+	//     returned even though List and Load hide it;
+	//   - settings and anything else that is not a puzzle this app wrote are
+	//     not, and an id-shaped file or key that has never been a legal id is
+	//     not either.
+	//
+	// Callers that need to read the puzzles want List or All; anything that
+	// turns around and loads every id it was given has gained nothing.
+	IDs() ([]string, error)
 	// List returns summaries of all puzzles, most recently updated first.
 	List() ([]Summary, error)
 	// All returns every puzzle in full. Stats need the guess distribution,

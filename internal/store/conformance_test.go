@@ -3,6 +3,8 @@ package store
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -343,6 +345,91 @@ func TestStoreDeletedDailyKeepsItsDate(t *testing.T) {
 		}
 		if games[0].Daily != "2026-08-06" {
 			t.Errorf("deleted daily lost its date: %+v", games[0])
+		}
+	})
+}
+
+// --- ids: the identity-only read ---
+
+// idsOf reads a store's ids through the contract: sorted ascending, no error
+// on an empty store.
+func idsOf(t *testing.T, s settingsCapable) []string {
+	t.Helper()
+	got, err := s.IDs()
+	if err != nil {
+		t.Fatalf("IDs: %v", err)
+	}
+	return got
+}
+
+// IDs is what the store holds by identity, and nothing else. It exists so a
+// caller that only needs to know which puzzles are there — a fresh board's code
+// check, a restore's duplicate check, the daily screen's tombstone hunt — does
+// not decode the whole history to find out.
+func TestStoreIDsAreRecordsNotSettings(t *testing.T) {
+	eachStore(t, "ids", func(t *testing.T, s settingsCapable) {
+		// An empty store has no ids, and that is not an error: a first run has
+		// nothing saved.
+		if got := idsOf(t, s); len(got) != 0 {
+			t.Errorf("IDs = %v, want nothing on an empty store", got)
+		}
+
+		// Three puzzles, saved in descending id order so the expected order is
+		// a sort rather than the order they were written in.
+		made := []*game.Game{newGame(t, 5), wonGame(t), newGame(t, 6)}
+		sort.Slice(made, func(i, j int) bool { return made[i].ID > made[j].ID })
+		want := make([]string, 0, len(made))
+		for _, g := range made {
+			if err := s.Save(g); err != nil {
+				t.Fatal(err)
+			}
+			want = append(want, g.ID)
+		}
+		sort.Strings(want)
+
+		// Preferences share the browser store's key space; they are not
+		// puzzles in either store.
+		if err := s.SaveSettings(Settings{Theme: "nord"}); err != nil {
+			t.Fatal(err)
+		}
+
+		for range 3 {
+			if got := idsOf(t, s); !slices.Equal(got, want) {
+				t.Errorf("IDs = %v, want %v (ascending, deterministically)", got, want)
+			}
+		}
+	})
+}
+
+// The reader split, on the identity axis: a deleted finished puzzle keeps its
+// id — its tombstone is a record — while List hides it, and an unfinished
+// delete takes its id with it because there is nothing left behind.
+func TestStoreIDsKeepTombstonesAndForgetAnUnfinishedDelete(t *testing.T) {
+	eachStore(t, "ids-delete", func(t *testing.T, s settingsCapable) {
+		done := wonGame(t)
+		open := newGame(t, 5)
+		for _, g := range []*game.Game{done, open} {
+			if err := s.Save(g); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := s.Delete(done.ID); err != nil {
+			t.Fatalf("Delete of a finished puzzle: %v", err)
+		}
+		if err := s.Delete(open.ID); err != nil {
+			t.Fatalf("Delete of an unfinished puzzle: %v", err)
+		}
+
+		if got, want := idsOf(t, s), []string{done.ID}; !slices.Equal(got, want) {
+			t.Errorf("IDs = %v, want only the tombstone %s", got, done.ID)
+		}
+		if list, err := s.List(); err != nil || len(list) != 0 {
+			t.Errorf("List = %v, %v; want no puzzles", list, err)
+		}
+		games, err := s.All()
+		if err != nil || len(games) != 1 || !games[0].Deleted {
+			t.Errorf("All = %+v, %v; want the one tombstone", games, err)
 		}
 	})
 }

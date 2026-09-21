@@ -206,6 +206,49 @@ func archiveWithID(t *testing.T, id string) []byte {
 	return body
 }
 
+// A record the install already holds is off limits even when it cannot be read.
+// All skips a record it cannot decode, which is right for a history scan and
+// wrong for a duplicate check: it would read the corrupt save as absent and
+// overwrite it with the archive's copy. The merge asks for ids, which is the
+// one read that cannot make that mistake.
+func TestApplyDoesNotOverwriteAnUnreadableRecord(t *testing.T) {
+	g := wonGame(t, "crane")
+
+	from := newStore(t)
+	stale := *g
+	stale.Answer = "slate"
+	if err := from.Save(&stale); err != nil {
+		t.Fatal(err)
+	}
+	b := buildFrom(t, from, store.Settings{}, nil)
+
+	dir := t.TempDir()
+	to, err := store.NewJSON(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "puzzles", g.ID+".json")
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Apply(b, to, store.Settings{})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res.PuzzlesAdded != 0 || res.PuzzlesKept != 1 {
+		t.Errorf("added %d and kept %d, want 0 and 1: the id is already there",
+			res.PuzzlesAdded, res.PuzzlesKept)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the import removed a record it could not read: %v", err)
+	}
+	if !bytes.Equal(after, []byte("{not json")) {
+		t.Errorf("the import overwrote an unreadable record with %q", after)
+	}
+}
+
 // A tombstone in an archive must not delete a puzzle the player still holds.
 // This is the sharpest edge of "only ever adds": the record is a deletion, and
 // applying it as one would destroy live history.

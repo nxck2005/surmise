@@ -61,29 +61,42 @@ func (row dailyRow) done() bool { return !row.spent && row.status.Done() }
 
 // reload reads what has been played of a day.
 //
-// It reads through All rather than Load because a deleted daily has to be
-// visible here: Load reports a tombstone as ErrNotFound, which would make a
-// spent day look untouched. One pass over the directory covers every mode.
+// It asks for ids first and then loads only the day's own three records: a
+// deleted daily has to be visible here (Load reports a tombstone as
+// ErrNotFound, which alone would make a spent day look untouched), but reading
+// the player's whole history to find three files is what made opening this
+// screen O(history) on both platforms. An id that is present but will not load
+// is reported rather than shown as a day never started.
 func (m *dailyScreen) reload(s store.Store, d daily.Day) {
 	m.day = d
 	m.err = nil
 	m.copyRequested = false
 	m.rows = make([]dailyRow, 0, len(words.Lengths))
 
-	saved, err := s.All()
+	ids, err := s.IDs()
 	if err != nil {
 		m.err = err
 	}
-	byID := make(map[string]*game.Game, len(saved))
-	for _, g := range saved {
-		byID[g.ID] = g
+	present := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		present[id] = true
 	}
 
 	for _, n := range words.Lengths {
 		row := dailyRow{length: n, id: daily.ID(d, n)}
-		if g, ok := byID[row.id]; ok {
-			row.status, row.attempts, row.spent = g.Status, g.Attempts(), g.Deleted
-			row.maxAttempts, row.elapsed, row.marks = g.MaxAttempts, g.Elapsed(), g.Marks
+		if present[row.id] {
+			g, err := s.Load(row.id)
+			switch {
+			case err == nil:
+				row.status, row.attempts, row.spent = g.Status, g.Attempts(), g.Deleted
+				row.maxAttempts, row.elapsed, row.marks = g.MaxAttempts, g.Elapsed(), g.Marks
+			case errors.Is(err, store.ErrNotFound):
+				// Present but unopenable is what a tombstone is: played, then
+				// deleted. Rebuilding the puzzle would write over that record.
+				row.spent = true
+			default:
+				m.err = err
+			}
 		}
 		m.rows = append(m.rows, row)
 	}
