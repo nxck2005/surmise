@@ -17,7 +17,9 @@
 package backup
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -52,7 +54,9 @@ const Version = 1
 // themselves to this figure, so one number describes "too big to be a backup".
 const MaxArchiveBytes = 64 << 20
 
-// What an archive may hold, checked before a single record is decoded. The
+// What an archive may hold, enforced by recordList and themeList as the arrays
+// are decoded: the cap is checked before the element past it is read, so a
+// file can never make the decoder allocate more than the limits allow. The
 // limits are two orders of magnitude above a long history; their job is to
 // bound the shapes a parser walks, not to ration anyone's play.
 const (
@@ -64,14 +68,94 @@ const (
 // so that they are exactly the bytes a store holds — see store.EncodeRecord.
 // That is what makes an archive portable between the two stores by
 // construction rather than by a conversion somebody has to keep correct.
+//
+// The two arrays are named slice types rather than plain slices because they
+// have to count themselves as they are decoded; see decodeBounded. The JSON
+// shape is unchanged and Build still writes them the way it always did.
 type Archive struct {
-	Format    string            `json:"format"`
-	Version   int               `json:"version"`
-	CreatedAt time.Time         `json:"createdAt"`
-	App       string            `json:"app,omitempty"`
-	Puzzles   []json.RawMessage `json:"puzzles"`
-	Settings  *store.Settings   `json:"settings,omitempty"`
-	Themes    []theme.File      `json:"themes,omitempty"`
+	Format    string          `json:"format"`
+	Version   int             `json:"version"`
+	CreatedAt time.Time       `json:"createdAt"`
+	App       string          `json:"app,omitempty"`
+	Puzzles   recordList      `json:"puzzles"`
+	Settings  *store.Settings `json:"settings,omitempty"`
+	Themes    themeList       `json:"themes,omitempty"`
+}
+
+// recordList is the puzzles array. It exists so the record cap is applied to
+// the array while it is read: json.Unmarshal into a plain []json.RawMessage
+// materializes every element first and only then can Read count them, which is
+// how a few megabytes naming two million empty puzzles once spent hundreds of
+// times their size before the refusal. Each element is decoded and counted one
+// at a time instead, and the array is refused at the element past the cap.
+type recordList []json.RawMessage
+
+func (l *recordList) UnmarshalJSON(b []byte) error {
+	elems, err := decodeBounded[json.RawMessage](b, maxPuzzles, "records")
+	if err != nil {
+		return err
+	}
+	*l = elems
+	return nil
+}
+
+// themeList is the themes array, bounded the same way and for the same reason.
+type themeList []theme.File
+
+func (l *themeList) UnmarshalJSON(b []byte) error {
+	elems, err := decodeBounded[theme.File](b, maxThemes, "themes")
+	if err != nil {
+		return err
+	}
+	*l = elems
+	return nil
+}
+
+// tooManyError is the refusal a count limit produces. Build raises it for an
+// archive it was about to write and the decoder raises it for one it was about
+// to read, so both say the same sentence about the same limit.
+type tooManyError struct {
+	what string // "records" or "themes"
+	n    int
+	max  int
+}
+
+func (e tooManyError) Error() string {
+	return fmt.Sprintf("backup: %d %s is more than a backup may hold (%d)", e.n, e.what, e.max)
+}
+
+// decodeBounded reads one JSON array without ever holding more than max
+// elements. The cap is checked before each element is decoded, so a hostile
+// array is refused at the limit rather than after it has been allocated.
+func decodeBounded[T any](b []byte, max int, what string) ([]T, error) {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if tok == nil {
+		// A JSON null is a section that is not there, the same as no elements.
+		return nil, nil
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '[' {
+		return nil, fmt.Errorf("backup: want an array of %s", what)
+	}
+
+	var out []T
+	for dec.More() {
+		if len(out) >= max {
+			return nil, tooManyError{what: what, n: max + 1, max: max}
+		}
+		var elem T
+		if err := dec.Decode(&elem); err != nil {
+			return nil, err
+		}
+		out = append(out, elem)
+	}
+	if _, err := dec.Token(); err != nil { // the closing ']'
+		return nil, err
+	}
+	return out, nil
 }
 
 // Build reads a whole install into an archive.
@@ -133,6 +217,13 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 
 	var a Archive
 	if err := json.Unmarshal(b, &a); err != nil {
+		// A count limit speaks for itself: "10001 records is more than a
+		// backup may hold" is the whole answer, not a sign that this is some
+		// other file. See recordList.
+		var tooMany tooManyError
+		if errors.As(err, &tooMany) {
+			return nil, nil, tooMany
+		}
 		return nil, nil, fmt.Errorf("backup: this is not a %s file: %w", Format, err)
 	}
 	if a.Format != Format {
@@ -147,12 +238,6 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 	if a.Version > Version {
 		return nil, nil, fmt.Errorf("backup: this file is version %d and this build reads %d — update the game and try again",
 			a.Version, Version)
-	}
-	if len(a.Puzzles) > maxPuzzles {
-		return nil, nil, fmt.Errorf("backup: %d records is more than a backup may hold (%d)", len(a.Puzzles), maxPuzzles)
-	}
-	if len(a.Themes) > maxThemes {
-		return nil, nil, fmt.Errorf("backup: %d themes is more than a backup may hold (%d)", len(a.Themes), maxThemes)
 	}
 	for i, t := range a.Themes {
 		if len(t.Body) > theme.MaxFileBytes {

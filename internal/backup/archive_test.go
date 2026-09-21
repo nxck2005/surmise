@@ -232,8 +232,9 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 	t.Run("too many records", func(t *testing.T) {
 		a := base
 		a.Puzzles = make([]json.RawMessage, maxPuzzles+1)
-		if _, _, err := Read(mk(a)); err == nil {
-			t.Error("Read accepted more records than a backup may hold")
+		_, _, err := Read(mk(a))
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (10000)") {
+			t.Errorf("Read of too many records = %v, want the record limit named", err)
 		}
 	})
 	t.Run("oversized record", func(t *testing.T) {
@@ -246,8 +247,9 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 	t.Run("too many themes", func(t *testing.T) {
 		a := base
 		a.Themes = make([]theme.File, maxThemes+1)
-		if _, _, err := Read(mk(a)); err == nil {
-			t.Error("Read accepted more themes than a backup may hold")
+		_, _, err := Read(mk(a))
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (256)") {
+			t.Errorf("Read of too many themes = %v, want the theme limit named", err)
 		}
 	})
 	t.Run("oversized theme", func(t *testing.T) {
@@ -271,6 +273,39 @@ func TestReadRefusesAnArchiveOverItsLimits(t *testing.T) {
 			t.Errorf("Read of an overflowing play counter = %v, want a settings refusal", err)
 		}
 	})
+}
+
+// The refusal above has to come from the element count, not from the array
+// having been materialized first. An archive naming two hundred thousand empty
+// puzzles is a megabyte of input and, decoded whole, allocates once per record
+// — hundreds of times the size of the refusal, which stops at the cap. The
+// assertion is a ratio rather than a constant so it does not depend on how
+// many allocations the decoder happens to spend per element: doubling the
+// array must not double the work.
+func TestReadDoesNotAmplifyAHostileArray(t *testing.T) {
+	body := func(n int) []byte {
+		return []byte(`{"format":"surmise.backup","version":1,"puzzles":[` +
+			strings.Repeat("null,", n-1) + `null]}`)
+	}
+
+	var err error
+	allocs := func(n int) float64 {
+		b := body(n)
+		return testing.AllocsPerRun(3, func() {
+			_, _, err = Read(b)
+		})
+	}
+	small, large := allocs(100_000), allocs(200_000)
+	if err == nil {
+		t.Fatal("Read accepted an archive naming more records than a backup may hold")
+	}
+	if !strings.Contains(err.Error(), "more than a backup may hold") {
+		t.Fatalf("error = %v, want the record limit named", err)
+	}
+	if large > small*1.5 {
+		t.Errorf("%.0f allocations for 200k records against %.0f for 100k; the refusal must not scale with the array",
+			large, small)
+	}
 }
 
 // An id becomes a filename when an archive lands, so a record carrying

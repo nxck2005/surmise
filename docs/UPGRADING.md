@@ -38,6 +38,18 @@ the same challenge identity and answer, not that every non-answer guess remains
 accepted forever. A safety removal may explicitly retire an affected old code;
 silently mapping it to another answer is never allowed.
 
+## v0.6.1 → v0.6.2: hardening from the 2026-09-21 audit
+
+**An archive's arrays are counted while they are decoded.** A backup names its
+puzzles and themes in two JSON arrays, and the count limits were only applied
+after the whole array had been read into memory: a hostile file could name two
+million empty puzzles in a few megabytes and spend roughly twenty-seven times
+its own size in allocations before the limits were consulted. The counts are
+now enforced element by element, as the file is decoded, so a file past a limit
+is refused at the limit rather than after it. The refusal names the same
+figure it always did, and every archive written by a released build still reads
+unchanged.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on
