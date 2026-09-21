@@ -55,10 +55,11 @@ const Version = 1
 const MaxArchiveBytes = 64 << 20
 
 // What an archive may hold, enforced by recordList and themeList as the arrays
-// are decoded: the cap is checked before the element past it is read, so a
-// file can never make the decoder allocate more than the limits allow. The
-// limits are two orders of magnitude above a long history; their job is to
-// bound the shapes a parser walks, not to ration anyone's play.
+// are decoded and by Build before it writes one out, so an archive this build
+// writes is always one it can read. The limits bound the shapes a parser
+// walks, not a long history — sprint mode deals boards fast enough to reach
+// the record cap — so an install that is past one is told which limit it hit
+// rather than handed a file that cannot be restored.
 const (
 	maxPuzzles = 10_000
 	maxThemes  = 256
@@ -158,6 +159,32 @@ func decodeBounded[T any](b []byte, max int, what string) ([]T, error) {
 	return out, nil
 }
 
+// checkCounts refuses a history the reader would refuse for its shape. It
+// raises tooManyError so a writer and a reader say the same sentence about the
+// same limit.
+func checkCounts(records, themes int) error {
+	if records > maxPuzzles {
+		return tooManyError{what: "records", n: records, max: maxPuzzles}
+	}
+	if themes > maxThemes {
+		return tooManyError{what: "themes", n: themes, max: maxThemes}
+	}
+	return nil
+}
+
+// checkSize refuses an archive the reader would refuse for its size.
+//
+// The counts above are what actually keep a Build output small today — ten
+// thousand short records and 256 themes of 64 KiB are a few tens of megabytes
+// at the absolute most — but the reader's bound is what Build owes, so it is
+// checked here rather than discovered at import time.
+func checkSize(n int) error {
+	if n > MaxArchiveBytes {
+		return fmt.Errorf("backup: this archive would be larger than %d bytes", MaxArchiveBytes)
+	}
+	return nil
+}
+
 // Build reads a whole install into an archive.
 //
 // settings and themes may be zero and nil: a platform without preferences or
@@ -170,6 +197,24 @@ func Build(s store.Store, settings store.Settings, themes []theme.File, app stri
 	games, err := s.All()
 	if err != nil {
 		return nil, fmt.Errorf("backup: read puzzles: %w", err)
+	}
+
+	// Refuse an archive Read would refuse, before encoding it. A backup that
+	// cannot be restored is the one failure this format exists to prevent, and
+	// the player would otherwise find out only when they need it — a new
+	// machine, an insurance copy. The messages name the limit and the figure.
+	if err := checkCounts(len(games), len(themes)); err != nil {
+		return nil, err
+	}
+	for i, t := range themes {
+		if len(t.Body) > theme.MaxFileBytes {
+			return nil, fmt.Errorf("backup: theme %d is larger than %d bytes", i+1, theme.MaxFileBytes)
+		}
+	}
+	if settings != (store.Settings{}) {
+		if err := store.ValidateSettings(settings); err != nil {
+			return nil, fmt.Errorf("backup: settings: %w", err)
+		}
 	}
 
 	// Sorted by id so two exports of an unchanged history are byte-identical.
@@ -198,6 +243,9 @@ func Build(s store.Store, settings store.Settings, themes []theme.File, app stri
 	out, err := json.MarshalIndent(a, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("backup: encode archive: %w", err)
+	}
+	if err := checkSize(len(out)); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

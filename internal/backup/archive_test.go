@@ -144,6 +144,71 @@ func TestBuildIsDeterministic(t *testing.T) {
 	}
 }
 
+// staticStore hands Build a fixed history, for the tests that are about Build's
+// own bounds rather than about a real store.
+type staticStore struct{ games []*game.Game }
+
+func (s staticStore) All() ([]*game.Game, error)      { return s.games, nil }
+func (s staticStore) Load(string) (*game.Game, error) { return nil, store.ErrNotFound }
+func (s staticStore) Save(*game.Game) error           { return nil }
+func (s staticStore) Delete(string) error             { return store.ErrNotFound }
+func (s staticStore) List() ([]store.Summary, error)  { return nil, nil }
+
+// A backup this build writes has to be one it can read back. Writing a file
+// whose own import refuses it is the failure the format exists to prevent, and
+// the player finds out only when they need the file. Every export path — the
+// flags and the screen — now gets a refusal naming the limit instead.
+func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
+	at := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+
+	t.Run("too many records", func(t *testing.T) {
+		g := wonGame(t, "crane")
+		many := make([]*game.Game, maxPuzzles+1)
+		for i := range many {
+			many[i] = g
+		}
+		_, err := Build(staticStore{games: many}, store.Settings{}, nil, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (10000)") {
+			t.Fatalf("Build = %v, want the record limit named", err)
+		}
+	})
+
+	t.Run("too many themes", func(t *testing.T) {
+		themes := make([]theme.File, maxThemes+1)
+		_, err := Build(newStore(t), store.Settings{}, themes, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "more than a backup may hold (256)") {
+			t.Fatalf("Build = %v, want the theme limit named", err)
+		}
+	})
+
+	t.Run("oversized theme", func(t *testing.T) {
+		themes := []theme.File{{Name: "big.toml", Body: strings.Repeat("a", theme.MaxFileBytes+1)}}
+		_, err := Build(newStore(t), store.Settings{}, themes, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "larger than") {
+			t.Fatalf("Build = %v, want the theme size named", err)
+		}
+	})
+
+	t.Run("oversized settings", func(t *testing.T) {
+		settings := store.Settings{DisplayName: strings.Repeat("a", store.MaxRecordBytes)}
+		_, err := Build(newStore(t), settings, nil, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "larger than") {
+			t.Fatalf("Build = %v, want the settings size named", err)
+		}
+	})
+}
+
+// The output cap is the reader's, so its boundary is inclusive exactly as
+// Read's is: a file of exactly MaxArchiveBytes is read, one byte more is not.
+func TestCheckSizeBoundary(t *testing.T) {
+	if err := checkSize(MaxArchiveBytes); err != nil {
+		t.Errorf("checkSize(at the limit) = %v, want nil", err)
+	}
+	if err := checkSize(MaxArchiveBytes + 1); err == nil {
+		t.Error("checkSize(one past the limit) = nil, want a refusal")
+	}
+}
+
 // Tombstones are records. internal/stats reads them to tell a deleted day from
 // a day never played, so an archive that dropped them would restore a history
 // whose streaks were wrong.

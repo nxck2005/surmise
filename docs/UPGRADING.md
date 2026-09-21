@@ -50,6 +50,15 @@ is refused at the limit rather than after it. The refusal names the same
 figure it always did, and every archive written by a released build still reads
 unchanged.
 
+**A backup is only written if this build could read it back.** The reader
+refuses an archive over 64 MiB, with more than 10,000 records, more than 256
+themes, a theme body or settings blob over its cap — but `Build` applied none
+of those, so a long history or a couple of imported theme packs could produce
+an export that its own import then refused. Export and the backup screen now
+check the same limits and say which one was hit instead of writing a file that
+cannot be restored. The limits themselves are unchanged; raising them stays a
+deliberate decision rather than something a write path quietly works around.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on
