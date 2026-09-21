@@ -75,6 +75,17 @@ type backupFileMsg struct {
 	err  error
 }
 
+// backupAppliedMsg carries the merge itself back from its command. A restore
+// writes every record it adds through the store, and on a real disk that is one
+// durable save per puzzle — seconds of work at a large history, which is why it
+// is a tea.Cmd and not something Update waits for. The UI-owned half of the
+// restore (preferences, theme files, the report) still happens in Update: the
+// command must not close over the model.
+type backupAppliedMsg struct {
+	res backup.Result
+	err error
+}
+
 func tick() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
@@ -911,7 +922,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.screen != screenBackup {
 			return m, nil
 		}
-		m.applyBackup(msg)
+		return m, m.applyBackup(msg)
+
+	case backupAppliedMsg:
+		// The merge is written; what is left is what the UI owns. It runs on
+		// the UI goroutine, so it may touch the model — which the command that
+		// produced this must not have.
+		m.finishBackup(msg)
 		return m, nil
 
 	case tea.ColorProfileMsg:
@@ -1369,6 +1386,11 @@ func (m *Model) dispatch(a action) tea.Cmd {
 // back is what esc does: leave the board, saving on the way out, and return to
 // the menu.
 func (m *Model) back() tea.Cmd {
+	// A restore in flight owns the screen until it lands: leaving would put a
+	// list or a board on top of a store that is still being written to.
+	if m.screen == screenBackup && m.backup.restoring {
+		return nil
+	}
 	// Whatever was animating belongs to the screen being left.
 	m.anim.clear()
 	m.pendingResult = false
@@ -1653,6 +1675,14 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 }
 
 func (m *Model) updateBackup(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// A restore in flight owns the screen. It is writing records one durable
+	// save at a time, and leaving would put a list or a board on top of a store
+	// that is still changing under it. ctrl+c is answered above this switch, so
+	// quitting is still possible; the import is add-only and each save is
+	// atomic, so a partial one is already safe.
+	if m.backup.restoring {
+		return m, nil
+	}
 	if key := msg.String(); key == "esc" || key == "q" {
 		return m, m.back()
 	}
@@ -1666,6 +1696,9 @@ func (m *Model) updateBackup(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // doBackup runs one of the screen's two actions. Both the key path and the
 // click path land here, so a row and its button cannot drift apart.
 func (m *Model) doBackup(row int) tea.Cmd {
+	if m.backup.restoring {
+		return nil
+	}
 	switch row {
 	case backupRowSave:
 		m.saveBackup()
@@ -1719,28 +1752,45 @@ func (m *Model) loadBackup() tea.Cmd {
 	}
 }
 
-// applyBackup merges a file the platform handed back.
+// applyBackup takes a file the platform handed back and starts merging it.
 //
 // Everything about the merge itself belongs to internal/backup; what is here is
-// only what the UI owns — writing the preferences back, putting the themes on
-// disk, and applying a theme the archive filled in so the player sees it now
-// rather than after a restart.
-func (m *Model) applyBackup(msg backupFileMsg) {
+// only the split between what has to happen off the UI loop and what must not.
+// Apply is one durable Store.Save per new record — at a large history that is
+// seconds on a real disk, and running it inline froze the interface for all of
+// them. So Update hands back a command, and the UI-owned half of the restore
+// arrives as a backupAppliedMsg on the loop that owns the model.
+//
+// The command may not close over m: commands run on another goroutine. It
+// captures the three immutable things Apply needs instead.
+func (m *Model) applyBackup(msg backupFileMsg) tea.Cmd {
 	switch {
 	case msg.err != nil:
 		m.backup.refused(msg.err)
-		return
+		return nil
 	case len(msg.b) == 0:
 		// A picker closed without choosing. Not a failure.
 		m.backup.cancelled()
-		return
+		return nil
 	}
 
-	res, err := backup.Apply(msg.b, m.store, m.settingsOf())
-	if err != nil {
-		m.backup.refused(err)
+	m.backup.applying()
+	body, s, current := msg.b, m.store, m.settingsOf()
+	return func() tea.Msg {
+		res, err := backup.Apply(body, s, current)
+		return backupAppliedMsg{res: res, err: err}
+	}
+}
+
+// finishBackup does the UI-owned half of a restore: report a refusal, write the
+// merged preferences, put the themes on disk, and apply a theme the archive
+// filled in so the player sees it now rather than after a restart.
+func (m *Model) finishBackup(msg backupAppliedMsg) {
+	if msg.err != nil {
+		m.backup.refused(msg.err)
 		return
 	}
+	res := msg.res
 
 	if len(res.SettingsFilled) > 0 || res.PlaytimeAdded > 0 {
 		m.saveSettings(res.Settings)

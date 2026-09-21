@@ -58,6 +58,13 @@ type backupScreen struct {
 	// to say why nothing is happening.
 	waiting bool
 
+	// restoring is set while the picked file is being merged into the store.
+	// That phase writes records durably, one per new puzzle, so it is a
+	// background command rather than part of Update — and while it runs the
+	// screen is closed: no second file, no second action, and no leaving for a
+	// screen that would read or write the same store underneath it.
+	restoring bool
+
 	// report is what the last action did, one line per thing that changed, and
 	// failure is why it did not happen. They are exclusive: an action sets one
 	// and clears the other, so the screen never shows a stale success beside a
@@ -72,6 +79,17 @@ type backupScreen struct {
 func (b *backupScreen) reset() {
 	b.cursor = backupRowSave
 	b.waiting = false
+	b.restoring = false
+	b.report = nil
+	b.failure = ""
+}
+
+// applying reports that a file arrived and its merge is under way. The wait it
+// replaces is over — the platform has answered — and what the player is waiting
+// on now is the store.
+func (b *backupScreen) applying() {
+	b.waiting = false
+	b.restoring = true
 	b.report = nil
 	b.failure = ""
 }
@@ -95,6 +113,7 @@ func (b *backupScreen) saved(where string, linked []string) {
 // same order.
 func (b *backupScreen) loaded(res backup.Result, themesAdded int) {
 	b.waiting = false
+	b.restoring = false
 	b.failure = ""
 
 	if !res.Any() && themesAdded == 0 {
@@ -126,6 +145,7 @@ func (b *backupScreen) loaded(res backup.Result, themesAdded int) {
 // read: backup.Read's refusals name what is wrong with the file.
 func (b *backupScreen) refused(err error) {
 	b.waiting = false
+	b.restoring = false
 	b.report = nil
 	b.failure = err.Error()
 }
@@ -134,6 +154,7 @@ func (b *backupScreen) refused(err error) {
 // failure, so it does not go on the error line.
 func (b *backupScreen) cancelled() {
 	b.waiting = false
+	b.restoring = false
 	b.failure = ""
 	b.report = []string{"no file chosen"}
 }
@@ -205,6 +226,11 @@ func (b *backupScreen) note() string {
 	switch {
 	case b.waiting:
 		lines = []string{"waiting for a file…"}
+	case b.restoring:
+		// The file is in and the merge is writing it, one durable save per new
+		// puzzle. Saying so is the difference between a slow restore and a
+		// screen that looks stuck.
+		lines = []string{"restoring…"}
 	case b.failure != "":
 		lines, style = []string{safeText(b.failure)}, st.err
 	case len(b.report) > 0:
