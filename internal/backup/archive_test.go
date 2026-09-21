@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
@@ -49,6 +50,25 @@ func inProgress(t *testing.T, answer, guess string) *game.Game {
 	}
 	g.Answer = answer
 	if err := g.Guess(guess); err != nil {
+		t.Fatalf("Guess: %v", err)
+	}
+	return g
+}
+
+// wonDaily is a finished daily for a date, with the derived id the codec now
+// requires of anything labeled as a daily.
+func wonDaily(t *testing.T, date string) *game.Game {
+	t.Helper()
+	d, err := daily.ParseDay(date)
+	if err != nil {
+		t.Fatalf("ParseDay(%q): %v", date, err)
+	}
+	g, err := game.NewFrom(daily.ID(d, 5), "crane", 5)
+	if err != nil {
+		t.Fatalf("NewFrom: %v", err)
+	}
+	g.Daily = date
+	if err := g.Guess("crane"); err != nil {
 		t.Fatalf("Guess: %v", err)
 	}
 	return g
@@ -214,8 +234,7 @@ func TestCheckSizeBoundary(t *testing.T) {
 // whose streaks were wrong.
 func TestArchiveCarriesTombstones(t *testing.T) {
 	s := newStore(t)
-	g := wonGame(t, "crane")
-	g.Daily = "2026-08-18"
+	g := wonDaily(t, "2026-08-18")
 	if err := s.Save(g); err != nil {
 		t.Fatal(err)
 	}
@@ -444,6 +463,44 @@ func TestReadRefusesWordsWithControlCharacters(t *testing.T) {
 		if _, _, err := Read(body); err == nil {
 			t.Errorf("Read accepted a record with a control character in its %s", c.name)
 		}
+	}
+}
+
+// A daily's date and id are one fact; an imported record that carries a real
+// daily's identity under a chosen date is refused with the rest of an
+// untrustworthy archive. The store codec enforces it; this pins the import
+// path the audit reached it through.
+func TestReadRefusesADailyThatIsNotItsDate(t *testing.T) {
+	d := daily.DayOf(time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC))
+	g, err := game.NewFrom(daily.ID(d, 5), "crane", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Daily = d.String()
+	raw, err := store.EncodeRecord(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Move the record to another valid id, leaving the date it claims behind.
+	other, err := game.New(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "`+other.ID+`"`), 1)
+	if bytes.Equal(patched, raw) {
+		t.Fatal("the record does not carry the id it was encoded with")
+	}
+	body, err := json.Marshal(Archive{
+		Format:  Format,
+		Version: Version,
+		Puzzles: []json.RawMessage{patched},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Read(body); err == nil || !strings.Contains(err.Error(), "does not match puzzle id") {
+		t.Errorf("Read of a daily under another id = %v, want a refusal", err)
 	}
 }
 

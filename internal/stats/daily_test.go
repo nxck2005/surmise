@@ -40,6 +40,28 @@ func TestDailyStreakCountsConsecutiveDays(t *testing.T) {
 	}
 }
 
+// A custom puzzle is left out of every figure, and the daily walk is a figure
+// too: a custom record carrying a daily date must not extend a run of days, or
+// a hand-edited save could add a day that was never played. The day it names
+// reads as a gap, exactly as an unplayed one does.
+func TestCustomDailyIsNotADayPlayed(t *testing.T) {
+	custom := mkDaily(5, game.Won, ago(2))
+	custom.Custom = true
+	games := []*game.Game{
+		mkDaily(5, game.Won, ago(3)),
+		custom,
+		mkDaily(5, game.Won, ago(1)),
+		mkDaily(5, game.Won, day),
+	}
+	got := ComputeAt(games, day).Daily[5]
+	if got.CurrentStreak != 2 || got.MaxStreak != 2 {
+		t.Errorf("streaks = %d/%d, want 2/2 (the custom day is a gap, not a win)", got.CurrentStreak, got.MaxStreak)
+	}
+	if got.Played != 3 || got.Won != 3 {
+		t.Errorf("counts = %d played/%d won, want 3/3", got.Played, got.Won)
+	}
+}
+
 // The point of a daily streak: a day nobody played is a break, even though
 // nothing on disk records it.
 func TestMissedDayBreaksTheDailyStreak(t *testing.T) {

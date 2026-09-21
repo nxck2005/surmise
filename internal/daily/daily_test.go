@@ -235,6 +235,72 @@ func TestNewRejectsUnsupportedLength(t *testing.T) {
 	}
 }
 
+// A stored daily has to answer for the id its date and length derive: the id
+// is what every lookup keys on, and a record carrying another date is how a
+// crafted backup poses as a day nobody played. Tombstones are held to it too,
+// because a deleted daily keeps its date — and a custom puzzle is refused
+// outright, since a day's board is never one somebody chose.
+func TestValidateGameHoldsADailyToItsDerivedID(t *testing.T) {
+	d := day(t, "2026-08-06")
+	g, err := New(t.Context(), Local(), d, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateGame(g); err != nil {
+		t.Errorf("ValidateGame(a real daily): %v", err)
+	}
+
+	ordinary, err := game.New(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateGame(ordinary); err != nil {
+		t.Errorf("ValidateGame(an ordinary puzzle): %v", err)
+	}
+
+	if err := ValidateGame(g.Tombstone()); err != nil {
+		t.Errorf("ValidateGame(a daily tombstone): %v", err)
+	}
+
+	cases := []struct {
+		name string
+		game func() *game.Game
+	}{
+		{"another day's date", func() *game.Game {
+			bad := *g
+			bad.Daily = d.AddDays(1).String()
+			return &bad
+		}},
+		{"another mode's id", func() *game.Game {
+			bad := *g
+			bad.Length = 4
+			return &bad
+		}},
+		{"a custom puzzle claiming a daily", func() *game.Game {
+			bad := *g
+			bad.Custom = true
+			return &bad
+		}},
+		{"a tombstone with another day's date", func() *game.Game {
+			bad := g.Tombstone()
+			bad.Daily = d.AddDays(1).String()
+			return bad
+		}},
+		{"a custom tombstone claiming a daily", func() *game.Game {
+			bad := g.Tombstone()
+			bad.Custom = true
+			return bad
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if err := ValidateGame(c.game()); err == nil {
+				t.Error("ValidateGame accepted a daily that is not its own")
+			}
+		})
+	}
+}
+
 // A source that cannot speak for a day must stop the puzzle being built rather
 // than a fallback word being invented — that is what an offline remote source
 // will do every time it has nothing cached.

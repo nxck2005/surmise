@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nxck2005/surmise/internal/challenge"
+	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 )
 
@@ -303,12 +304,28 @@ func TestStoreSaveOfATombstoneWritesTheMarker(t *testing.T) {
 	}
 }
 
+// newDaily builds a real daily for a date: the id derived from it, as
+// daily.New would label one. Tests that need the daily origin cannot set the
+// field on a random game any more — see daily.ValidateGame.
+func newDaily(t *testing.T, date string) *game.Game {
+	t.Helper()
+	d, err := daily.ParseDay(date)
+	if err != nil {
+		t.Fatalf("ParseDay(%q): %v", date, err)
+	}
+	g, err := game.NewFrom(daily.ID(d, 5), "crane", 5)
+	if err != nil {
+		t.Fatalf("NewFrom: %v", err)
+	}
+	g.Daily = date
+	return g
+}
+
 // A deleted daily keeps its date. The daily streak walks the calendar and
 // cannot otherwise tell a deleted day from one never played.
 func TestStoreDeletedDailyKeepsItsDate(t *testing.T) {
 	eachStore(t, "delete-daily", func(t *testing.T, s settingsCapable) {
-		g := newGame(t, 5)
-		g.Daily = "2026-08-06"
+		g := newDaily(t, "2026-08-06")
 		g.Status = game.Lost
 		if err := s.Save(g); err != nil {
 			t.Fatal(err)
@@ -535,6 +552,36 @@ func TestStoreRejectsMismatchedChallengeMetadata(t *testing.T) {
 		g.Challenge.Code = "4400-0000-0000-00QW"
 		if err := s.Save(g); err == nil {
 			t.Error("Save accepted challenge metadata for another board")
+		}
+	})
+}
+
+func TestStoreRejectsMismatchedDailyMetadata(t *testing.T) {
+	eachStore(t, "daily-mismatch", func(t *testing.T, s settingsCapable) {
+		d := daily.DayOf(time.Date(2026, 8, 6, 12, 0, 0, 0, time.UTC))
+		g, err := game.NewFrom(daily.ID(d, 5), "crane", 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g.Daily = d.String()
+		if err := s.Save(g); err != nil {
+			t.Fatalf("Save of a real daily: %v", err)
+		}
+
+		// The same board claiming another day must not save: the id is what
+		// every lookup keys on, so a chosen date would open as a daily nobody
+		// played and move the daily streaks.
+		other := *g
+		other.Daily = d.AddDays(1).String()
+		if err := s.Save(&other); err == nil {
+			t.Error("Save accepted a daily labeled with another day")
+		}
+
+		// And a custom puzzle cannot claim to be a daily at all.
+		custom := *g
+		custom.Custom = true
+		if err := s.Save(&custom); err == nil {
+			t.Error("Save accepted a custom puzzle labeled as a daily")
 		}
 	})
 }

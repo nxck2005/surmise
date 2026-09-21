@@ -59,6 +59,15 @@ check the same limits and say which one was hit instead of writing a file that
 cannot be restored. The limits themselves are unchanged; raising them stays a
 deliberate decision rather than something a write path quietly works around.
 
+**A daily record has to carry its own date.** A puzzle saved as the daily for a
+day is now held to the id that date and mode derive, wherever a record is read
+or written: an imported or hand-edited record that claims a real daily's id
+under a chosen date is refused, and so is a custom puzzle carrying a daily
+date. The daily streak walk also skips custom puzzles instead of counting a day
+they never played. No save written by a released build is affected — every
+daily has carried its derived id since dailies shipped, and the check needs no
+schema change.
+
 ## v0.6.0 → v0.6.1: imported settings are bounded, theme links leave backups
 
 **What changed.** The settings file is now held to the same 64 KiB bound on

@@ -248,8 +248,7 @@ func TestDeleteFinishedLeavesTombstone(t *testing.T) {
 // which pins the field list).
 func TestDeleteDailyKeepsItsDate(t *testing.T) {
 	s := newStore(t)
-	g := newGame(t, 5)
-	g.Daily = "2026-08-06"
+	g := newDaily(t, "2026-08-06")
 	g.Status = game.Lost
 	if err := s.Save(g); err != nil {
 		t.Fatal(err)
