@@ -136,12 +136,7 @@ func (f fileTransfer) Load() ([]byte, string, error) {
 	}
 
 	path := filepath.Join(dir, newest)
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, "", fmt.Errorf("read %s: %w", path, err)
-	}
-	defer file.Close()
-	b, err := readCapped(file)
+	b, err := readRegularCapped(path)
 	if err != nil {
 		return nil, "", fmt.Errorf("read %s: %w", path, err)
 	}
@@ -196,6 +191,34 @@ func readCapped(r io.Reader) ([]byte, error) {
 		return nil, fmt.Errorf("larger than %d bytes", backup.MaxArchiveBytes)
 	}
 	return b, nil
+}
+
+// readRegularCapped applies the same pre-open mode check as the puzzle store.
+// Opening a FIFO blocks until a writer appears, so the mode has to be checked
+// before os.Open; the descriptor is checked again for the accepted stat→open
+// replacement window.
+func readRegularCapped(path string) ([]byte, error) {
+	before, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
+	return readCapped(file)
 }
 
 // exportBackup writes the whole install to path.
@@ -263,11 +286,7 @@ func importBackup(s *store.JSON, themeDir, path string) error {
 	if path == stdio {
 		b, err = readCapped(os.Stdin)
 	} else {
-		var f *os.File
-		if f, err = os.Open(path); err == nil {
-			defer f.Close()
-			b, err = readCapped(f)
-		}
+		b, err = readRegularCapped(path)
 	}
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
