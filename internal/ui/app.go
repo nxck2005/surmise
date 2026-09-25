@@ -2308,6 +2308,15 @@ func (m *Model) compose() tea.View {
 		return v
 	}
 
+	// Bubble Tea can deliver its colour profile before the first window size.
+	// Painting the splash before it has a terminal to place it in would put an
+	// unplaced panel at the top-left for one frame, then move the whole thing
+	// when the size arrives. An empty unmeasured frame is the honest answer:
+	// the first real frame is already in its final place.
+	if m.screen == screenSplash && (m.width <= 0 || m.height <= 0) {
+		return v
+	}
+
 	// Clickable regions are collected fresh each frame; only the hover carries
 	// over from the last one.
 	h := &hitMap{hover: m.hover}

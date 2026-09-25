@@ -87,6 +87,18 @@ func TestSplashSweepStartsAtTheFirstMeasuredFrame(t *testing.T) {
 	}
 }
 
+func TestSplashDoesNotPaintBeforeTheTerminalSize(t *testing.T) {
+	m := splashModel(t, Options{Motion: motionOffName})
+	if got := m.View().Content; got != "" {
+		t.Fatalf("unmeasured splash painted %d bytes; want an empty first frame", len(got))
+	}
+
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	if got := sgr.ReplaceAllString(m.View().Content, ""); !strings.Contains(got, tagline) {
+		t.Fatalf("the first measured frame has no splash:\n%s", got)
+	}
+}
+
 // A timed splash ends on its timer, and a timer that arrives after it has gone
 // must not act on the screen underneath.
 func TestTimedSplashDismisses(t *testing.T) {
