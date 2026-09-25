@@ -10,7 +10,9 @@
 set -eu
 
 REPO=nxck2005/surmise
-DEST=${SURMISE_INSTALL_DIR:-"$HOME/.local/bin"}
+# ${HOME:?} rather than a bare $HOME, so a shell with no HOME says so instead of
+# failing on an unset variable.
+DEST=${SURMISE_INSTALL_DIR:-"${HOME:?install.sh: HOME is not set}/.local/bin"}
 WANT=${SURMISE_VERSION:-}
 
 need() {
@@ -122,14 +124,69 @@ fi
 }
 
 tar -xzf "$tmp/pkg.tar.gz" -C "$tmp"
-if [ -f "$DEST/surmise" ] && [ "${SURMISE_FORCE:-0}" != 1 ]; then
+
+# What came out of the archive has to be the binary, and a plain one. An archive
+# member can be a symlink, and `mv` and `chmod` both follow one.
+[ -f "$tmp/surmise" ] && [ ! -L "$tmp/surmise" ] || {
+    echo "install.sh: the archive holds no regular surmise binary" >&2
+    exit 1
+}
+
+# A symlink already at the destination is refused outright, whatever
+# SURMISE_FORCE says.
+#
+# The check below used to be `[ -f ... ]`, which follows a link, so what it asked
+# was "is there a file there" and not "is a link there". Three things followed,
+# each verified against the old script:
+#
+#   - a *dangling* link is not a file, so the guard passed with no
+#     SURMISE_FORCE needed and the install replaced the link the player had put
+#     there;
+#   - a link to a *directory* is a directory to `mv file dest`, so the binary
+#     landed inside the linked directory and the link stayed — an install that
+#     reported success and put nothing where the user would run it from;
+#   - with SURMISE_FORCE, `mv` and `chmod` both dereferenced, so a link to a real
+#     file had that file replaced and chmodded rather than the link.
+#
+# Whether something is a link is a separate question from what it points at, and
+# that is the question this asks.
+[ -L "$DEST/surmise" ] && {
+    echo "install.sh: $DEST/surmise is a symlink; refusing to write through it" >&2
+    exit 1
+}
+if [ -e "$DEST/surmise" ] && [ "${SURMISE_FORCE:-0}" != 1 ]; then
     echo "install.sh: $DEST/surmise already exists; set SURMISE_FORCE=1 to replace it" >&2
     exit 1
 fi
 
 mkdir -p "$DEST"
-mv "$tmp/surmise" "$DEST/surmise"
-chmod +x "$DEST/surmise"
+# Write beside the destination and rename over it, rather than moving onto it.
+# `mv file dest` treats a directory at dest as somewhere to move the file *into*,
+# so the binary can end up one level down from where the user will run it; a
+# rename is a single step that replaces whatever is there and is not a move into
+# a directory at all.
+#
+# install(1) rather than cp + chmod, where it exists, because it sets the mode
+# outright instead of adding to whatever the archive carried.
+if command -v install >/dev/null 2>&1; then
+    install -m 0755 "$tmp/surmise" "$DEST/surmise.new" || {
+        rm -f "$DEST/surmise.new" 2>/dev/null || true
+        echo "install.sh: could not write $DEST/surmise" >&2
+        exit 1
+    }
+else
+    cp "$tmp/surmise" "$DEST/surmise.new" || {
+        rm -f "$DEST/surmise.new" 2>/dev/null || true
+        echo "install.sh: could not write $DEST/surmise" >&2
+        exit 1
+    }
+    chmod 0755 "$DEST/surmise.new"
+fi
+mv -f "$DEST/surmise.new" "$DEST/surmise" || {
+    rm -f "$DEST/surmise.new" 2>/dev/null || true
+    echo "install.sh: could not put the binary in place" >&2
+    exit 1
+}
 
 echo "installed $DEST/surmise"
 case ":$PATH:" in
