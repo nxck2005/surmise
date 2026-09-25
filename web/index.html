@@ -35,6 +35,9 @@
     <script src="vendor/xterm.js"></script>
     <script src="vendor/addon-fit.js"></script>
     <script src="wasm_exec.js"></script>
+    <!-- Before boot.js, which reads the gate off it at load. Not a module, or
+         it would be deferred past the WebAssembly start. -->
+    <script src="clipboard.js"></script>
     <script src="boot.js"></script>
   </body>
 </html>

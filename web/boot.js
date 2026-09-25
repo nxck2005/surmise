@@ -1,8 +1,14 @@
 // The page half of the browser build.
 //
 // The contract with the Go half is one object: globalThis.surmise = { term,
-// onExit }. internal/web reads it, wires xterm.js up as bubbletea's input and
-// output, and never touches the DOM beyond that.
+// saveFile, openFile, armClipboard, onExit }. internal/web reads it, wires
+// xterm.js up as bubbletea's input and output, and never touches the DOM beyond
+// that. armClipboard is the one call that goes the other way — see the OSC 52
+// handler below.
+
+// The clipboard gate, defined in clipboard.js and loaded before this script.
+// See there for why it is separate and why it is not a module.
+const { arm: armClipboard, take: takeClipboard } = globalThis.surmiseClipboard;
 
 const $ = (id) => document.getElementById(id);
 
@@ -47,10 +53,34 @@ const paint = (name) => (data) => {
 term.parser.registerOscHandler(10, paint("--surmise-fg"));
 term.parser.registerOscHandler(11, paint("--surmise-bg"));
 
-// Bubble Tea writes clipboard requests as OSC 52. xterm.js deliberately leaves
-// that sequence to its host, so bridge system-clipboard writes to the browser.
-// The game emits this only for an explicit result-screen copy action.
+// A clipboard write the game did not ask for is refused.
+//
+// The handler is registered for the life of the page, so without this gate any
+// OSC 52 reaching the terminal stream would write the system clipboard — the
+// clipboard-poisoning primitive, with no signal to the player, since the UI says
+// "copy requested" and never learns whether it worked.
+//
+// The permission is one-shot and travels with the bytes: internal/web arms it
+// when it is about to write a frame carrying the introducer, and the gate spends
+// it here. Nothing else in the game emits OSC 52 — it comes from
+// tea.SetClipboard on the result screen's copy action, the daily trio's share
+// and a challenge code, all key- or click-initiated.
+//
+// Only a write is possible. The read form (c;?) and the primary selection (p;…)
+// are not matched, and there is no readText call anywhere, so this cannot become
+// an exfiltration channel.
+//
+// The gate itself is in clipboard.js, so the smoke test exercises the real
+// function rather than a copy of it.
 term.parser.registerOscHandler(52, async (data) => {
+  // Spent first, before the payload is even looked at: a sequence that arrives
+  // twice must not write twice, and an unauthorised one must not leave a grant
+  // standing for the next.
+  if (!takeClipboard()) {
+    console.warn("refused a clipboard write the game did not ask for");
+    return true;
+  }
+
   const match = /^c;([A-Za-z0-9+/]*={0,2})$/.exec(data);
   if (!match) return false;
 
@@ -189,6 +219,10 @@ globalThis.surmise = {
   term,
   saveFile,
   openFile,
+  // Called by internal/web immediately before it writes a frame carrying an
+  // OSC 52 clipboard request, so the handler above has permission for that one
+  // write. See the note on it.
+  armClipboard,
   onExit() {
     $("exit").hidden = false;
   },

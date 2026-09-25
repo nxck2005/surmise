@@ -101,6 +101,17 @@ const require = createRequire(import.meta.url);
 const { Terminal } = require("../web/node_modules/@xterm/headless");
 const goroot = execSync("go env GOROOT").toString().trim();
 
+// The page's clipboard gate: the real file, loaded the way the page loads it.
+// The browser build has a <script src="clipboard.js"> before boot.js, so this is
+// the same path rather than a module import, and the cases below test the gate
+// the page ships rather than a restatement of it. (A gate written inline in
+// boot.js could only be tested by writing it out again, which tests nothing.)
+{
+  const src = readFileSync(new URL("../web/clipboard.js", import.meta.url), "utf8");
+  new Function(src)();
+}
+const { arm: armClipboard, take: takeClipboard } = globalThis.surmiseClipboard;
+
 // wasm_exec.js expects a browser-ish global scope.
 globalThis.require = require;
 globalThis.fs = require("node:fs");
@@ -118,6 +129,20 @@ const term = new Terminal({ cols: 120, rows: 30, allowProposedApi: true });
 const osc = {};
 term.parser.registerOscHandler(10, (d) => ((osc.fg = d), false));
 term.parser.registerOscHandler(11, (d) => ((osc.bg = d), false));
+
+// The clipboard handler, calling the page's real gate. This is the one group of
+// assertions here that is about a refusal: every other check is that something
+// the program asked for arrived, and these are that something it did not ask for
+// did not.
+const clip = { writes: [] };
+term.parser.registerOscHandler(52, (data) => {
+  if (!takeClipboard()) return true; // refused, as the page refuses it
+  const m = /^c;([A-Za-z0-9+/]*={0,2})$/.exec(data);
+  if (!m) return false;
+  clip.writes.push(Buffer.from(m[1], "base64").toString("utf8"));
+  return true;
+});
+
 let title = "";
 term.onTitleChange((t) => (title = t));
 
@@ -133,6 +158,10 @@ const files = { saved: null, offer: null };
 globalThis.surmise = {
   term,
   onExit: () => (exited = true),
+  // The one call that goes the other way: internal/web calls this before it
+  // writes a frame carrying an OSC 52 request, so the handler above has
+  // permission for that one write. The page publishes the same function.
+  armClipboard,
   saveFile(text) {
     files.saved = text;
     return "surmise-backup-smoke.json";
@@ -263,6 +292,58 @@ check(
   "stored the submitted guess",
   saved?.guesses?.[0] === "crane",
   `first guess is ${JSON.stringify(saved?.guesses?.[0])}`,
+);
+
+// The clipboard gate, in both directions.
+//
+// The handler above calls web/clipboard.js — the same module the page loads —
+// so these cases exercise the real gate rather than a copy of it. That is the
+// whole reason it is a separate file: a gate stubbed here would be a test of the
+// stub, and deleting the gate from the page would leave every case below passing.
+//
+// The refused case comes first and is the one that matters: an OSC 52 nobody
+// asked for must not reach the clipboard, and the frame is exactly the path one
+// would arrive by. The granted case then proves the gate is not simply refusing
+// everything — a real copy request still gets through, which is the half a
+// too-strict fix breaks.
+//
+// term.write is queued, so each case waits for the write to have been parsed
+// before it looks. A check that read the flag straight after writing would pass
+// for the wrong reason.
+const osc52 = (text) => "\x1b]52;c;" + Buffer.from(text).toString("base64") + "\x07";
+
+let before = clip.writes.length;
+term.write(osc52("http://example.invalid"));
+await wait(200);
+check(
+  "an unrequested clipboard write is refused",
+  clip.writes.length === before,
+  "a clipboard write arrived without the game asking for one",
+);
+
+armClipboard();
+before = clip.writes.length;
+term.write(osc52("hello"));
+await wait(200);
+check(
+  "an armed write still gets through",
+  clip.writes.length === before + 1 && clip.writes.at(-1) === "hello",
+  `writes are ${JSON.stringify(clip.writes)}`,
+);
+
+before = clip.writes.length;
+term.write(osc52("hello again"));
+await wait(200);
+check(
+  "a second write on the same grant is refused",
+  clip.writes.length === before,
+  "one grant produced two clipboard writes",
+);
+
+check(
+  "a refused write does not leave a grant standing",
+  !takeClipboard(),
+  "the permission survived a refused write, so the next one would be allowed",
 );
 
 // The regression this file exists for: the frame shrinks going back to the
