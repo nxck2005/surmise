@@ -40,10 +40,25 @@ const schemaVersion = 1
 // first) writes the same bytes Delete would, instead of a Game spelled out in
 // full, which codec's own rule below says reads as corruption.
 func encodeRecord(g *game.Game) ([]byte, error) {
+	var (
+		b   []byte
+		err error
+	)
 	if g.Deleted {
-		return encodeTombstone(g)
+		b, err = encodeTombstone(g)
+	} else {
+		b, err = encodeGame(g)
 	}
-	return encodeGame(g)
+	if err != nil {
+		return nil, err
+	}
+	// Keep the write boundary inside the same cap as every reader. A legacy
+	// record can gain bytes when its schema is stamped, and a store or backup
+	// must never write bytes its own reader will later refuse.
+	if len(b) > MaxRecordBytes {
+		return nil, fmt.Errorf("store: record %s is larger than %d bytes", g.ID, MaxRecordBytes)
+	}
+	return b, nil
 }
 
 // encodeGame renders a puzzle for storage. It is the live-puzzle half of
