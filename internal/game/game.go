@@ -501,6 +501,21 @@ func (g *Game) Validate() error {
 		return fmt.Errorf("game: %d guesses but %d marks", len(g.Guesses), len(g.Marks))
 	case g.MaxAttempts != attemptsFor(g.Length):
 		return fmt.Errorf("game: maxAttempts %d does not match %d letters", g.MaxAttempts, g.Length)
+	// The guess count is bounded by the same invariant, and it is the half that
+	// actually reaches the screen. The composer's height ladder sizes a frame
+	// from MaxAttempts (see boardLayout.rows via gameScreen.layout) while the
+	// board draws one row per guess, so a record holding more guesses than the
+	// board allows is sized as though it would not and drawn as though it
+	// would: a frame thousands of rows tall, whose top rows — the panel's title
+	// rule and its close box — the renderer discards. Guess cannot produce one,
+	// so the only route is a hand-edited save or an imported backup, and both
+	// arrive through this function.
+	//
+	// With the bound here, a valid record is O(length²) bytes and the per-record
+	// cap in store has nothing left to catch. That is the point: the cap is
+	// still checked, but no record can reach it.
+	case len(g.Guesses) > g.MaxAttempts:
+		return fmt.Errorf("game: %d guesses but maxAttempts is %d", len(g.Guesses), g.MaxAttempts)
 	case !g.Status.valid():
 		return fmt.Errorf("game: unknown status %q", g.Status)
 	}
