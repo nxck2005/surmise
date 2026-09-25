@@ -15,6 +15,7 @@ import (
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // The claim this package makes is that a file written on one machine restores
@@ -313,10 +314,17 @@ func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
 		}
 	})
 
-	t.Run("oversized record", func(t *testing.T) {
-		// A hand-edited pre-schema record can be valid on disk and grow when
-		// the shared encoder stamps its schema. The board does not need to be
-		// reachable through normal play for Build to owe the reader this cap.
+	t.Run("a record deeper than its board is refused", func(t *testing.T) {
+		// This subtest used to build a 2,000-guess record to get one over
+		// MaxRecordBytes, which made the per-record cap look load-bearing. It
+		// is not any more, and that is the better outcome: game.Validate now
+		// bounds the guess count, so no valid record is deep enough to reach the
+		// cap by any route. Every field of a record is bounded, which puts a
+		// maximal one at a few hundred bytes.
+		//
+		// So the size cap is now unreachable through a valid record, and what
+		// Build owes the reader is the record being valid — which is what
+		// store.EncodeRecord checks, and what refuses this one by name.
 		g := wonGame(t, "crane")
 		g.Schema = 0
 		for range 2_000 {
@@ -324,11 +332,52 @@ func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
 			g.Marks = append(g.Marks, game.Score("about", g.Answer))
 		}
 		_, err := Build(staticStore{games: []*game.Game{g}}, store.Settings{}, nil, "test", at)
-		if err == nil || !strings.Contains(err.Error(), "larger than") {
-			t.Fatalf("Build = %v, want the record size named", err)
+		if err == nil || !strings.Contains(err.Error(), "guesses but maxAttempts is") {
+			t.Fatalf("Build = %v, want the record refused as too deep", err)
+		}
+	})
+
+	t.Run("a maximum record is nowhere near the cap", func(t *testing.T) {
+		// The durable form of what the subtest above used to assert: the cap is
+		// only worth keeping while the largest record this build can write is
+		// comfortably inside it. A board played to its last attempt, on the
+		// longest length there is: about 850 bytes against a 64 KiB cap, so the
+		// headroom is two orders of magnitude and the factor below is loose on
+		// purpose — it is here to fail if a field ever becomes unbounded again,
+		// not to be tight.
+		g := wonGame(t, "crane")
+		g.Length = 6
+		g.Answer = "abacus"
+		g.MaxAttempts = attemptsForTest(6)
+		g.Guesses = nil
+		g.Marks = nil
+		for i := range g.MaxAttempts {
+			// A real six-letter word, so the record is one play could produce.
+			w, err := words.AnswerAt(6, i+1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			g.Guesses = append(g.Guesses, w)
+			g.Marks = append(g.Marks, game.Score(w, g.Answer))
+		}
+		if err := g.Validate(); err != nil {
+			t.Fatalf("a maximal record = %v, want it valid", err)
+		}
+		b, err := store.EncodeRecord(g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(b)*16 > store.MaxRecordBytes {
+			t.Fatalf("a maximal record is %d bytes against a cap of %d; the cap is within reach of a valid record again",
+				len(b), store.MaxRecordBytes)
 		}
 	})
 }
+
+// attemptsForTest is game.attemptsFor, which is unexported and belongs to the
+// package under test. The rule it states is length+1, and a record that
+// disagreed would be refused before this mattered.
+func attemptsForTest(n int) int { return n + 1 }
 
 // The output cap is the reader's, so its boundary is inclusive exactly as
 // Read's is: a file of exactly MaxArchiveBytes is read, one byte more is not.
