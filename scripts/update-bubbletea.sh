@@ -20,7 +20,7 @@ src="$(go env GOMODCACHE)/$mod@$version"
 # Keep the patch files across the refresh.
 tmp=$(mktemp -d)
 trap 'chmod -R u+w "$tmp" 2>/dev/null; rm -rf "$tmp"' EXIT
-cp "$dst"/tty_js.go "$dst"/signals_js.go "$dst"/PATCHES.md "$tmp/"
+cp "$dst"/tty_js.go "$dst"/signals_js.go "$dst"/PATCHES.md "$dst"/PATCHES.sha256 "$tmp/"
 
 rm -rf "$dst"
 mkdir -p "$dst"
@@ -33,5 +33,11 @@ tar -C "$src" -cf - \
 # The module cache is read-only.
 chmod -R u+w "$dst"
 cp "$tmp"/tty_js.go "$tmp"/signals_js.go "$tmp"/PATCHES.md "$dst/"
+
+# The pinned digests cover the two js files, and an upgrade does not change
+# them — that is the point of a pin. If the check below fails on them, the patch
+# was edited rather than carried across, and the digest is to be updated by hand
+# in a commit that says why. Recorded here so the failure is not a surprise.
+cp "$tmp"/PATCHES.sha256 "$dst/"
 
 echo "updated $dst to $version; now run scripts/check-bubbletea.sh"
