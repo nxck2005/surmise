@@ -243,6 +243,9 @@ func TestParseBackupName(t *testing.T) {
 		"surmise-backup-2026-13-01.json",
 		"surmise-backup-2026-08-18-1.json", // backupName's first save has no number
 		"surmise-backup-2026-08-18-0.json",
+		"surmise-backup-2026-08-18-+2.json",
+		"surmise-backup-2026-08-18-02.json",
+		"surmise-backup-2026-08-18-0002.json",
 		"surmise-backup-2026-08-18.JSON",
 		"other-backup-2026-08-18.json",
 		"surmise-backup-2026-08-18.json.bak",
