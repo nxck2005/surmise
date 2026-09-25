@@ -407,7 +407,12 @@ func (g *Game) AddElapsed(d time.Duration) {
 	if d <= 0 {
 		return
 	}
-	g.ElapsedMS += d.Milliseconds()
+	add := d.Milliseconds()
+	if g.ElapsedMS >= MaxElapsedMS || add >= MaxElapsedMS-g.ElapsedMS {
+		g.ElapsedMS = MaxElapsedMS
+	} else {
+		g.ElapsedMS += add
+	}
 	g.UpdatedAt = time.Now().UTC()
 }
 
@@ -453,6 +458,13 @@ func (g *Game) FillLetterStates(dst map[byte]Mark) {
 // splicing it in raw: a hand-edited or imported id may contain control
 // characters, and errors are rendered on the error line. %q escapes them.
 func (g *Game) Validate() error {
+	// ElapsedMS is multiplied by time.Millisecond, so even a tombstone must
+	// stay inside the duration range. The marker normally discards this field,
+	// but a record arriving from an archive still passes through here first.
+	if g.ElapsedMS < 0 || g.ElapsedMS > MaxElapsedMS {
+		return fmt.Errorf("game: elapsedMs %d is out of range", g.ElapsedMS)
+	}
+
 	// A tombstone has been stripped of everything the rest of these checks are
 	// about, so only its identity is left to check.
 	if g.Deleted {
@@ -491,11 +503,6 @@ func (g *Game) Validate() error {
 		return fmt.Errorf("game: maxAttempts %d does not match %d letters", g.MaxAttempts, g.Length)
 	case !g.Status.valid():
 		return fmt.Errorf("game: unknown status %q", g.Status)
-	case g.ElapsedMS < 0 || g.ElapsedMS > MaxElapsedMS:
-		// A duration cannot hold more milliseconds than this, so a value past
-		// the bound would wrap Elapsed() negative and take the profile's
-		// totals with it. See MaxElapsedMS.
-		return fmt.Errorf("game: elapsedMs %d is out of range", g.ElapsedMS)
 	}
 	for i, guess := range g.Guesses {
 		if len(guess) != g.Length || len(g.Marks[i]) != g.Length {

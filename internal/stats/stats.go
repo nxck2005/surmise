@@ -136,15 +136,15 @@ func ComputeAt(games []*game.Game, today daily.Day) Summary {
 
 			s.Distribution[g.Attempts()]++
 			totalAttempts += g.Attempts()
-			totalTime += g.Elapsed()
+			totalTime = addDurationSaturating(totalTime, g.Elapsed())
 			acc.attempts += g.Attempts()
-			acc.time += g.Elapsed()
+			acc.time = addDurationSaturating(acc.time, g.Elapsed())
 
 			if dacc != nil {
 				dacc.played++
 				dacc.won++
 				dacc.attempts += g.Attempts()
-				dacc.time += g.Elapsed()
+				dacc.time = addDurationSaturating(dacc.time, g.Elapsed())
 			}
 
 		case game.Lost:

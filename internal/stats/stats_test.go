@@ -64,6 +64,22 @@ func TestComputeCounts(t *testing.T) {
 	}
 }
 
+func TestComputeSaturatesElapsedTotals(t *testing.T) {
+	max := time.Duration(1<<63 - 1)
+	games := []*game.Game{
+		mk(5, game.Won, 3, max, time.Now()),
+		mk(5, game.Won, 3, max, time.Now().Add(time.Minute)),
+	}
+
+	s := Compute(games)
+	if s.AvgTime != max/2 {
+		t.Errorf("AvgTime = %v, want the saturated total divided by two (%v)", s.AvgTime, max/2)
+	}
+	if got := s.ByLength[5].AvgTime; got != max/2 {
+		t.Errorf("ByLength[5].AvgTime = %v, want %v", got, max/2)
+	}
+}
+
 func TestStreaks(t *testing.T) {
 	base := time.Now()
 	at := func(i int) time.Time { return base.Add(time.Duration(i) * time.Minute) }

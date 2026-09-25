@@ -57,6 +57,17 @@ func TestPlaytimeSurvivesDeletion(t *testing.T) {
 	}
 }
 
+func TestPlaytimeSaturatesTheRecordFloor(t *testing.T) {
+	max := time.Duration(1<<63 - 1)
+	games := []*game.Game{
+		mk(5, game.Won, 3, max, time.Now()),
+		mk(5, game.Won, 3, max, time.Now().Add(time.Minute)),
+	}
+	if got := Playtime(0, games); got != max {
+		t.Errorf("Playtime = %v, want the saturated duration %v", got, max)
+	}
+}
+
 func TestFormatPlaytime(t *testing.T) {
 	cases := []struct {
 		in   time.Duration
