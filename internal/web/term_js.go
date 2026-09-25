@@ -22,6 +22,7 @@
 package web
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"sync"
@@ -144,9 +145,37 @@ func (t *Terminal) Reader() io.Reader { return t.in }
 // xterm.js, so returning immediately is correct rather than optimistic.
 type writer struct{ term js.Value }
 
+// clipboardRequest is the OSC 52 introducer, which is what bubbletea writes
+// when tea.SetClipboard is called.
+var clipboardRequest = []byte("\x1b]52;")
+
+// armClipboard is the page's one-shot permission for a clipboard write.
+//
+// The page's OSC 52 handler writes to the system clipboard, and a page-wide
+// trust assumption about who may ask is a poor thing to stand behind: any
+// sequence reaching the terminal stream would otherwise do it, silently, with
+// no signal to the player — the classic clipboard-poisoning primitive, and the
+// UI says "copy requested" without ever learning whether it worked.
+//
+// So the permission is per-request and travels with the bytes. This is the only
+// place the game emits OSC 52 (from three copy actions, all key- or
+// click-initiated), so arming on sight of the introducer is the handshake: the
+// handler in boot.js refuses unless the flag is set, and clears it as it
+// consumes it. One copy, one permission.
+func armClipboard(host js.Value) {
+	host.Call("armClipboard")
+}
+
 func (w writer) Write(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
+	}
+	// Before the write, not after: xterm.js parses the sequence out of the
+	// bytes as it consumes them, so the flag has to be standing when the
+	// handler runs. Setting it for a write that carries no request is harmless,
+	// since nothing consumes it and the next one re-arms.
+	if bytes.Contains(p, clipboardRequest) {
+		armClipboard(js.Global().Get("surmise"))
 	}
 	buf := js.Global().Get("Uint8Array").New(len(p))
 	js.CopyBytesToJS(buf, p)

@@ -41,7 +41,7 @@ cp web/node_modules/@xterm/xterm/lib/xterm.js "$out/vendor/"
 cp web/node_modules/@xterm/xterm/css/xterm.css "$out/vendor/"
 cp web/node_modules/@xterm/addon-fit/lib/addon-fit.js "$out/vendor/"
 
-cp web/index.html web/style.css web/boot.js "$out/"
+cp web/index.html web/style.css web/boot.js web/clipboard.js "$out/"
 
 # Cache-bust the wasm. index.html is served with no-cache and names a URL that
 # changes with the build, so a deploy is picked up immediately while the wasm
