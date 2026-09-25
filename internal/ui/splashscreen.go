@@ -39,6 +39,11 @@ type splashScreen struct {
 	// test compares against.
 	anim *anims
 
+	// animStarted keeps a resize from restarting the one-shot startup sweep.
+	// It belongs to this screen rather than to anims because a later splash
+	// gets a fresh sweep.
+	animStarted bool
+
 	width, height int
 }
 
