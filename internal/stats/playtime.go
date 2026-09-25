@@ -31,7 +31,7 @@ func Playtime(saved time.Duration, games []*game.Game) time.Duration {
 		// No skips here, by design — see above. A tombstone contributes nothing
 		// because its ElapsedMS was destroyed with the rest of the record, which
 		// is exactly why the counter and not this sum is the authority.
-		floor += g.Elapsed()
+		floor = addDurationSaturating(floor, g.Elapsed())
 	}
 	if saved > floor {
 		return saved

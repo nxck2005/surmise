@@ -520,6 +520,13 @@ func TestValidateRejectsCorruptTombstone(t *testing.T) {
 	if err := tomb.Validate(); err == nil {
 		t.Error("Validate accepted a tombstone with an invented status")
 	}
+	for _, elapsed := range []int64{-1, MaxElapsedMS + 1} {
+		tomb = g.Tombstone()
+		tomb.ElapsedMS = elapsed
+		if err := tomb.Validate(); err == nil {
+			t.Errorf("Validate accepted a tombstone with elapsedMs %d", elapsed)
+		}
+	}
 }
 
 func TestAddElapsedIgnoresNonPositive(t *testing.T) {
@@ -527,6 +534,15 @@ func TestAddElapsedIgnoresNonPositive(t *testing.T) {
 	g.AddElapsed(-5)
 	if g.Elapsed() != 0 {
 		t.Errorf("Elapsed() = %v after negative add, want 0", g.Elapsed())
+	}
+}
+
+func TestAddElapsedSaturatesAtTheBound(t *testing.T) {
+	g := newFixed(t, "crane")
+	g.ElapsedMS = MaxElapsedMS - 1
+	g.AddElapsed(2 * time.Millisecond)
+	if g.ElapsedMS != MaxElapsedMS {
+		t.Errorf("ElapsedMS = %d after an over-bound add, want %d", g.ElapsedMS, MaxElapsedMS)
 	}
 }
 
