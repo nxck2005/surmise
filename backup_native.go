@@ -172,7 +172,7 @@ func parseBackupName(name string) (time.Time, int, bool) {
 		return time.Time{}, 0, false
 	}
 	n, err := strconv.Atoi(rest[i+1:])
-	if err != nil || n < 2 {
+	if err != nil || n < 2 || strconv.Itoa(n) != rest[i+1:] {
 		return time.Time{}, 0, false
 	}
 	return day, n, true
