@@ -25,11 +25,15 @@ safe across upgrades:
 The fixtures under `internal/store/testdata/` and the tests beside them pin all
 of this.
 
-## v0.6.2 → v1.0.0: hardening from the 2026-09-26 audit
+## v0.6.4 → v0.6.5: hardening from the 2026-09-26 audit
 
 Two bounds closed, both found by the 2026-09-26 security audit and both
 reachable by importing a file somebody else wrote. Neither changes the save
 format, and `schema` does not move.
+
+This is the first release since v0.6.2 with anything you could notice, and for
+almost nobody that is anything at all: both changes refuse a file that was never
+a real one. If you keep ordinary backups you will see no difference.
 
 ### A preferences field is bounded on its own
 
@@ -89,6 +93,61 @@ nothing behind it rather than a limit doing real work.
 **What you will notice.** Nothing. If a save or an archive is refused for this,
 the message names the record and the two counts, and importing it again after
 deleting that puzzle from the file works.
+
+### The installer will not write through a symlink
+
+`install.sh` now refuses outright if a symlink is sitting where the binary goes,
+whatever `SURMISE_FORCE` says, and refuses an archive whose `surmise` is one. The
+binary is written beside the destination and renamed over it, and is installed
+`0755` outright rather than having `+x` added to whatever mode the archive
+carried.
+
+**Why.** From the same audit. The old guard was `[ -f "$DEST/surmise" ]`, which
+follows a link, so it asked whether there was a *file* there rather than whether
+there was a *link* — three separate consequences, each reproduced against the old
+script before it was fixed. A **dangling** link is not a file, so the guard passed
+with no `SURMISE_FORCE` needed and the install replaced the link you had put
+there. A link to a **directory** is a directory to `mv file dest`, so the binary
+landed *inside* it and the link stayed: an install that reported success and put
+nothing where you would run it from. And with `SURMISE_FORCE`, `mv` and `chmod`
+both dereferenced, so a link to a real file had that file replaced instead of the
+link.
+
+**What you will notice.** Only if you had a symlink at the destination, which
+almost nobody does. If you did — a version-manager link, a link into a dotfiles
+repo — the installer now stops and says so rather than replacing or writing
+through it. Remove the link and run it again, or point `SURMISE_INSTALL_DIR`
+somewhere else. `SURMISE_FORCE` still replaces a *file* that is there; it just no
+longer follows a link to somewhere else.
+
+### A copied result will only reach the clipboard when you asked for it
+
+In the browser build, the result screen's copy action still works exactly as
+before. What changed is the other direction: the page no longer writes to your
+clipboard for an OSC 52 sequence it did not ask for.
+
+**Why.** Also from the same audit, and this one is defence in depth rather than a
+live bug. The handler that bridges to the browser's Clipboard API is registered
+for the life of the page, and its only condition on a write was that the base64
+was well-formed — Go's half of that contract was a comment in the source rather
+than anything the page checked. If any of the app's text filters ever regressed,
+the result would have been a silent clipboard overwrite, which is the poisoning
+primitive and has no visible symptom: the app says `copy requested` and never
+learns whether it worked.
+
+**What you will notice.** Nothing. A clipboard write now needs the game to have
+asked for one, and the game only asks when you press the copy key or click the
+button.
+
+### Smaller things
+
+- The board's click-target parser no longer trusts the id in a marker it finds in
+  a frame, and drops an unterminated one rather than passing it to the terminal. No
+  accepted value can contain an escape byte today, so this closes a latent panic
+  rather than a live one.
+- The vendored Bubble Tea copy's two WebAssembly patch files are now pinned by
+  digest and checked in CI, so an edit to either fails the build instead of
+  reaching a browser release. See `third_party/bubbletea/PATCHES.md`.
 
 ## Challenge-code answer snapshots
 
