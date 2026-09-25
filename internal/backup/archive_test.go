@@ -226,6 +226,22 @@ func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
 			t.Fatalf("Build = %v, want the settings size named", err)
 		}
 	})
+
+	t.Run("oversized record", func(t *testing.T) {
+		// A hand-edited pre-schema record can be valid on disk and grow when
+		// the shared encoder stamps its schema. The board does not need to be
+		// reachable through normal play for Build to owe the reader this cap.
+		g := wonGame(t, "crane")
+		g.Schema = 0
+		for range 2_000 {
+			g.Guesses = append(g.Guesses, "about")
+			g.Marks = append(g.Marks, game.Score("about", g.Answer))
+		}
+		_, err := Build(staticStore{games: []*game.Game{g}}, store.Settings{}, nil, "test", at)
+		if err == nil || !strings.Contains(err.Error(), "larger than") {
+			t.Fatalf("Build = %v, want the record size named", err)
+		}
+	})
 }
 
 // The output cap is the reader's, so its boundary is inclusive exactly as
