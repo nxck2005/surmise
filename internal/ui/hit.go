@@ -17,6 +17,16 @@ package ui
 // marker cannot shift a single cell of layout — TestMarkersDoNotAffectLayout
 // holds us to that.
 //
+// scan is also the one place markers come out of a finished frame, so it is
+// where a marker-shaped sequence in *data* has to be survivable. No accepted
+// value can carry an ESC today — game.Validate holds words to lowercase
+// letters, theme.Parse refuses control characters in a value, and safeText
+// repairs the prose sinks — but that guarantee is spread across four packages
+// rather than held here, and a parser that panics on a payload it did not
+// expect is the wrong thing to be standing behind the rest of the mouse
+// support. Hence the bound on the id and the strip of an unterminated
+// introducer. Neither is reachable today, and both are a couple of lines.
+//
 // A *hitMap is threaded explicitly through view()/help() rather than kept in a
 // package-level manager, and every method is nil-safe, so rendering without
 // collecting hit regions stays possible (which is what the layout test needs).
@@ -174,6 +184,10 @@ func (h *hitMap) scan(frame string) string {
 		// Columns are counted in display cells, not bytes, so styled and wide
 		// text place their markers correctly.
 		col := 0
+		// The walk consumes what it has interpreted, so the tail is written
+		// once at the end rather than inside the loop. That is what makes the
+		// unterminated case below safe to break out of: whatever is left in
+		// line is text, with no marker in it, and does not need interpreting.
 		for {
 			i := strings.Index(line, markerStart)
 			if i < 0 {
@@ -181,13 +195,25 @@ func (h *hitMap) scan(frame string) string {
 			}
 			j := strings.Index(line[i:], markerEnd)
 			if j < 0 {
+				// An introducer with no terminator on this line. It cannot be a
+				// marker of ours — mark always writes both halves — and a
+				// terminal reads it as the start of an APC string and consumes
+				// the rest of the row looking for the end. So it is dropped and
+				// the walk stops: the rest of the row is text.
+				line = line[:i] + line[i+len(markerStart):]
 				break
 			}
 
 			b.WriteString(line[:i])
 			col += lipgloss.Width(line[:i])
 
-			if id, err := strconv.Atoi(line[i+len(markerStart) : i+j]); err == nil && id < len(h.zones) {
+			// A marker whose id is not one of ours is not attributed, but it is
+			// still removed: the strip is what keeps data out of the frame, so
+			// it must not depend on the payload parsing. The bound is checked on
+			// both sides because Atoi accepts a negative id, and a negative
+			// index here is a panic rather than a missed target.
+			if id, err := strconv.Atoi(line[i+len(markerStart) : i+j]); err == nil &&
+				id >= 0 && id < len(h.zones) {
 				h.zones[id].rect.x = col
 				h.zones[id].rect.y = y
 				h.zones[id].scanned = true
