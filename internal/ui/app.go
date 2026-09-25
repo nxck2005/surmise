@@ -736,10 +736,25 @@ func (m *Model) raiseSplash() {
 	}
 	m.splash.next = m.screen
 	m.splash.anim = &m.anim
+	m.splash.animStarted = false
 	m.screen = screenSplash
-	// The sweep starts with the screen. Nothing waits on it: the splash is
-	// dismissible from the first frame, and a dismissal simply leaves the effect
-	// to expire behind whatever came next.
+	// A caller that already has a measured terminal can start the sweep now. A
+	// launch has no size yet; pushSize starts it with the first WindowSizeMsg so
+	// startup time cannot make the first visible frame begin mid-sweep.
+	if m.width > 0 && m.height > 0 {
+		m.startSplashAnimation()
+	}
+}
+
+// startSplashAnimation begins the startup sweep once, after the splash has a
+// measured frame to appear in. A resize must not restart it.
+func (m *Model) startSplashAnimation() {
+	if m.screen != screenSplash || m.splash.animStarted {
+		return
+	}
+	m.splash.animStarted = true
+	// Nothing waits on the effect: the splash is dismissible from its first
+	// frame, and a dismissal leaves the sweep to expire behind what came next.
 	m.anim.beginSplash()
 }
 
@@ -817,11 +832,10 @@ func (m *Model) openProfile(s store.Settings) {
 
 func (m *Model) Init() tea.Cmd {
 	// Batch drops the nils, so neither the splash timer nor the theme watch
-	// needs a condition here: each decides for itself whether it exists.
-	//
-	// animCmd is here as well as in Update's wrapper because the splash sweep is
-	// the one effect that starts before any message arrives: without it the art
-	// would sit still until the first tick a second later.
+	// needs a condition here: each decides for itself whether it exists. The
+	// splash sweep normally starts when the first size arrives, after the first
+	// frame can be composed at the right phase; animCmd also covers a splash
+	// raised by a caller that already has a measured size.
 	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd(), m.animCmd())
 }
 
@@ -851,10 +865,15 @@ func (m *Model) pushSize() {
 
 	// The splash is measured too late to be checked at startup — there is no
 	// size until the first WindowSizeMsg — so this is where art too big for the
-	// terminal gives up its turn rather than overflowing the frame.
+	// terminal gives up its turn rather than overflowing the frame. It is also
+	// where its sweep starts, so the first composed frame is phase zero.
 	m.splash.resize(m.width, m.height)
-	if m.screen == screenSplash && !m.splash.fits() {
-		m.dismissSplash()
+	if m.screen == screenSplash {
+		if !m.splash.fits() {
+			m.dismissSplash()
+			return
+		}
+		m.startSplashAnimation()
 	}
 }
 

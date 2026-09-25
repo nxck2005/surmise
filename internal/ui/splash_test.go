@@ -54,6 +54,39 @@ func TestSplashDrawsItsArt(t *testing.T) {
 	}
 }
 
+func TestSplashSweepStartsAtTheFirstMeasuredFrame(t *testing.T) {
+	now := time.Now()
+	withClock(t, &now)
+	m := New(mustStore(t), nil, Options{Motion: motionPronouncedName})
+	if m.screen != screenSplash {
+		t.Fatalf("screen = %v, want splash", m.screen)
+	}
+	if _, ok := m.anim.shimmer(now); ok {
+		t.Fatal("the sweep started before the terminal had a size")
+	}
+
+	// Model construction and program startup may take long enough for a sweep
+	// started in New to be visibly half-way across by the first render.
+	now = now.Add(500 * time.Millisecond)
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	if p, ok := m.anim.shimmer(now); !ok || p != 0 {
+		t.Fatalf("sweep phase at the first measured frame = %v, %v; want 0, true", p, ok)
+	}
+	first := sgr.ReplaceAllString(m.View().Content, "")
+	started := m.anim.board.startedAt
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	if !m.anim.board.startedAt.Equal(started) {
+		t.Error("a resize restarted the splash sweep")
+	}
+
+	off := New(mustStore(t), nil, Options{Motion: motionOffName})
+	off.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	want := sgr.ReplaceAllString(off.View().Content, "")
+	if first != want {
+		t.Errorf("first splash frame is not the settled drawing:\n%s", first)
+	}
+}
+
 // A timed splash ends on its timer, and a timer that arrives after it has gone
 // must not act on the screen underneath.
 func TestTimedSplashDismisses(t *testing.T) {
