@@ -245,18 +245,39 @@ func decodeSettings(b []byte) Settings {
 
 // ValidateSettings reports whether v is within the bounds settings are written
 // and read under: a schema this build knows, a play counter that cannot
-// overflow a duration, and an encoded size no larger than MaxRecordBytes.
+// overflow a duration, free text short enough to draw in a cell, and an encoded
+// size no larger than MaxRecordBytes.
 //
 // It is the import side of those rules — internal/backup calls it before an
 // archive's preferences may fill anything in — and it refuses rather than
 // clamping, because a value out of range is not this app's output and Read
 // refuses the whole file over one bad record.
+//
+// The free-text fields are checked by name, so the refusal says which one was
+// wrong: a section may spend most of its 64 KiB on a single string, and without
+// a per-field bound a display name of a few thousand zero-width runes is within
+// MaxRecordBytes and ruinous to draw.
 func ValidateSettings(v Settings) error {
 	if v.Schema != 0 && v.Schema != schemaVersion {
 		return errors.New("schema version mismatch")
 	}
 	if v.PlaytimeMS < 0 || v.PlaytimeMS > MaxPlaytimeMS {
 		return errors.New("playtime is out of range")
+	}
+	for _, f := range []struct {
+		name  string
+		value string
+	}{
+		{"theme", v.Theme},
+		{"display name", v.DisplayName},
+		{"splash", v.Splash},
+		{"splash art", v.SplashArt},
+		{"splash dismiss", v.SplashDismiss},
+		{"motion", v.Motion},
+	} {
+		if len(f.value) > MaxSettingFieldBytes {
+			return fmt.Errorf("%s is longer than %d bytes", f.name, MaxSettingFieldBytes)
+		}
 	}
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -220,10 +222,94 @@ func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
 	})
 
 	t.Run("oversized settings", func(t *testing.T) {
+		// Every free-text field is bounded now, so a settings section cannot
+		// reach MaxRecordBytes by any route and the total-size cap has nothing
+		// left to catch. What Build still owes the reader is the field bound,
+		// and the refusal names the field rather than the blob.
 		settings := store.Settings{DisplayName: strings.Repeat("a", store.MaxRecordBytes)}
 		_, err := Build(newStore(t), settings, nil, "test", at)
-		if err == nil || !strings.Contains(err.Error(), "larger than") {
-			t.Fatalf("Build = %v, want the settings size named", err)
+		if err == nil || !strings.Contains(err.Error(), "display name is longer than") {
+			t.Fatalf("Build = %v, want the field named", err)
+		}
+	})
+
+	// A settings file already on disk is read, not validated. A player who
+	// already has an over-long name is not refused their preferences and does
+	// not lose their other settings; the UI's text field shortens the one field
+	// when it draws. This is the same reason decodeSettings degrades to the
+	// defaults instead of erroring, and the reason the bound is a refusal in
+	// ValidateSettings — the import path — and nowhere else.
+	//
+	// The file is written by hand rather than through SaveSettings, because a
+	// field over 128 bytes but under MaxRecordBytes is exactly the shape a
+	// file can be in and the writer cannot produce: SaveSettings takes the
+	// caller's value as it stands and encodeSettings holds the whole blob to
+	// MaxRecordBytes, not a field to anything.
+	t.Run("an over-long field on disk is read, not refused", func(t *testing.T) {
+		dir := t.TempDir()
+		js, err := store.NewJSON(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Well past the field cap, well inside the blob cap: a hand-edited
+		// settings file, and the one shape that matters here.
+		long := store.Settings{DisplayName: strings.Repeat("d", 8*store.MaxSettingFieldBytes)}
+		if err := store.ValidateSettings(long); err == nil {
+			t.Fatal("the fixture is not actually out of bounds")
+		}
+		blob, err := json.Marshal(long)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(blob) > store.MaxRecordBytes {
+			t.Fatalf("the fixture is %d bytes, over the cap it is meant to sit under", len(blob))
+		}
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), blob, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		// The read path hands the value over as it stands; the repair is the
+		// UI's, because the store does not know which cell a field is drawn in.
+		// What matters here is that the player keeps their settings.
+		got := js.Settings()
+		if got.DisplayName == "" {
+			t.Fatal("an over-long name cost the player their settings")
+		}
+		if got.Length != long.Length {
+			t.Fatalf("the rest of the settings were lost: %+v", got)
+		}
+	})
+
+	t.Run("a maximum settings section is nowhere near the cap", func(t *testing.T) {
+		// The durable form of what the subtest above used to assert. There is
+		// no longer any route to an oversized section, so the cap is only worth
+		// keeping if the largest section this build can write is comfortably
+		// inside it — which is what makes a backup Build writes readable.
+		full := store.Settings{
+			Theme:         strings.Repeat("t", store.MaxSettingFieldBytes),
+			DisplayName:   strings.Repeat("d", store.MaxSettingFieldBytes),
+			Splash:        strings.Repeat("s", store.MaxSettingFieldBytes),
+			SplashArt:     strings.Repeat("a", store.MaxSettingFieldBytes),
+			SplashDismiss: strings.Repeat("x", store.MaxSettingFieldBytes),
+			Motion:        strings.Repeat("m", store.MaxSettingFieldBytes),
+			Length:        6,
+			RememberLast:  true,
+			SplashMillis:  store.MaxSettingFieldBytes,
+			PlaytimeMS:    store.MaxPlaytimeMS,
+		}
+		if err := store.ValidateSettings(full); err != nil {
+			t.Fatalf("a maximum settings section = %v, want it accepted", err)
+		}
+		b, err := json.Marshal(full)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Six fields at their cap and the largest counter there is, and it is
+		// well under a fiftieth of the blob cap. That headroom is the point:
+		// nothing a player or an archive can put in these fields closes it.
+		if len(b)*50 > store.MaxRecordBytes {
+			t.Fatalf("a maximum settings section is %d bytes against a cap of %d; the blob cap is nearly reachable again",
+				len(b), store.MaxRecordBytes)
 		}
 	})
 

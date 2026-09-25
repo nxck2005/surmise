@@ -6,6 +6,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/nxck2005/surmise/internal/store"
 )
 
 // textField is a staged single-line editor: enter begins, enter keeps, esc puts
@@ -18,7 +20,9 @@ import (
 // nothing leaves the field until it is committed.
 //
 // Width is counted in display cells rather than bytes, because what the cap
-// protects is a fixed-width cell in a terminal, not a buffer.
+// protects is a fixed-width cell in a terminal, not a buffer — and a byte cap
+// rides along beside it, because a cell cap on its own is not a bound. See
+// fieldBuilder.add.
 type textField struct {
 	value   string // the committed text
 	before  string // what value was when editing began, for esc
@@ -85,6 +89,33 @@ func (f *textField) deleteRune() {
 	f.value = f.value[:len(f.value)-size]
 }
 
+// fieldBuilder accumulates a value while holding it to both of the field's
+// caps. It exists so the two places that fill a field — typing, and cleaning
+// what arrived from a settings file — cannot come to different answers about
+// what "long enough" means.
+type fieldBuilder struct {
+	b     strings.Builder
+	width int
+}
+
+// add puts r in if it still fits, and reports whether it did. A rune that does
+// not fit ends the value rather than being skipped, so the cap is a prefix of
+// what was offered and not a value with holes in it.
+func (fb *fieldBuilder) add(r rune, maxCells int) bool {
+	w := lipgloss.Width(string(r))
+	// The byte cap is what a cell cap alone is not. A zero-width rune — a
+	// combining mark, which every IsPrint filter admits — never advances width,
+	// so a value of any length can pass a cell cap of any size. Bytes is also
+	// the honest unit: this value is persisted, and a cell is not a thing a
+	// file can measure.
+	if fb.width+w > maxCells || fb.b.Len()+utf8.RuneLen(r) > store.MaxSettingFieldBytes {
+		return false
+	}
+	fb.b.WriteRune(r)
+	fb.width += w
+	return true
+}
+
 // typeText appends what a keypress carried. It reads Text rather than a single
 // rune so a paste or an input method delivering several runes at once arrives
 // whole.
@@ -92,23 +123,20 @@ func (f *textField) typeText(text string) {
 	if !f.editing || text == "" {
 		return
 	}
-	var b strings.Builder
-	b.Grow(len(f.value) + len(text))
-	b.WriteString(f.value)
-	width := lipgloss.Width(f.value)
+	var fb fieldBuilder
+	fb.b.Grow(len(f.value) + len(text))
+	fb.b.WriteString(f.value)
+	fb.width = lipgloss.Width(f.value)
 	for _, r := range text {
 		r, ok := f.filter(r)
 		if !ok {
 			continue
 		}
-		runeWidth := lipgloss.Width(string(r))
-		if width+runeWidth > f.max {
+		if !fb.add(r, f.max) {
 			break
 		}
-		b.WriteRune(r)
-		width += runeWidth
 	}
-	f.value = b.String()
+	f.value = fb.b.String()
 }
 
 // editField is the keyboard half of an edit in progress: enter keeps, esc puts
@@ -146,23 +174,23 @@ func fieldHelp(h *hitMap, row int, keep string) string {
 
 // sanitize is what protects the terminal and a fixed-width row from text that
 // did not come from typeText — a hand-edited settings file, most of all.
+//
+// It is also the last thing between a settings file somebody else wrote and a
+// frame, so it shares the fieldBuilder that typeText uses: a name long enough
+// to break the layout is refused the same way whether it was typed or imported.
 func (f *textField) sanitize(s string) string {
-	var b strings.Builder
-	b.Grow(len(s))
-	width := 0
+	var fb fieldBuilder
+	fb.b.Grow(len(s))
 	for _, r := range s {
 		r, ok := f.filter(r)
 		if !ok {
 			continue
 		}
-		runeWidth := lipgloss.Width(string(r))
-		if width+runeWidth > f.max {
+		if !fb.add(r, f.max) {
 			break
 		}
-		b.WriteRune(r)
-		width += runeWidth
 	}
-	return strings.TrimSpace(b.String())
+	return strings.TrimSpace(fb.b.String())
 }
 
 // display is what the row shows: the text, with a caret while it is being

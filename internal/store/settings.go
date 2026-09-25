@@ -89,6 +89,25 @@ type Settings struct {
 // the two must not be able to drift.
 const MaxPlaytimeMS = game.MaxElapsedMS
 
+// MaxSettingFieldBytes bounds one free-text preference: the theme name, the
+// profile name, and the splash and motion choices. Every one of them is a short
+// display string, and nothing this app writes comes near the figure — it is a
+// theme name's worth of bytes, which is the longest free text the theme reader
+// accepts either.
+//
+// It exists because the total-size cap is not a field cap. ValidateSettings
+// refuses a blob over MaxRecordBytes, so a settings section may still devote
+// 64 KiB to a single string, and every one of these fields is drawn inside a
+// cell the terminal cannot widen. A name of a few thousand combining marks takes
+// no space at all on screen and still widens the panel to hold it.
+//
+// internal/ui's textField holds the *same* bound, and must not hold a larger
+// one: a field that accepted what the store would then refuse would be a field
+// whose value could not be saved. That is why this is the one constant and the
+// UI refers to it, in the way MaxPlaytimeMS is game.MaxElapsedMS rather than a
+// second derivation of the same figure.
+const MaxSettingFieldBytes = 128
+
 // clampPlaytime is how every settings read and write saturates the counter: a
 // value past the bound is corrupt, and one that wrapped negative would take the
 // whole lifetime total with it. A negative value reads as "nothing played yet",
