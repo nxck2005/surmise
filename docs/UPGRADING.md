@@ -25,6 +25,36 @@ safe across upgrades:
 The fixtures under `internal/store/testdata/` and the tests beside them pin all
 of this.
 
+## v0.6.2 → v1.0.0: a preferences field is bounded on its own
+
+**What changed.** Each free-text preference — the theme name, the display name,
+and the splash and motion choices — is now held to 128 bytes of its own, and an
+archive carrying one past that is refused by name (`display name is longer than
+128 bytes`) rather than filling it in. The 64 KiB bound on the settings blob
+itself is unchanged and still checked; this is a bound per field, not instead of
+one. A value the app wrote is far below either figure, so nothing this build
+produces is affected.
+
+Nothing about the format changed. `schema` does not move, and no record, setting
+or archive written by a released build changes meaning.
+
+**Why.** From the 2026-09-26 security audit. A total-size bound is not a
+per-field bound: an archive could spend most of its 64 KiB on one string, and
+the display name is drawn in a fixed 20-cell row. A name made of a few thousand
+combining marks is printable, so it passes every text filter, and it is zero
+cells wide, so a cell count never notices it either — the row measured thousands
+of columns for a name that rendered as nothing, and since nothing in the app
+truncates horizontally, that widened the whole panel. The name was then saved,
+so it came back on every launch, and the editor could not remove it either: the
+marks are invisible and backspace erases one at a time.
+
+**What you will notice.** Nothing, unless you import an archive carrying an
+absurdly long preference. If you do, the import is refused and says which field.
+A `settings.json` already on disk is repaired when it is read: the offending
+value is shortened to what fits, so the app is usable and the profile can be
+edited normally again. A `display_name` of 128 bytes is far longer than the
+19 cells the row shows, so if you did have one, the visible part is unchanged.
+
 ## Challenge-code answer snapshots
 
 A challenge code carries an answer-list version. Version 1 is the exact ordered

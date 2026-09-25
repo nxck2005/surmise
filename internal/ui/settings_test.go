@@ -280,6 +280,38 @@ func TestProfileDisplayNameIsSanitizedAndBounded(t *testing.T) {
 	}
 }
 
+// A cell cap is not a bound on its own, and the name that shows it is a
+// settings file somebody else wrote. Nothing truncates horizontally in this app
+// and block() pads every line to the widest, so a name that measures thousands
+// of cells widens the whole panel and every row soft-wraps off the screen.
+//
+// So the property worth pinning is the one a player would recognise: whatever
+// a settings file says, the frame comes out a sane width. A unit test on
+// sanitize cannot state that.
+func TestSettingsFileCannotWidenTheFrame(t *testing.T) {
+	s, _ := newStore(t)
+	// Thousands of combining marks: printable, and zero cells each, so a cell
+	// cap never trips and the value measures ~42 KB. Nothing here is visible.
+	hostile := store.Settings{DisplayName: repeated(combining, 20_000)}
+	if err := s.SaveSettings(hostile); err != nil {
+		t.Fatal(err)
+	}
+
+	m := New(s, nil, Options{})
+	m.screen = screenMenu
+	openSettings(t, m)
+	frame := draw(t, m)
+
+	// The row it is drawn in is valueWidth wide; the panel is that plus chrome.
+	if width := lipgloss.Width(frame); width > testWidth {
+		t.Fatalf("frame is %d cells wide on a %d-cell terminal — the panel was widened by a field: %q",
+			width, testWidth, m.settings.name.value)
+	}
+	if n := len(m.settings.name.value); n > store.MaxSettingFieldBytes {
+		t.Fatalf("the settings screen kept %d bytes of display name, cap is %d", n, store.MaxSettingFieldBytes)
+	}
+}
+
 // Changing the mode takes effect without a relaunch: the next puzzle started
 // from the menu uses it.
 func TestSettingsScreenChangesTheNextPuzzle(t *testing.T) {
