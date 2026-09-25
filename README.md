@@ -32,6 +32,10 @@ it verifies the checksum, installs to `~/.local/bin` (override with
 `SURMISE_INSTALL_DIR`), and never needs sudo. pin a version with
 `SURMISE_VERSION=v0.5.1`, or grab an archive by hand — every release carries one:
 
+it will not write through a symlink already sitting where the binary goes, and
+will not install an archive whose `surmise` is one — `SURMISE_FORCE=1` replaces
+a file that is there, it does not follow a link to somewhere else:
+
 on windows, use [scoop](https://scoop.sh) instead of either:
 
 ```sh
