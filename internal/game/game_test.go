@@ -13,8 +13,25 @@ import (
 	"github.com/nxck2005/surmise/internal/words"
 )
 
+// missOfThisLength is a real word of length n, distinct from the answer, so a
+// record built from it is one play could have produced. Both come from the
+// answer list, which every length carries in bulk.
+func missOfThisLength(t *testing.T, n int, answer string, i int) string {
+	t.Helper()
+	for at := 0; ; at++ {
+		w, err := words.AnswerAt(n, (i+at)%256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w != answer {
+			return w
+		}
+	}
+}
+
 // newFixed builds a game with a known answer, so tests do not depend on the
 // random draw.
+
 func newFixed(t *testing.T, answer string) *Game {
 	t.Helper()
 	g, err := New(len(answer))
@@ -376,7 +393,23 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 		{"bad length", func(g *Game) { g.Length = 9 }},
 		{"answer length mismatch", func(g *Game) { g.Answer = "toolong" }},
 		{"marks out of sync", func(g *Game) { g.Marks = nil }},
+		// The two of these are one invariant: a board allows length+1 guesses,
+		// and a record may not hold more than that whatever it claims. Both
+		// matter because the composer's height ladder reads MaxAttempts while
+		// the board itself draws one row per guess, so a record where the two
+		// disagree sizes a frame it then overflows.
 		{"too many guesses", func(g *Game) { g.MaxAttempts = 1 }},
+		// The fixture is a five-letter board played twice over, so it holds two
+		// guesses of six. Repeating the last one past the limit is the least
+		// record that disagrees, and a player who lost a five-letter board does
+		// hold six — so the shape is a real one, not a synthetic one.
+		{"more guesses than the board allows", func(g *Game) {
+			for len(g.Guesses) < g.MaxAttempts+1 {
+				last := g.Guesses[len(g.Guesses)-1]
+				g.Guesses = append(g.Guesses, last)
+				g.Marks = append(g.Marks, Score(last, g.Answer))
+			}
+		}},
 		// maxAttempts is derived, not stored state: every board has always
 		// allowed length+1 guesses, and a record claiming otherwise would only
 		// be a way to make the composer draw a board of the wrong size.
@@ -409,6 +442,42 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 			tt.munge(g)
 			if err := g.Validate(); err == nil {
 				t.Error("Validate accepted corrupt game")
+			}
+		})
+	}
+}
+
+// The guess bound is inclusive too, and in both directions: a record holding
+// exactly as many guesses as the board allows is the last one that is valid,
+// and the refusal must be the refusal and not an off-by-one either way. A board
+// played to its last attempt is a real thing — a loss — so the boundary is
+// where a player can actually get to.
+func TestValidateGuessCountAtItsBound(t *testing.T) {
+	for _, n := range words.Lengths {
+		t.Run(fmt.Sprintf("%d letters", n), func(t *testing.T) {
+			// A loss: every attempt used, which is the deepest a valid record
+			// for this length can go. The guess is a real word of this length
+			// so the only thing wrong with the record is how deep it is.
+			answer, err := words.AnswerAt(n, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The guesses are built directly rather than played: what is under
+			// test is the shape of a record at the limit, not how a game is
+			// played to it. Every word is a real one of this length and none is
+			// the answer, so the only thing wrong with the record is its depth.
+			g := newFixed(t, answer)
+			for i := range attemptsFor(n) {
+				miss := missOfThisLength(t, n, answer, i)
+				g.Guesses = append(g.Guesses, miss)
+				g.Marks = append(g.Marks, Score(miss, answer))
+			}
+			g.Status = Lost
+			if len(g.Guesses) != g.MaxAttempts {
+				t.Fatalf("the fixture holds %d guesses, not %d", len(g.Guesses), g.MaxAttempts)
+			}
+			if err := g.Validate(); err != nil {
+				t.Errorf("a record at exactly the attempt limit was refused: %v", err)
 			}
 		})
 	}

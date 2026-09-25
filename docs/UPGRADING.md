@@ -25,7 +25,13 @@ safe across upgrades:
 The fixtures under `internal/store/testdata/` and the tests beside them pin all
 of this.
 
-## v0.6.2 → v1.0.0: a preferences field is bounded on its own
+## v0.6.2 → v1.0.0: hardening from the 2026-09-26 audit
+
+Two bounds closed, both found by the 2026-09-26 security audit and both
+reachable by importing a file somebody else wrote. Neither changes the save
+format, and `schema` does not move.
+
+### A preferences field is bounded on its own
 
 **What changed.** Each free-text preference — the theme name, the display name,
 and the splash and motion choices — is now held to 128 bytes of its own, and an
@@ -54,6 +60,35 @@ A `settings.json` already on disk is repaired when it is read: the offending
 value is shortened to what fits, so the app is usable and the profile can be
 edited normally again. A `display_name` of 128 bytes is far longer than the
 19 cells the row shows, so if you did have one, the visible part is unchanged.
+
+### A saved puzzle cannot hold more guesses than its board allows
+
+Alongside the preferences bound above, a puzzle record is now held to its own
+attempt limit: a record claiming more guesses than `length + 1` is refused,
+wherever it is read — a save, a backup, an import.
+
+The save format has not changed and `schema` does not move. No record written by
+a released build is affected, because `Guess` has always stopped at the limit
+and ended the game; only a hand-edited or crafted file can disagree.
+
+**Why.** From the same audit. The composer's height ladder sizes a frame from
+the board's attempt limit while the board itself draws one row per guess, so a
+record where the two disagree was sized as though it would fit and drawn as
+though it would not: a frame thousands of rows tall, of which a terminal shows
+the bottom. The rows that go are the panel's title rule and its ✕ close box, and
+the cost of redrawing that frame every message is high enough to leave the app
+unresponsive. The safeguard built for exactly this — refuse to draw a board
+nobody can see — was reading the same number as the frame, so it never fired.
+
+This is also the root cause of #81's per-record size cap: a valid record could
+be made arbitrarily large out of surplus guesses, which is why the cap was
+needed. With the guess count bounded, every field of a record is bounded and the
+largest valid record is a few hundred bytes, so that cap is now a backstop with
+nothing behind it rather than a limit doing real work.
+
+**What you will notice.** Nothing. If a save or an archive is refused for this,
+the message names the record and the two counts, and importing it again after
+deleting that puzzle from the file works.
 
 ## Challenge-code answer snapshots
 

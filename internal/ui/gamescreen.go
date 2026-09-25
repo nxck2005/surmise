@@ -568,6 +568,11 @@ func (m *gameScreen) layout() boardLayout {
 		return l
 	}
 
+	// The board has MaxAttempts rows, not len(Guesses), and the two are equal
+	// for every record game.Validate accepts — that invariant is the guess
+	// bound. It is deliberately not len(Guesses): the ladder reserves room for
+	// the board as a board, so sizing it from the guesses would mean a record
+	// that disagreed shaped the frame it then overflowed.
 	attempts := m.g.MaxAttempts
 
 	// The tall board is asked for first, and only from the untightened form: a
