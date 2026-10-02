@@ -215,8 +215,8 @@ func BenchmarkIDsAgainstAll(b *testing.B) {
 	}
 }
 
-// fillRecords writes n real records straight to disk, without Save's fsync: a
-// benchmark fixture is not a durability test.
+// fillRecords writes n real records straight to disk, without Save's temp file
+// and rename: a benchmark fixture is not a durability test.
 func fillRecords(b *testing.B, n int) *JSON {
 	b.Helper()
 	dir := b.TempDir()

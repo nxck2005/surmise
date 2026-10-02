@@ -333,7 +333,9 @@ func (m *gameScreen) submit() tea.Cmd {
 	// the puzzle as worth writing from here on.
 	m.persisted = true
 
-	// Save after every guess: a kill -9 should cost nothing.
+	// Save after every guess: a kill -9 should cost nothing. That is the whole
+	// promise — a power cut may cost the last few seconds of saves, by choice;
+	// see store.writeFileAtomic.
 	if err := m.store.Save(m.g); err != nil {
 		m.notify("could not save: %v", err)
 	}

@@ -59,7 +59,7 @@ type backupScreen struct {
 	waiting bool
 
 	// restoring is set while the picked file is being merged into the store.
-	// That phase writes records durably, one per new puzzle, so it is a
+	// That phase writes records, one per new puzzle, so it is a
 	// background command rather than part of Update — and while it runs the
 	// screen is closed: no second file, no second action, and no leaving for a
 	// screen that would read or write the same store underneath it.
@@ -230,8 +230,7 @@ func (b *backupScreen) note() string {
 	case b.waiting:
 		lines = []string{"waiting for a file…"}
 	case b.restoring:
-		// The file is in and the merge is writing it, one durable save per new
-		// puzzle. Saying so is the difference between a slow restore and a
+		// The file is in and the merge is writing it, one save per new puzzle. Saying so is the difference between a slow restore and a
 		// screen that looks stuck.
 		lines = []string{"restoring…"}
 	case b.failure != "":

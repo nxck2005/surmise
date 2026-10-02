@@ -25,6 +25,36 @@ safe across upgrades:
 The fixtures under `internal/store/testdata/` and the tests beside them pin all
 of this.
 
+## What a save survives
+
+The game saves after every accepted guess, when a puzzle ends, and when you
+leave a board. Each save is written to a temporary file and renamed into place,
+so a file is always either the old version or the new one, never half of each.
+
+- **The app crashing, being killed, or the terminal closing costs nothing**
+  that was already saved. That includes `kill -9`.
+- **A power cut or an operating-system crash can cost the last few seconds of
+  saves.** The game does not force each save onto the disk (`fsync`); the
+  operating system writes it out a few seconds later, as it does for most
+  files. What was on the disk before stays readable.
+
+This is a choice, made on 2026-10-03 for v0.7.0. Until then every save was
+synced. That made each guess wait about 4.5 ms for the disk on Linux, longer on
+macOS, and made a restore of 10,000 puzzles spend about 45 seconds waiting —
+and it still did not fully protect a power cut, because the folder itself was
+not synced, so a newly created puzzle could still vanish.
+
+The alternative was to make the stronger promise properly: sync the folder as
+well as the file, and move every save to a background writer so play never
+waits for the disk. It was not taken. It would have changed when a failed save
+is reported (after the guess rather than on it) and how the app has to shut
+down, and losing a few seconds of a word game to a power cut did not justify
+that. If that trade ever changes, it is that design, not putting the old sync
+back.
+
+The browser build is unaffected either way: a browser decides for itself when
+its storage reaches the disk.
+
 ## v0.6.5 → v0.6.6: the rest of the 2026-09-26 audit
 
 Small fixes from the same audit. None changes the save format, and `schema`
