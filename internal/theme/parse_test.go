@@ -224,7 +224,9 @@ func TestFreeTextFieldsAreCapped(t *testing.T) {
 	for _, body := range []string{
 		`name = "` + strings.Repeat("n", maxFieldBytes+1) + `"`,
 		`author = "` + strings.Repeat("a", maxFieldBytes+1) + `"`,
-		`glyphs.caret = "` + strings.Repeat("g", maxGlyphRunes+1) + `"`,
+		`glyphs.caret = "` + strings.Repeat("g", maxGlyphCells+1) + `"`,
+		// Under the cap in runes, over it in cells.
+		`glyphs.caret = "` + strings.Repeat("字", maxGlyphCells/2+1) + `"`,
 	} {
 		if _, warns := Parse("capped", []byte(body)); len(warns) == 0 {
 			t.Errorf("Parse(%q) produced no warning", body)

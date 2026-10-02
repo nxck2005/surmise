@@ -100,7 +100,8 @@ close        = "×"        # the panel's close box
 The histogram measures in eighths of a cell, ending a bar on `▏▎▍▌▋▊▉` so two
 counts a hair apart do not draw the same length. That only applies while `bar`
 is `█`, since those glyphs are fractions of it — set your own bar rune and the
-histogram goes back to whole cells of it. Each bar is also shaded along its
+histogram goes back to whole copies of it. A bar glyph two cells wide is drawn
+half as many times, so the longest bar keeps the same width. Each bar is also shaded along its
 length, from a dimmed `bar` up to `bar` itself, so nothing there is a colour you
 did not choose.
 
@@ -194,7 +195,7 @@ the theme is called after its file.
 ## Limits, and linked files
 
 A theme file may be at most 64 KiB, its `name` and `author` at most 128 bytes
-each, and a glyph at most 16 runes — far above anything readable in a list row
+each, and a glyph at most 16 cells wide — far above anything readable in a list row
 or one tile. A file over a cap is listed with an error rather than read whole.
 The cap is measured on the file that would be read: a symlink is only a few
 bytes, so a linked theme's target is statted through the open file and read
