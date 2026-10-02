@@ -237,7 +237,13 @@ func (b *backupScreen) note() string {
 	case b.failure != "":
 		lines, style = []string{safeText(b.failure)}, st.err
 	case len(b.report) > 0:
-		lines = b.report
+		// Every line is filtered here rather than where it is composed: "saved
+		// to" carries a path under -data, and the next line added to the report
+		// should not have to remember the rule to be covered by it.
+		lines = make([]string, len(b.report))
+		for i, l := range b.report {
+			lines[i] = safeText(l)
+		}
 	default:
 		return ""
 	}
