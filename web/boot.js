@@ -60,11 +60,12 @@ term.parser.registerOscHandler(11, paint("--surmise-bg"));
 // clipboard-poisoning primitive, with no signal to the player, since the UI says
 // "copy requested" and never learns whether it worked.
 //
-// The permission is one-shot and travels with the bytes: internal/web arms it
-// when it is about to write a frame carrying the introducer, and the gate spends
-// it here. Nothing else in the game emits OSC 52 — it comes from
-// tea.SetClipboard on the result screen's copy action, the daily trio's share
-// and a challenge code, all key- or click-initiated.
+// The permission is one-shot and comes from the copy action, not from the
+// bytes: internal/web's Terminal.Copy arms it on its way to emitting the
+// request, and the gate spends it here. The game asks for a copy in three
+// places — the result screen, the daily trio's share and a challenge code —
+// all key- or click-initiated, and all through that one function. A write
+// that only looks like a request is refused, whatever bytes it carries.
 //
 // Only a write is possible. The read form (c;?) and the primary selection (p;…)
 // are not matched, and there is no readText call anywhere, so this cannot become
@@ -219,9 +220,9 @@ globalThis.surmise = {
   term,
   saveFile,
   openFile,
-  // Called by internal/web immediately before it writes a frame carrying an
-  // OSC 52 clipboard request, so the handler above has permission for that one
-  // write. See the note on it.
+  // Called by internal/web when the game asks for a copy, just before the
+  // OSC 52 request is written, so the handler above has permission for that
+  // one write. See the note on it.
   armClipboard,
   onExit() {
     $("exit").hidden = false;

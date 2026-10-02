@@ -207,5 +207,5 @@ func (m *Model) copyResult() tea.Cmd {
 		return nil
 	}
 	m.result.copyRequested = true
-	return tea.SetClipboard(shareResult(m.result.g))
+	return m.copyText(shareResult(m.result.g))
 }

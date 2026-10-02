@@ -104,7 +104,12 @@ func run(cfg config) error {
 		transfer = t
 	}
 
-	err = start(store.NewKV(kv), lib, uiOptions(cfg, browserDataDir, transfer),
+	opts := uiOptions(cfg, browserDataDir, transfer)
+	// The page grants each clipboard write on its own, so copying goes through
+	// the terminal, which arms that grant. See web.Terminal.Copy.
+	opts.Clipboard = term.Copy
+
+	err = start(store.NewKV(kv), lib, opts,
 		// Mandatory, not optional: without an input bubbletea falls through to
 		// os.Stdin and OpenTTY, and there is neither.
 		tea.WithInput(term.Reader()),

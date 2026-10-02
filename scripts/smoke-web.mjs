@@ -155,13 +155,19 @@ globalThis.document = { title: "" };
 // a channel that a bubbletea command is blocked on. That hand-off is the one
 // this file exists to prove cannot deadlock (see the resize check at the foot).
 const files = { saved: null, offer: null };
+let armsFromGo = 0;
 globalThis.surmise = {
   term,
   onExit: () => (exited = true),
-  // The one call that goes the other way: internal/web calls this before it
-  // writes a frame carrying an OSC 52 request, so the handler above has
-  // permission for that one write. The page publishes the same function.
-  armClipboard,
+  // The one call that goes the other way: internal/web calls this when the
+  // game asks for a copy, so the handler above has permission for that one
+  // write. The page publishes the same function. Counted, because nothing in
+  // this run asks for a copy, so a grant here would be one the bytes gave
+  // themselves — see the gate checks at the foot.
+  armClipboard() {
+    armsFromGo++;
+    armClipboard();
+  },
   saveFile(text) {
     files.saved = text;
     return "surmise-backup-smoke.json";
@@ -302,8 +308,9 @@ check(
 // stub, and deleting the gate from the page would leave every case below passing.
 //
 // The refused case comes first and is the one that matters: an OSC 52 nobody
-// asked for must not reach the clipboard, and the frame is exactly the path one
-// would arrive by. The granted case then proves the gate is not simply refusing
+// asked for must not reach the clipboard. The grant comes from the game's copy
+// action, never from the frames, so the whole run above — which drew many of
+// them and asked for no copy — must not have armed it once. The granted case then proves the gate is not simply refusing
 // everything — a real copy request still gets through, which is the half a
 // too-strict fix breaks.
 //
@@ -311,6 +318,12 @@ check(
 // before it looks. A check that read the flag straight after writing would pass
 // for the wrong reason.
 const osc52 = (text) => "\x1b]52;c;" + Buffer.from(text).toString("base64") + "\x07";
+
+check(
+  "drawing frames never grants a clipboard write",
+  armsFromGo === 0,
+  `the Go side armed the clipboard ${armsFromGo} time(s) without a copy`,
+);
 
 let before = clip.writes.length;
 term.write(osc52("http://example.invalid"));
