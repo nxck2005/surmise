@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/game"
@@ -20,7 +21,8 @@ type KV interface {
 	// missing key is not an error.
 	Get(key string) (string, bool)
 	// Set writes a value. It errors when the backing store refuses — a browser
-	// raises QuotaExceededError when its origin allowance is full.
+	// raises QuotaExceededError when its origin allowance is full, and Set
+	// reports that as an error wrapping ErrFull.
 	Set(key, value string) error
 	// Delete removes a key. Removing a key that is not there is not an error.
 	Delete(key string) error
@@ -204,6 +206,32 @@ func (s *KVStore) SaveSettings(v Settings) error {
 		return err
 	}
 	return s.kv.Set(kvSettingsKey, string(b))
+}
+
+// Usage is how much of the KV's room is spent, counted the way a browser
+// counts it against an origin's quota: the UTF-16 length of every key and every
+// value. Every key counts, not only this app's — the allowance belongs to the
+// origin, so a key the app did not write still takes room from its saves.
+//
+// It reads every value, so it costs what All costs without the decoding. The
+// backup screen calls it when it opens and after a restore, never per frame.
+func (s *KVStore) Usage() int {
+	n := 0
+	for _, k := range s.kv.Keys() {
+		v, _ := s.kv.Get(k)
+		n += utf16Len(k) + utf16Len(v)
+	}
+	return n
+}
+
+// utf16Len is a string's length in UTF-16 code units: one per rune, two for a
+// rune outside the Basic Multilingual Plane.
+func utf16Len(s string) int {
+	n := 0
+	for _, r := range s {
+		n += utf16.RuneLen(r)
+	}
+	return n
 }
 
 // NewMemoryKV is a KV in a map. It is the test double, and it is also the

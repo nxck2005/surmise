@@ -80,6 +80,11 @@ class FileStorage {
   }
 
   setItem(key, value) {
+    // A browser out of room throws this, and the game must say so in its own
+    // words. The check near the foot sets full to provoke it.
+    if (this.full) {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    }
     this.values[key] = String(value);
     this.save();
   }
@@ -384,6 +389,11 @@ for (let i = 0; i < 14 && !onRow("backup"); i++) {
 check("found the backup row on the menu", onRow("backup"));
 await type("\r");
 await wait(300);
+check(
+  "the backup screen shows how full storage is",
+  screen().some((l) => /storage: about \d+% used/.test(l)),
+  "no storage meter on the backup screen",
+);
 
 await type("\r"); // the cursor opens on "save a backup"
 await wait(400);
@@ -425,5 +435,26 @@ await wait(500);
 const resized = screen();
 check("a resize redraws", resized.some((l) => l.trim().length > 0));
 check("the resized frame left no stale cells", leftEdges(resized).size === 1);
+
+// Storage running out. Every save now throws QuotaExceededError, as a full
+// origin does, and the board has to say what that means rather than go quiet
+// or print the exception's name. Walk to a mode by its label, not by a count.
+localStorage.full = true;
+const onFive = () => screen().some((l) => /›\s*5 letters\s*‹/.test(l));
+for (let i = 0; i < 16 && !onFive(); i++) {
+  await type("k");
+  await wait(60);
+}
+check("found the 5 letters row on the menu", onFive());
+await type("\r");
+await wait(300);
+for (const c of "slate") await type(c);
+await type("\r");
+await wait(200);
+check(
+  "a full storage says so on the board",
+  screen().some((l) => l.includes("storage is full")),
+  "the board did not report the refused save",
+);
 
 report();

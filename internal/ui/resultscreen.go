@@ -182,7 +182,7 @@ func (m *Model) nextResult() tea.Cmd {
 	}
 	if m.game.g.Daily != "" || m.game.g.Custom || m.game.g.Challenge != nil {
 		if err := m.game.leave(); err != nil {
-			m.result.notice = fmt.Sprintf("could not save: %v", err)
+			m.result.notice = saveFailed(err)
 			return nil
 		}
 		if m.game.g.Custom {

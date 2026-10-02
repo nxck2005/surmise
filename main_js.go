@@ -109,7 +109,15 @@ func run(cfg config) error {
 	// the terminal, which arms that grant. See web.Terminal.Copy.
 	opts.Clipboard = term.Copy
 
-	err = start(store.NewKV(kv), lib, opts,
+	// The backup screen shows how full localStorage is, because it runs out at
+	// a few thousand puzzles and says nothing until a save fails. A session
+	// that fell back to memory has no quota to show.
+	kvStore := store.NewKV(kv)
+	if storageErr == nil {
+		opts.Storage = func() (int, int) { return kvStore.Usage(), web.StorageLimit }
+	}
+
+	err = start(kvStore, lib, opts,
 		// Mandatory, not optional: without an input bubbletea falls through to
 		// os.Stdin and OpenTTY, and there is neither.
 		tea.WithInput(term.Reader()),
