@@ -36,10 +36,12 @@ done
 
 get() {
     # get URL FILE — fetch through whichever client we found, quietly.
+    # HTTPS only, redirects included: every URL here is https, and a redirect
+    # that dropped to plain http would hand the checksums to the network too.
     if [ "$FETCH" = curl ]; then
-        curl -fsSL "$1" -o "$2"
+        curl --proto '=https' --tlsv1.2 -fsSL "$1" -o "$2"
     else
-        wget -qO "$2" "$1"
+        wget --https-only -qO "$2" "$1"
     fi
 }
 
@@ -97,6 +99,13 @@ if [ -z "$WANT" ]; then
 else
     tag=$WANT
 fi
+# The tag goes into URLs and file names below. Only a release tag is one, the
+# same shape release.yml refuses to build anything else from, so a typo in
+# SURMISE_VERSION or an odd answer from the API stops here.
+if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+    echo "install.sh: $tag is not a release tag (vMAJOR.MINOR.PATCH)" >&2
+    exit 1
+fi
 version=${tag#v}
 
 base="surmise_${version}_${os}_${arch}"
@@ -106,7 +115,9 @@ echo "fetching surmise $tag ($os/$arch)"
 get "$url/$base.tar.gz" "$tmp/pkg.tar.gz"
 get "$url/checksums.txt" "$tmp/checksums.txt"
 
-want_sum=$(grep " $base.tar.gz\$" "$tmp/checksums.txt" | awk '{print $1}')
+# Matched on the file-name field exactly, not as a pattern: the dots in a
+# version are not wildcards.
+want_sum=$(awk -v f="$base.tar.gz" '$2 == f { print $1 }' "$tmp/checksums.txt")
 [ -n "$want_sum" ] || {
     echo "install.sh: checksums.txt has no entry for $base.tar.gz" >&2
     exit 1

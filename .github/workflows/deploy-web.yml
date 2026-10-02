@@ -23,6 +23,15 @@ on:
   push:
     branches: [main]
   workflow_call:
+    # Declared so release.yml can pass exactly these three by name. A push or
+    # a manual dispatch reads the same names from the repository as usual.
+    secrets:
+      VERCEL_TOKEN:
+        required: true
+      VERCEL_ORG_ID:
+        required: true
+      VERCEL_PROJECT_ID:
+        required: true
   workflow_dispatch:
 
 permissions:
@@ -134,8 +143,9 @@ jobs:
       #
       # --ignore-scripts because this job holds VERCEL_TOKEN two steps later:
       # a lifecycle script in a compromised dependency could rewrite the
-      # binary that step runs. Nothing in the locked tree has an install
-      # script today, so this costs nothing and keeps it that way.
+      # binary that step runs. esbuild and fsevents in the locked tree declare
+      # install scripts; neither is needed by `deploy --prebuilt`, which builds
+      # nothing.
       - name: install the deploy CLI
         run: |
           cp tools/deploy/package.json tools/deploy/package-lock.json "$RUNNER_TEMP/"
@@ -237,11 +247,21 @@ jobs:
             done
           fi
 
+          # Each header is compared with the value the config sets, not only
+          # looked for: a weakened CSP is still a CSP header, and only the
+          # value says whether it is the policy that was meant.
           headers=$(get "$site" --head | tr -d '\r')
           echo "$headers" | grep -i '^content-security-policy:' || true
           for header in content-security-policy x-content-type-options x-frame-options referrer-policy; do
-            if ! echo "$headers" | grep -qi "^$header:"; then
-              echo "$site is not serving $header"
+            want=$(jq -r --arg h "$header" '.routes[0].headers[$h] // empty' .vercel/output/config.json)
+            if [ -z "$want" ]; then
+              echo "the config sets no $header"
+              exit 1
+            fi
+            got=$(echo "$headers" | grep -i "^$header:" | head -n1 | cut -d: -f2- | sed 's/^ *//')
+            if [ "$got" != "$want" ]; then
+              echo "$site serves $header: '$got'"
+              echo "the config sets:  '$want'"
               exit 1
             fi
           done

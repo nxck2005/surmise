@@ -36,7 +36,9 @@ fi
 # xterm.js is pinned in web/package.json and copied out of node_modules rather
 # than fetched from a CDN, so a build is reproducible and the page works with no
 # third-party host involved.
-npm ci --prefix web --silent
+# --ignore-scripts: nothing here needs a lifecycle script, and the deploy job
+# that runs this holds VERCEL_TOKEN later on.
+npm ci --ignore-scripts --prefix web --silent
 cp web/node_modules/@xterm/xterm/lib/xterm.js "$out/vendor/"
 cp web/node_modules/@xterm/xterm/css/xterm.css "$out/vendor/"
 cp web/node_modules/@xterm/addon-fit/lib/addon-fit.js "$out/vendor/"
@@ -50,6 +52,13 @@ cp web/favicon.svg web/apple-touch-icon.png "$out/"
 stamp=$(sha256sum "$out/surmise.wasm" | cut -c1-12)
 sed -i.bak "s|return \"surmise.wasm\";|return \"surmise.wasm?v=$stamp\";|" "$out/boot.js"
 rm -f "$out/boot.js.bak"
+# sed succeeds whether or not it matched. If boot.js stops spelling the line
+# this way, the page would ask for the old cached wasm with the new JS beside
+# it, so a miss fails the build instead.
+if ! grep -q "surmise.wasm?v=$stamp" "$out/boot.js"; then
+	echo "build-web.sh: the wasm cache-bust did not match boot.js" >&2
+	exit 1
+fi
 
 size=$(wc -c <"$out/surmise.wasm")
 printf 'built %s\n  wasm: %.1f MB raw\n' "$out" "$(echo "$size" | awk '{print $1/1048576}')"
