@@ -240,7 +240,9 @@ func Build(s store.Store, settings store.Settings, themes []theme.File, app stri
 		a.Settings = &settings
 	}
 
-	out, err := json.MarshalIndent(a, "", "  ")
+	// Compact, like the records it carries: the encoder would re-indent each
+	// one, and an archive is a copy to move, not a file to read.
+	out, err := json.Marshal(a)
 	if err != nil {
 		return nil, fmt.Errorf("backup: encode archive: %w", err)
 	}

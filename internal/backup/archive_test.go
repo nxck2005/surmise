@@ -562,13 +562,13 @@ func TestReadRefusesAnUnsafePuzzleID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := []byte(`"id": "` + g.ID + `"`)
+	id := []byte(`"id":"` + g.ID + `"`)
 	for _, unsafe := range []string{"../settings", "../../outside", "./alias", "a/b", "/etc/settings", `c:\settings`, "with space", ".."} {
 		quoted, err := json.Marshal(unsafe)
 		if err != nil {
 			t.Fatal(err)
 		}
-		patched := bytes.Replace(raw, id, append([]byte(`"id": `), quoted...), 1)
+		patched := bytes.Replace(raw, id, append([]byte(`"id":`), quoted...), 1)
 		if bytes.Equal(patched, raw) {
 			t.Fatal("the record does not carry the id it was encoded with")
 		}
@@ -605,7 +605,7 @@ func TestReadRefusesWordsWithControlCharacters(t *testing.T) {
 		name     string
 		old, new []byte
 	}{
-		{"answer", []byte(`"answer": "crane"`), []byte(`"answer": "cr\u001bne"`)},
+		{"answer", []byte(`"answer":"crane"`), []byte(`"answer":"cr\u001bne"`)},
 		{"guess", []byte(`"about"`), []byte(`"\u001b]0;x"`)},
 	}
 	for _, c := range cases {
@@ -648,7 +648,7 @@ func TestReadRefusesADailyThatIsNotItsDate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "`+other.ID+`"`), 1)
+	patched := bytes.Replace(raw, []byte(`"id":"`+g.ID+`"`), []byte(`"id":"`+other.ID+`"`), 1)
 	if bytes.Equal(patched, raw) {
 		t.Fatal("the record does not carry the id it was encoded with")
 	}
