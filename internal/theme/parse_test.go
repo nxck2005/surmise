@@ -227,6 +227,10 @@ func TestFreeTextFieldsAreCapped(t *testing.T) {
 		`glyphs.caret = "` + strings.Repeat("g", maxGlyphCells+1) + `"`,
 		// Under the cap in runes, over it in cells.
 		`glyphs.caret = "` + strings.Repeat("字", maxGlyphCells/2+1) + `"`,
+		// One cell wide and thousands of bytes long: combining marks are zero
+		// cells, so only a byte cap catches this, and every frame that draws
+		// the glyph would carry all of it.
+		`glyphs.empty = "x` + strings.Repeat("\u0301", maxFieldBytes) + `"`,
 	} {
 		if _, warns := Parse("capped", []byte(body)); len(warns) == 0 {
 			t.Errorf("Parse(%q) produced no warning", body)

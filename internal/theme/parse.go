@@ -125,7 +125,11 @@ func parseValue(s string) (string, error) {
 // What a theme's free text may hold. Name and author are shown in a list row
 // and a title line; a glyph is drawn in a cell or a few. The glyph cap is in
 // cells, not runes, because cells are what it takes from the frame: sixteen
-// wide runes are thirty-two of them. The caps are far above
+// wide runes are thirty-two of them. A cell count is not a bound on its own,
+// though — a combining mark or a joiner is zero cells wide, so a glyph of
+// thousands of them is still "one cell" while every frame that draws it
+// carries every byte. So a glyph is held to the same byte cap as a name as
+// well. The caps are far above
 // anything readable in those places, and they bound what a hand-written or
 // imported file can put in the frame rather than rationing anyone's theme.
 const (
@@ -236,6 +240,9 @@ func (t *Theme) setGlyph(key, value string) error {
 	}
 	if lipgloss.Width(value) > maxGlyphCells {
 		return fmt.Errorf("glyph is wider than %d cells", maxGlyphCells)
+	}
+	if len(value) > maxFieldBytes {
+		return fmt.Errorf("glyph is longer than %d bytes", maxFieldBytes)
 	}
 	*p = value
 	return nil
