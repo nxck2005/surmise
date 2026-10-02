@@ -159,8 +159,12 @@ jobs:
   #
   # The called workflow sees this run's github context, so the tag decides
   # production against staging inside it exactly as a tag push would.
-  # `secrets: inherit` passes the three VERCEL_* secrets it reads.
+  # The three VERCEL_* secrets it reads are passed by name, rather than with
+  # `secrets: inherit`, which would hand it every secret the repository has.
   deploy:
     needs: release
     uses: ./.github/workflows/deploy-web.yml
-    secrets: inherit
+    secrets:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

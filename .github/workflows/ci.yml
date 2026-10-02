@@ -121,10 +121,18 @@ jobs:
       # cells, and a localStorage failure silently forgets history on reload.
       - name: wasm smoke test
         run: |
-          npm ci --prefix web
+          npm ci --ignore-scripts --prefix web
           node --check web/boot.js
           GOOS=js GOARCH=wasm go build -o /tmp/surmise.wasm .
           node scripts/smoke-web.mjs /tmp/surmise.wasm
+
+      # The notices name every linked module and its licence, and the release
+      # archives ship the file. A dependency change that did not regenerate it
+      # would ship notices for code that is no longer the code in the binary.
+      - name: third-party notices are current
+        run: |
+          go run ./tools/gennotices
+          git diff --exit-code THIRD_PARTY_NOTICES.md
 
       # Proves the vendored copy is upstream plus exactly the two patch files.
       # See third_party/bubbletea/PATCHES.md.
