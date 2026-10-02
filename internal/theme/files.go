@@ -45,10 +45,32 @@ var safeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*\.toml$`)
 // directory. filepath.Base alone is not enough — it would silently accept
 // "../../evil.toml" by rewriting it, which turns a refusal into a surprise.
 func validName(name string) bool {
-	if !safeName.MatchString(name) || strings.Contains(name, "..") {
+	if !safeName.MatchString(name) || strings.Contains(name, "..") || deviceName(name) {
 		return false
 	}
 	return filepath.Base(name) == name
+}
+
+// deviceName reports whether name is one of the names Windows reserves for a
+// device. Before Windows 11, an extension did not make one an ordinary file:
+// "con.toml" opened the console and "com1.toml" a serial port, so a restore
+// would have written an archive's theme body straight to the terminal, past
+// every filter, or blocked on a port. It is refused on every platform, so a
+// backup restores the same set of themes wherever it is opened.
+//
+// The part before the first dot is what Windows compares, in any case.
+// safeName has already limited the name to ASCII letters, digits, dots,
+// dashes and underscores, which rules out the other reserved spellings
+// (CONIN$, CONOUT$ and the superscript-digit ports).
+func deviceName(name string) bool {
+	base, _, _ := strings.Cut(name, ".")
+	switch base = strings.ToUpper(base); {
+	case base == "CON", base == "PRN", base == "AUX", base == "NUL":
+		return true
+	case len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")):
+		return base[3] >= '0' && base[3] <= '9'
+	}
+	return false
 }
 
 // Files reads every theme in dir, sorted by name so two reads of an unchanged

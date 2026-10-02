@@ -127,6 +127,32 @@ func TestWriteNewRefusesNamesThatEscape(t *testing.T) {
 	}
 }
 
+// Windows device names are refused like any other name that does not name a
+// file. Before Windows 11, "con.toml" was the console and "com1.toml" a serial
+// port whatever the extension, so a restore would have written the archive's
+// bytes to the terminal or blocked on a port.
+func TestWriteNewRefusesWindowsDeviceNames(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "themes")
+	devices := []string{"con.toml", "NUL.toml", "Aux.toml", "prn.toml",
+		"com1.toml", "COM9.toml", "lpt1.toml", "nul.dark.toml"}
+	files := []File{{Name: "console.toml", Body: "yes\n"}, {Name: "com10.toml", Body: "yes\n"}}
+	for _, name := range devices {
+		files = append(files, File{Name: name, Body: "no"})
+	}
+	added, skipped, err := WriteNew(dir, files)
+	if err == nil {
+		t.Error("no refusal reported for a device name")
+	}
+	if added != 2 || skipped != len(devices) {
+		t.Errorf("added %d and skipped %d, want 2 and %d", added, skipped, len(devices))
+	}
+	for _, name := range devices {
+		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
+			t.Errorf("%s was written", name)
+		}
+	}
+}
+
 // The refusal error is printed to a terminal — the backup screen renders it —
 // so a refused name has to arrive quoted, never as the control bytes it is made
 // of. %q is what makes an escape read as text instead of as an escape.
