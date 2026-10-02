@@ -195,8 +195,8 @@ the theme is called after its file.
 ## Limits, and linked files
 
 A theme file may be at most 64 KiB, its `name` and `author` at most 128 bytes
-each, and a glyph at most 16 cells wide — far above anything readable in a list row
-or one tile. A file over a cap is listed with an error rather than read whole.
+each, and a glyph at most 16 cells wide and 128 bytes long — far above anything
+readable in a list row or one tile. A file over a cap is listed with an error rather than read whole.
 The cap is measured on the file that would be read: a symlink is only a few
 bytes, so a linked theme's target is statted through the open file and read
 through a limit rather than trusted to be small because the link is.
