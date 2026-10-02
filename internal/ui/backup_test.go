@@ -574,3 +574,50 @@ func TestBackupScreenOpensClean(t *testing.T) {
 		t.Errorf("the screen reopened with %v at row %d, want it clean", m.backup.report, m.backup.cursor)
 	}
 }
+
+// One load at a time, and one merge. A second press while a load was out used
+// to start a second load, and the second file a second merge beside the first:
+// every record written twice, and the screen unlocked by whichever merge landed
+// first while the other was still writing.
+func TestBackupLoadIsOneAtATime(t *testing.T) {
+	source := backupModel(t, &fakeTransfer{})
+	playOne(t, source, "crane")
+	send(t, source, "enter")
+	archive := source.transfer.(*fakeTransfer).saved
+
+	tr := &fakeTransfer{offer: archive, offerAs: "mine.json"}
+	m := backupModel(t, tr)
+	m.backup.cursor = backupRowLoad
+
+	_, first := m.Update(key("enter"))
+	_, second := m.Update(key("enter"))
+	if first == nil {
+		t.Fatal("the first press asked for no file")
+	}
+	if second != nil {
+		t.Fatal("a second press while a load was out asked for another file")
+	}
+
+	// The file lands and its merge starts; a stray second file arriving while
+	// that merge runs must not start another.
+	fileMsg := first()
+	_, merge := m.Update(fileMsg)
+	if merge == nil || !m.backup.restoring {
+		t.Fatal("the file did not start a merge")
+	}
+	if _, again := m.Update(fileMsg); again != nil {
+		t.Error("a file that arrived during a merge started a second one")
+	}
+	drain(t, m, merge)
+	if m.backup.restoring {
+		t.Error("the screen is still restoring after the merge landed")
+	}
+	if tr.loadCall != 1 {
+		t.Errorf("Transfer.Load ran %d times, want 1", tr.loadCall)
+	}
+
+	// Once it has answered, the next press is a load again.
+	if _, cmd := m.Update(key("enter")); cmd == nil {
+		t.Error("a load after the last one answered asked for no file")
+	}
+}

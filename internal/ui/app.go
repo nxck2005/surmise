@@ -193,6 +193,15 @@ type Model struct {
 	// revealed — the sprint's counterpart of pendingResult.
 	pendingDeal bool
 
+	// loadOut is set while a Transfer.Load is out with the platform, from the
+	// press that asked for it until its answer arrives — whatever the answer,
+	// and whichever screen is showing by then. One load at a time: a second
+	// press used to start a second load, and its file a second merge beside
+	// the first. It lives on the root rather than on backupScreen because the
+	// screen is reset when it is reopened, and the load it would forget is
+	// still out.
+	loadOut bool
+
 	// transfer is how a backup file leaves and re-enters this build. Nil means
 	// the platform cannot move files, and the menu then offers no backup row —
 	// which is what the headless tests see.
@@ -977,6 +986,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case backupFileMsg:
+		// The load that asked for this has answered, so another may be asked.
+		m.loadOut = false
 		// The screen may have been left while the picker was open. Applying it
 		// anyway would write a history nobody is looking at into the store and
 		// report it to a screen that is not showing, so a file that arrives
@@ -1834,9 +1845,12 @@ func (m *Model) saveBackup() {
 // as a file picker is open, which is why this is a command and not a call: the
 // app keeps drawing, and the screen says what it is waiting for.
 func (m *Model) loadBackup() tea.Cmd {
-	if m.transfer == nil {
+	// A load already out owns the answer: a second press would open a second
+	// picker in a browser and, natively, merge the same file twice at once.
+	if m.transfer == nil || m.loadOut {
 		return nil
 	}
+	m.loadOut = true
 	m.backup.waiting = true
 	transfer := m.transfer
 	return func() tea.Msg {
@@ -1857,6 +1871,13 @@ func (m *Model) loadBackup() tea.Cmd {
 // The command may not close over m: commands run on another goroutine. It
 // captures the three immutable things Apply needs instead.
 func (m *Model) applyBackup(msg backupFileMsg) tea.Cmd {
+	// A merge already running owns the store until it lands. A file that
+	// arrives now is dropped rather than merged beside it: two merges at once
+	// write every record twice, and the first to finish would unlock the
+	// screen while the second was still writing.
+	if m.backup.restoring {
+		return nil
+	}
 	switch {
 	case msg.err != nil:
 		m.backup.refused(msg.err)
