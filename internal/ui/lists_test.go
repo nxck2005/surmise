@@ -93,6 +93,20 @@ func TestHistogramKeepsWholeCellsForACustomBarGlyph(t *testing.T) {
 	}
 }
 
+// A bar glyph wider than a cell is drawn fewer times: the peak bar is the
+// histogram's width in cells, not that many copies of the glyph.
+func TestHistogramMeasuresAWideBarGlyphInCells(t *testing.T) {
+	m := newModel(t)
+	withTheme(t, themed(t, "[glyphs]\nbar = \"[]\"\n"))
+	m.profile.summary.Distribution = map[int]int{3: 3, 4: 4}
+
+	plain := sgr.ReplaceAllString(m.profile.renderDistribution(), "")
+	rows := strings.Split(plain, "\n")[1:]
+	if got := strings.Count(rows[1], "[]") * 2; got != distributionWidth {
+		t.Errorf("the peak bar is %d cells, want %d:\n%s", got, distributionWidth, plain)
+	}
+}
+
 // The shading stays inside the theme's own bar colour, and disappears entirely
 // on a terminal that cannot show it.
 func TestHistogramShadesOnlyWhenItCan(t *testing.T) {

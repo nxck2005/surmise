@@ -213,11 +213,15 @@ func barRamp() []color.Color {
 // Sub-cell precision is only used when the theme kept the default bar glyph: a
 // theme that chose its own rune means it, and half of somebody else's glyph is
 // not a smaller version of it.
+//
+// A glyph wider than one cell is drawn fewer times, so the peak bar is
+// distributionWidth cells whatever the theme chose, not that many glyphs.
 func renderBar(n, peak int, ramp []color.Color) string {
 	if peak <= 0 {
 		return ""
 	}
-	whole := max(n*distributionWidth/peak, 1)
+	cells := max(lipgloss.Width(st.glyph.Bar), 1)
+	whole := max(n*distributionWidth/(peak*cells), 1)
 	part := ""
 	if st.glyph.Bar == fullBlock {
 		eighth := n * distributionWidth * 8 / peak
@@ -232,7 +236,7 @@ func renderBar(n, peak int, ramp []color.Color) string {
 
 	var b strings.Builder
 	for i := range whole {
-		b.WriteString(st.bar.Foreground(colorAt(ramp, i)).Render(st.glyph.Bar))
+		b.WriteString(st.bar.Foreground(colorAt(ramp, i*cells)).Render(st.glyph.Bar))
 	}
 	if part != "" {
 		b.WriteString(st.bar.Foreground(colorAt(ramp, whole)).Render(part))
