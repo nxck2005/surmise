@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
@@ -176,5 +178,34 @@ func TestResultRetriesAFailedCompletionSaveOnExit(t *testing.T) {
 		t.Fatalf("Load() after save retry: %v", err)
 	} else if saved.Status != game.Won {
 		t.Errorf("saved status = %v, want won", saved.Status)
+	}
+}
+
+// Every copy action asks the platform's clipboard hook, so the browser — which
+// grants each clipboard write separately — hears about all three of them.
+func TestCopyActionsUseTheClipboardHook(t *testing.T) {
+	var copied []string
+	hook := func(text string) tea.Cmd {
+		copied = append(copied, text)
+		return nil
+	}
+	m := gameModel(t)
+	m.clipboard = hook
+	send(t, m, "c", "r", "a", "n", "e", "enter")
+	m.Update(key("c"))
+	if len(copied) != 1 || !strings.Contains(copied[0], "1/6") {
+		t.Errorf("the result copy did not reach the hook: %q", copied)
+	}
+
+	copied = nil
+	m.screen = screenChallenge
+	screen, err := newChallengeCreate(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.challenge = screen
+	m.copyChallenge()
+	if len(copied) != 1 || copied[0] != screen.code.String() {
+		t.Errorf("the challenge copy did not reach the hook: %q", copied)
 	}
 }

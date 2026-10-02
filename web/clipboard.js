@@ -8,8 +8,10 @@
 // requested" and never learns whether it worked.
 //
 // So permission is not a property of the page, it is a property of one request.
-// internal/web calls armClipboard immediately before it writes a frame carrying
-// the introducer, and takeClipboard spends it. One grant, one write.
+// internal/web calls armClipboard when the game asks for a copy, just before
+// the request is written, and takeClipboard spends it. One grant, one write.
+// The grant comes from the copy action and never from the bytes: a request
+// cannot vouch for itself.
 //
 // It is a plain script rather than a module, like boot.js, because index.html
 // loads it that way and a module would be deferred past the WebAssembly start.

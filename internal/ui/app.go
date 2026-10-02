@@ -202,6 +202,10 @@ type Model struct {
 	// still out.
 	loadOut bool
 
+	// clipboard is Options.Clipboard, resolved: never nil. Every copy action
+	// goes through it, via copyText.
+	clipboard func(text string) tea.Cmd
+
 	// transfer is how a backup file leaves and re-enters this build. Nil means
 	// the platform cannot move files, and the menu then offers no backup row —
 	// which is what the headless tests see.
@@ -276,6 +280,11 @@ type Options struct {
 	// the headless tests pass — means this build cannot, and the backup row is
 	// then not offered at all rather than offered and broken.
 	Transfer Transfer
+	// Clipboard puts text on the system clipboard. Nil means tea.SetClipboard,
+	// which is all a terminal needs. The browser build supplies its own,
+	// because the page grants each clipboard write separately and the grant has
+	// to come from the copy action itself — see internal/web's Terminal.Copy.
+	Clipboard func(text string) tea.Cmd
 	// DataDir is where saves, settings and themes live. It is display data —
 	// the about screen shows it, and the UI's own file access still goes
 	// through the store — so empty simply means "not known", which is what the
@@ -307,10 +316,14 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 		themeLib: lib,
 		// The menu is built knowing whether this build can move files, because
 		// a backup row that cannot do anything is worse than no row.
-		menu:     newMenuScreen(opts.Transfer != nil),
-		dailySrc: opts.DailySeeds,
-		dataDir:  opts.DataDir,
-		transfer: opts.Transfer,
+		menu:      newMenuScreen(opts.Transfer != nil),
+		dailySrc:  opts.DailySeeds,
+		dataDir:   opts.DataDir,
+		transfer:  opts.Transfer,
+		clipboard: opts.Clipboard,
+	}
+	if m.clipboard == nil {
+		m.clipboard = tea.SetClipboard
 	}
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
@@ -796,6 +809,18 @@ func (m *Model) dismissErr() {
 		return
 	}
 	m.err = nil
+}
+
+// copyText is the one way the app asks for a clipboard write. The three copy
+// actions — a result, the day's trio, a challenge code — all come through here,
+// so a platform that has to know a copy was asked for (the browser does) hears
+// about every one.
+func (m *Model) copyText(text string) tea.Cmd {
+	clip := m.clipboard
+	if clip == nil {
+		clip = tea.SetClipboard
+	}
+	return clip(text)
 }
 
 // settingsOf reads the saved preferences, or their defaults from a store that
@@ -1968,7 +1993,7 @@ func (m *Model) copyTrio() tea.Cmd {
 		return nil
 	}
 	m.daily.copyRequested = true
-	return tea.SetClipboard(shareTrio(m.daily.day.String(), m.daily.rows))
+	return m.copyText(shareTrio(m.daily.day.String(), m.daily.rows))
 }
 
 // openSelectedDaily plays — or reviews — the highlighted mode's daily.
@@ -2150,7 +2175,7 @@ func (m *Model) copyChallenge() tea.Cmd {
 		return nil
 	}
 	m.challenge.copied = true
-	return tea.SetClipboard(m.challenge.code.String())
+	return m.copyText(m.challenge.code.String())
 }
 
 func (m *Model) openCurrentChallenge() tea.Cmd {

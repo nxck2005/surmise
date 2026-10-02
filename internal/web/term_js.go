@@ -22,7 +22,6 @@
 package web
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"sync"
@@ -145,37 +144,36 @@ func (t *Terminal) Reader() io.Reader { return t.in }
 // xterm.js, so returning immediately is correct rather than optimistic.
 type writer struct{ term js.Value }
 
-// clipboardRequest is the OSC 52 introducer, which is what bubbletea writes
-// when tea.SetClipboard is called.
-var clipboardRequest = []byte("\x1b]52;")
-
-// armClipboard is the page's one-shot permission for a clipboard write.
+// Copy is the browser's clipboard action, for ui.Options.Clipboard.
 //
-// The page's OSC 52 handler writes to the system clipboard, and a page-wide
-// trust assumption about who may ask is a poor thing to stand behind: any
-// sequence reaching the terminal stream would otherwise do it, silently, with
-// no signal to the player — the classic clipboard-poisoning primitive, and the
-// UI says "copy requested" without ever learning whether it worked.
+// The page's OSC 52 handler writes to the system clipboard, so it refuses any
+// request it was not told to expect: a page-wide "whoever writes OSC 52 may
+// set the clipboard" would let any sequence that reached the terminal stream
+// overwrite it silently. Copy is how it is told. It arms the page's one-shot
+// grant, then hands bubbletea the ordinary clipboard command, whose OSC 52
+// spends the grant.
 //
-// So the permission is per-request and travels with the bytes. This is the only
-// place the game emits OSC 52 (from three copy actions, all key- or
-// click-initiated), so arming on sight of the introducer is the handshake: the
-// handler in boot.js refuses unless the flag is set, and clears it as it
-// consumes it. One copy, one permission.
-func armClipboard(host js.Value) {
-	host.Call("armClipboard")
+// The grant comes from the copy action, not from the bytes. An earlier version
+// armed whenever a write contained the OSC 52 introducer, which is the request
+// vouching for itself: any OSC 52 that reached the writer was let through, the
+// injected one included. bubbletea's renderer also drops an OSC 52 that is part
+// of a frame's content (internal/ui's TestRendererDropsEscapesInContent holds
+// it to that), so this is the second of two locks, not the only one.
+//
+// The grant is armed inside the command, on its way to the program, so it
+// stands for as short a time as the framework allows.
+func (t *Terminal) Copy(text string) tea.Cmd {
+	set := tea.SetClipboard(text)
+	host := t.host
+	return func() tea.Msg {
+		host.Call("armClipboard")
+		return set()
+	}
 }
 
 func (w writer) Write(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
-	}
-	// Before the write, not after: xterm.js parses the sequence out of the
-	// bytes as it consumes them, so the flag has to be standing when the
-	// handler runs. Setting it for a write that carries no request is harmless,
-	// since nothing consumes it and the next one re-arms.
-	if bytes.Contains(p, clipboardRequest) {
-		armClipboard(js.Global().Get("surmise"))
 	}
 	buf := js.Global().Get("Uint8Array").New(len(p))
 	js.CopyBytesToJS(buf, p)
