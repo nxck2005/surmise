@@ -206,6 +206,10 @@ type Model struct {
 	// goes through it, via copyText.
 	clipboard func(text string) tea.Cmd
 
+	// storage is Options.Storage: nil, or how full the store is. The backup
+	// screen reads it through measureStorage.
+	storage func() (used, limit int)
+
 	// transfer is how a backup file leaves and re-enters this build. Nil means
 	// the platform cannot move files, and the menu then offers no backup row —
 	// which is what the headless tests see.
@@ -285,6 +289,12 @@ type Options struct {
 	// because the page grants each clipboard write separately and the grant has
 	// to come from the copy action itself — see internal/web's Terminal.Copy.
 	Clipboard func(text string) tea.Cmd
+	// Storage reports how much of the store's room is spent and about how much
+	// there is, in the same unit. Nil means the room is not worth showing —
+	// natively it is a disk — and the backup screen then shows no meter. The
+	// browser build supplies it, because localStorage runs out at a few
+	// thousand puzzles and says nothing until a save fails.
+	Storage func() (used, limit int)
 	// DataDir is where saves, settings and themes live. It is display data —
 	// the about screen shows it, and the UI's own file access still goes
 	// through the store — so empty simply means "not known", which is what the
@@ -321,6 +331,7 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 		dataDir:   opts.DataDir,
 		transfer:  opts.Transfer,
 		clipboard: opts.Clipboard,
+		storage:   opts.Storage,
 	}
 	if m.clipboard == nil {
 		m.clipboard = tea.SetClipboard
@@ -1523,7 +1534,7 @@ func (m *Model) back() tea.Cmd {
 	switch {
 	case m.screen == screenResult && m.game != nil:
 		if err := m.game.leave(); err != nil {
-			m.result.notice = fmt.Sprintf("could not save: %v", err)
+			m.result.notice = saveFailed(err)
 			return nil
 		}
 	case m.screen == screenGame && m.game != nil:
@@ -1791,6 +1802,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		// says nothing about what is on the machine now — the same reason the
 		// how-to screen opens on its first page.
 		m.backup.reset()
+		m.measureStorage()
 		m.screen = screenBackup
 
 	case choiceAbout:
@@ -1924,6 +1936,9 @@ func (m *Model) applyBackup(msg backupFileMsg) tea.Cmd {
 // merged preferences, put the themes on disk, and apply a theme the archive
 // filled in so the player sees it now rather than after a restart.
 func (m *Model) finishBackup(msg backupAppliedMsg) {
+	// A restore is what fills storage fastest, and one that failed part way —
+	// a browser out of room is the likely reason — has still written records.
+	m.measureStorage()
 	if msg.err != nil {
 		m.backup.refused(msg.err)
 		return

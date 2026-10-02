@@ -71,6 +71,11 @@ type backupScreen struct {
 	// fresh error.
 	report  []string
 	failure string
+
+	// used and limit are how full the store was when the screen opened, or
+	// after the last restore; limit 0 means there is no meter to show. See
+	// Options.Storage.
+	used, limit int
 }
 
 // reset clears the last report. The screen is opened fresh every time — a
@@ -211,6 +216,9 @@ func (b *backupScreen) view(h *hitMap) string {
 	}, "\n")
 
 	sections := []string{blurb, "", block(rows)}
+	if meter := b.meter(); meter != "" {
+		sections = append(sections, "", meter)
+	}
 	if note := b.note(); note != "" {
 		sections = append(sections, "", note)
 	}
@@ -247,6 +255,12 @@ func (b *backupScreen) note() string {
 		return ""
 	}
 
+	return b.centred(lines, style)
+}
+
+// centred pads lines to the width of the blurb, so that a line appearing or
+// changing does not resize the panel around it.
+func (b *backupScreen) centred(lines []string, style lipgloss.Style) string {
 	width := 0
 	for _, l := range backupBlurb {
 		if w := lipgloss.Width(l); w > width {
@@ -260,6 +274,29 @@ func (b *backupScreen) note() string {
 		out[i] = box.Render(style.Render(l))
 	}
 	return strings.Join(out, "\n")
+}
+
+// meter is how full the store is, when the platform can say. It is a line of
+// its own rather than part of the note, because it is not about the last
+// action: it is there whenever the screen is open. It turns to the error colour
+// at 90%, which leaves room for a few hundred more puzzles — time to save a
+// backup — and says plainly when nothing more will be kept.
+func (b *backupScreen) meter() string {
+	if b.limit <= 0 {
+		return ""
+	}
+	pct := min(b.used*100/b.limit, 100)
+	var lines []string
+	style := st.muted
+	switch {
+	case pct >= 100:
+		lines, style = []string{"storage is full", "new progress is not being saved"}, st.err
+	case pct >= 90:
+		lines, style = []string{fmt.Sprintf("storage is %d%% full", pct), "save a backup while you can"}, st.err
+	default:
+		lines = []string{fmt.Sprintf("storage: about %d%% used", pct)}
+	}
+	return b.centred(lines, style)
 }
 
 // renderRow draws one action, marked whole so the click target is the row

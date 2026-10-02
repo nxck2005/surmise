@@ -168,7 +168,7 @@ func (m *gameScreen) leave() error {
 // Both esc and a click on the menu button come through here.
 func (m *gameScreen) exit() {
 	if err := m.leave(); err != nil {
-		m.notify("could not save: %v", err)
+		m.notify("%s", saveFailed(err))
 	}
 }
 
@@ -337,7 +337,7 @@ func (m *gameScreen) submit() tea.Cmd {
 	// promise — a power cut may cost the last few seconds of saves, by choice;
 	// see store.writeFileAtomic.
 	if err := m.store.Save(m.g); err != nil {
-		m.notify("could not save: %v", err)
+		m.notify("%s", saveFailed(err))
 	}
 	return nil
 }
@@ -367,7 +367,7 @@ func (m *gameScreen) startNew() tea.Cmd {
 	}
 
 	if err := m.leave(); err != nil {
-		m.notify("could not save: %v", err)
+		m.notify("%s", saveFailed(err))
 		return nil
 	}
 

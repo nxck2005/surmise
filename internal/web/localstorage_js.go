@@ -47,7 +47,30 @@ func Storage() (store.KV, error) {
 	return kv, nil
 }
 
+// StorageLimit is about how much localStorage an origin gets, in the UTF-16
+// code units store.KVStore.Usage counts. No browser exposes the figure; five
+// million characters is what Chrome, Firefox and Safari each allow, so the
+// backup screen's meter is an estimate and says "about". The authority on
+// whether a save fits is still the browser, which answers with
+// QuotaExceededError (see quotaExceeded).
+const StorageLimit = 5 << 20
+
 type localStorage struct{ v js.Value }
+
+// quotaExceeded reports whether a recovered panic is the browser refusing a
+// write for lack of room. Old Firefox names the exception differently; every
+// browser gives it one of these two names.
+func quotaExceeded(r any) bool {
+	e, ok := r.(js.Error)
+	if !ok || e.Value.Type() != js.TypeObject {
+		return false
+	}
+	switch e.Value.Get("name").String() {
+	case "QuotaExceededError", "NS_ERROR_DOM_QUOTA_REACHED":
+		return true
+	}
+	return false
+}
 
 func (l localStorage) Get(key string) (value string, ok bool) {
 	defer func() {
@@ -66,8 +89,13 @@ func (l localStorage) Get(key string) (value string, ok bool) {
 func (l localStorage) Set(key, value string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			// Almost always QuotaExceededError. The caller reports it; nothing
-			// here may panic its way out.
+			// Almost always QuotaExceededError. That one is store.ErrFull, so
+			// the UI can say what it means; anything else keeps the browser's
+			// words. Nothing here may panic its way out.
+			if quotaExceeded(r) {
+				err = fmt.Errorf("browser %w", store.ErrFull)
+				return
+			}
 			err = fmt.Errorf("web: could not save: %v", r)
 		}
 	}()

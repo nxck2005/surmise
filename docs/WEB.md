@@ -24,6 +24,11 @@ means:
 - Clearing site data for this origin erases your history.
 - Another browser, another device or a private window is a different history.
 - There is no sync and no account.
+- There is a limit. A browser gives a site about five million characters of
+  `localStorage`, which is roughly 12,000–14,000 puzzles. The backup screen
+  shows how much is used, and turns red at 90%. When it is full the board says
+  `storage is full — not saved`: play continues, but nothing new is kept. Save
+  a backup before then.
 
 Private mode in Safari refuses `localStorage` outright. The game notices, falls
 back to memory and stays playable — it just forgets everything when you leave.

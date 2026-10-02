@@ -17,6 +17,14 @@ import (
 // ErrNotFound is returned by Load for an unknown id.
 var ErrNotFound = errors.New("store: puzzle not found")
 
+// ErrFull reports a write the backing storage refused for lack of room. Only
+// a browser's localStorage raises it today: an origin gets about five million
+// characters, and once they are spent every save fails. The UI recognises it
+// with errors.Is and tells the player why nothing is being kept, rather than
+// passing on the browser's own wording. Its text is written to read after
+// "browser ", which is how the browser's KV wraps it.
+var ErrFull = errors.New("storage is full")
+
 // Summary is the cheap view of a puzzle, for the browse list. It avoids
 // loading and decoding every saved game just to render a menu.
 type Summary struct {
