@@ -592,7 +592,7 @@ func (m *Model) applyStartupTheme(override string, saved store.Settings) {
 
 	t, ok := m.themeLib.Resolve(want)
 	if !ok {
-		m.err = fmt.Errorf("no theme named %q — using %s", want, theme.DefaultName)
+		m.err = fmt.Errorf("no theme named %.40q — using %s", want, theme.DefaultName)
 	}
 	m.themeName = t.Name
 	setTheme(t)
@@ -648,7 +648,7 @@ func (m *Model) applyStartupDay(override string) {
 func (m *Model) applyStartupSplash(override string, s store.Settings) {
 	mode, ok := parseSplashMode(s.SplashDismiss)
 	if !ok {
-		m.err = fmt.Errorf("no splash setting %q — using %s", s.SplashDismiss, mode.setting())
+		m.err = fmt.Errorf("no splash setting %.40q — using %s", s.SplashDismiss, mode.setting())
 	}
 	m.splash.mode = mode
 
@@ -685,7 +685,7 @@ func (m *Model) applyStartupSplash(override string, s store.Settings) {
 		art, ok := banner.Get(want)
 		if !ok {
 			art = banner.Default()
-			m.err = fmt.Errorf("no splash art named %q — using %s", want, art.Name)
+			m.err = fmt.Errorf("no splash art named %.40q — using %s", want, art.Name)
 		}
 		m.splash.art = art
 	}
@@ -703,7 +703,7 @@ func (m *Model) applyStartupMotion(override string, s store.Settings) {
 	if override != "" {
 		want, ok := parseMotion(override)
 		if !ok {
-			m.err = fmt.Errorf("no motion setting %q — using %s", override, want.setting())
+			m.err = fmt.Errorf("no motion setting %.40q — using %s", override, want.setting())
 		}
 		m.anim.motion = want
 		return
@@ -713,7 +713,7 @@ func (m *Model) applyStartupMotion(override string, s store.Settings) {
 	if saved != "" {
 		want, ok := parseMotion(saved)
 		if !ok {
-			m.err = fmt.Errorf("no motion setting %q — using %s", saved, want.setting())
+			m.err = fmt.Errorf("no motion setting %.40q — using %s", saved, want.setting())
 		}
 		m.anim.motion = want
 		return
@@ -768,6 +768,25 @@ func (m *Model) dismissSplash() tea.Cmd {
 	}
 	m.screen = m.splash.next
 	return nil
+}
+
+// dismissErr clears the error line once the player has acted after it.
+//
+// The line used to stay for the rest of the session: nothing reset it, so a
+// refusal from one screen — a deleted daily, a theme that would not resolve —
+// was drawn on every screen after it, and a long value echoed into it (a
+// browser query parameter, say) widened every frame until the app quit. Now an
+// error lasts until the next key or click, which is when the player has had the
+// chance to read it; whatever that input does may set a new one.
+//
+// The splash is the exception. A startup error is raised behind it, and the key
+// that dismisses the splash is not a key spent reading the error, so the line
+// survives that one keystroke and is there on the screen it reveals.
+func (m *Model) dismissErr() {
+	if m.screen == screenSplash {
+		return
+	}
+	m.err = nil
 }
 
 // settingsOf reads the saved preferences, or their defaults from a store that
@@ -1002,6 +1021,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if a, ok := m.hits.at(msg.X, msg.Y); ok {
+			m.dismissErr()
 			return m, m.dispatch(a)
 		}
 
@@ -1570,6 +1590,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+c" {
 		return m, m.quit()
 	}
+
+	// The error line belongs to the last thing that went wrong, and a key is
+	// the player moving on from it. See dismissErr.
+	m.dismissErr()
 
 	// A run whose clock has run out ends before any key is read: whatever this
 	// keystroke was meant for, it lands on the summary instead of a board that

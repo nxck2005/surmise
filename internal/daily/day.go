@@ -34,7 +34,7 @@ func DayOf(t time.Time) Day {
 func ParseDay(s string) (Day, error) {
 	t, err := time.Parse(dayLayout, s)
 	if err != nil {
-		return Day{}, fmt.Errorf("daily: %q is not a date (want %s)", s, dayLayout)
+		return Day{}, fmt.Errorf("daily: %.40q is not a date (want %s)", s, dayLayout)
 	}
 	return DayOf(t), nil
 }
