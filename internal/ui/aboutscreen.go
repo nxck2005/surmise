@@ -126,7 +126,9 @@ func (a *aboutScreen) view(h *hitMap) string {
 
 	lines := make([]string, len(rows))
 	for i, r := range rows {
-		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(r.value)
+		// A value can be a path from -data, which is the shell's to choose and
+		// so reaches the frame unvalidated; labels are all literals.
+		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(safeText(r.value))
 	}
 
 	return titled("about", strings.Join(lines, "\n"))
