@@ -193,28 +193,44 @@ jobs:
       # must not reach the live site unobserved. This is the only place the
       # security headers in web/vercel-output.json can be proven — the config
       # says they should be served, but only the deployed site shows whether
-      # Vercel applied the route.
+      # Vercel applied the route. The favicon is checked here too, because
+      # build-web.sh copies files by name and a missing one fails silently.
       #
       # Production is public, and its domain is what a visitor loads, so it is
       # checked with a plain request. Staging sits behind Vercel's Deployment
       # Protection, so a plain curl gets the SSO redirect rather than the app;
       # the CLI's curl command attaches the bypass the token is entitled to.
-      - name: verify the security headers
+      - name: verify the deployed site
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           if [ "$IS_PRODUCTION" = "true" ]; then
             site=https://surmise.nxck.dev/
-            headers=$(curl --fail --silent --show-error --head "$site" | tr -d '\r')
           else
             site=https://surmise-staging.vercel.app/
-            headers=$("$RUNNER_TEMP/node_modules/.bin/vercel" curl "$site" \
-              --yes -- --silent --show-error --head | tr -d '\r')
           fi
+          # get URL [curl options...]
+          get() {
+            if [ "$IS_PRODUCTION" = "true" ]; then
+              curl --silent --show-error "${@:2}" "$1"
+            else
+              "$RUNNER_TEMP/node_modules/.bin/vercel" curl "$1" --yes -- --silent --show-error "${@:2}"
+            fi
+          }
+
+          headers=$(get "$site" --head | tr -d '\r')
           echo "$headers" | grep -i '^content-security-policy:' || true
           for header in content-security-policy x-content-type-options x-frame-options referrer-policy; do
             if ! echo "$headers" | grep -qi "^$header:"; then
               echo "$site is not serving $header"
+              exit 1
+            fi
+          done
+
+          for file in favicon.svg apple-touch-icon.png; do
+            status=$(get "$site$file" --output /dev/null --write-out '%{http_code}')
+            if [ "$status" != 200 ]; then
+              echo "$site$file returned $status"
               exit 1
             fi
           done
