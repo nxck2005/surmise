@@ -19,7 +19,8 @@ import (
 // One file per puzzle keeps writes small (the game is saved after every guess)
 // and means a single corrupt file costs one puzzle rather than the whole
 // history. Writes go to a temp file and are renamed into place, so a crash
-// mid-write cannot leave a half-written save.
+// mid-write cannot leave a half-written save. They are not synced to the disk;
+// see writeFileAtomic for what that does and does not cost.
 //
 // There is deliberately no index and no counter: a puzzle's displayed code is
 // derived from its own id (see game.Code), so the store allocates nothing that
@@ -301,6 +302,19 @@ func (s *JSON) List() ([]Summary, error) {
 
 // writeFileAtomic writes via a temp file in the same directory, then renames.
 // Same-directory matters: rename is only atomic within a filesystem.
+//
+// There is deliberately no fsync. The promise a save keeps is the one the game
+// screen states — a kill -9 costs nothing — and the rename alone keeps it: once
+// it returns, every later read sees the whole new file, whatever happens to the
+// process. A sync buys only the stronger promise, that a save also survives a
+// power cut or an OS crash. It cost about 4.5 ms per guess on ext4, more on
+// macOS, where Go's Sync is F_FULLFSYNC, and about 45 s of a 10,000-record
+// restore, and it never kept that stronger promise: the directory was not
+// synced after the rename, so a new puzzle's file could still be lost. Keeping
+// it properly needs the directory sync and a writer goroutine, so the UI does
+// not wait on two syncs per guess. That was weighed on 2026-10-03 and not
+// chosen. docs/UPGRADING.md ("What a save survives") is the player's copy of
+// this decision; change both together.
 func writeFileAtomic(path string, b []byte) error {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, ".tmp-*")
@@ -313,10 +327,6 @@ func writeFileAtomic(path string, b []byte) error {
 	if _, err := f.Write(b); err != nil {
 		f.Close()
 		return fmt.Errorf("store: write %s: %w", tmp, err)
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return fmt.Errorf("store: sync %s: %w", tmp, err)
 	}
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("store: close %s: %w", tmp, err)
