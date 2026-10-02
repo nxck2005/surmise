@@ -25,6 +25,26 @@ safe across upgrades:
 The fixtures under `internal/store/testdata/` and the tests beside them pin all
 of this.
 
+## v0.6.5 → v0.6.6: the rest of the 2026-09-26 audit
+
+Small fixes from the same audit. None changes the save format, and `schema`
+does not move. No word list, challenge snapshot or bundled theme changed, so no
+daily answer moves.
+
+- **A theme glyph is capped at 16 cells wide, not 16 runes.** A glyph made of
+  wide characters (most emoji, CJK) now counts two cells for each one, so a
+  glyph of nine or more of them is refused with a warning, as an over-long
+  glyph always was. No bundled theme comes near the cap.
+- **A bar glyph wider than one cell draws the histogram at its proper width.**
+  Before, a two-cell `bar` made every bar twice as long and pushed the profile
+  out of its panel. It is now drawn half as many times.
+- The about screen and the backup screen now filter the `-data` path they show,
+  as every other screen already filtered outside text. Only your own command
+  line could put an escape there.
+- The web deploy now checks the security headers on the live site, not only on
+  staging, and the release workflows refuse a tag that is not a version number.
+  Nothing you run changes.
+
 ## v0.6.4 → v0.6.5: hardening from the 2026-09-26 audit
 
 Two bounds closed, both found by the 2026-09-26 security audit and both
