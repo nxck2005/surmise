@@ -8,8 +8,8 @@ did not write, and this page says how to report a problem with that safely.
 
 Security fixes land on `main` and ship in the next tagged release. Only the
 latest release is supported; there are no backports to older tags. The browser
-build at <https://surmise.nxck.dev> tracks `main` and is updated by deployment,
-not by tag.
+build at <https://surmise.nxck.dev> is the latest release too: a release tag
+deploys it, and a push to `main` goes only to a staging copy.
 
 ## Reporting a vulnerability
 
@@ -35,6 +35,8 @@ In scope:
   a hand-edited or corrupt save record, or an imported backup file.
 - The WebAssembly bundle and `web/boot.js`: the localStorage bridge, the OSC 52
   clipboard handler, and the functions published on `globalThis.surmise`.
+- A link to the browser build. Its query parameters (`?theme=`, `?day=`,
+  `?challenge=` and the rest) are chosen by whoever wrote the link.
 - The deployed site itself — serving content that was not built from this
   repository, or scripts injected beyond the app's own bundle.
 - Anything that lets a puzzle record, settings file or backup escape the data
@@ -45,13 +47,17 @@ Not in scope:
 - **Cheating at your own local game.** Answers live in plaintext inside saved
   puzzles by design — the format is documented as local history, not as an
   anti-cheat boundary. Reading your own saves is a feature, not a finding.
-- A malicious theme or save that damages only the install that loaded it. Files
-  you chose to put in your own data directory are trusted input; hostile files
-  are only interesting if they cross that line (escape the directory, execute
-  code, persist past deletion).
+- A theme or save you wrote yourself, when its only effect is on your own
+  install. What you write there is trusted input.
 - The vendored Bubble Tea copy's upstream defects — those belong to
   [bubbletea](https://github.com/charmbracelet/bubbletea/security), though say so
   in the report and the local copy will be patched too.
+
+The line is the file you open, not the directory it ends up in. A backup or a
+theme that came from somebody else is in scope even though restoring it puts it
+in your data directory: so is one that leaves the app unusable, slow or
+unrecoverable through its own screens, because sharing these files is what the
+features invite.
 
 ## Design notes that bound the risk
 
