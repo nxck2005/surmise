@@ -78,6 +78,12 @@ jobs:
             refs/tags/*) version="${GITHUB_REF_NAME#v}" ;;
             *) version="dev-$(git rev-parse --short HEAD)" ;;
           esac
+          # The same check as release.yml: the version goes into -ldflags, and
+          # a git ref may hold a quote.
+          if ! [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?|dev-[0-9a-f]+)$ ]]; then
+            echo "$GITHUB_REF_NAME does not give a version this build can stamp"
+            exit 1
+          fi
           bash scripts/build-web.sh "$version"
 
       # Vercel's build image ships Node and not Go, so the wasm cannot be built
@@ -125,10 +131,15 @@ jobs:
       # runtimes), and a nested module anywhere under the repository makes
       # `go vet ./...` and `go test ./...` refuse to walk it. The lockfile
       # stays in the tree; the install does not.
+      #
+      # --ignore-scripts because this job holds VERCEL_TOKEN two steps later:
+      # a lifecycle script in a compromised dependency could rewrite the
+      # binary that step runs. Nothing in the locked tree has an install
+      # script today, so this costs nothing and keeps it that way.
       - name: install the deploy CLI
         run: |
           cp tools/deploy/package.json tools/deploy/package-lock.json "$RUNNER_TEMP/"
-          npm ci --prefix "$RUNNER_TEMP"
+          npm ci --ignore-scripts --prefix "$RUNNER_TEMP"
 
       - name: deploy
         id: deploy
@@ -162,11 +173,14 @@ jobs:
       # you hand someone to try is the tagged build, until main moves again.
       - name: point the staging alias at it
         if: ${{ env.IS_PRODUCTION != 'true' }}
+        # The URL comes in through env rather than being written into the
+        # script, so nothing in it can be read as shell.
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
         run: |
           alias=surmise-staging.vercel.app
-          if "$RUNNER_TEMP/node_modules/.bin/vercel" alias set "${{ steps.deploy.outputs.url }}" "$alias" \
+          if "$RUNNER_TEMP/node_modules/.bin/vercel" alias set "$DEPLOY_URL" "$alias" \
               --token "$VERCEL_TOKEN"; then
             echo "staging: https://$alias" >>"$GITHUB_STEP_SUMMARY"
           else

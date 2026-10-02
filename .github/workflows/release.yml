@@ -59,6 +59,13 @@ jobs:
           # The tag is the version, minus the leading v: `surmise -version` then
           # prints "surmise 1.2.3 …", the form the README documents.
           version="${GITHUB_REF_NAME#v}"
+          # A git ref may hold a quote, and the version goes into -ldflags
+          # inside one. Only a semver tag is a release, so anything else stops
+          # here rather than being quoted around.
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag $GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH[-PRERELEASE]"
+            exit 1
+          fi
           name=surmise
           if [ "$GOOS" = windows ]; then name=surmise.exe; fi
 
