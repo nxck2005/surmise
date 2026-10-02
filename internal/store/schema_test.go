@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"strings"
@@ -67,7 +68,7 @@ func TestSchemaStampedOnEveryWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `"schema": 1`) {
+	if !strings.Contains(string(b), `"schema":1`) {
 		t.Errorf("puzzle record carries no schema tag: %s", b)
 	}
 
@@ -76,7 +77,7 @@ func TestSchemaStampedOnEveryWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `"schema": 1`) {
+	if !strings.Contains(string(b), `"schema":1`) {
 		t.Errorf("tombstone carries no schema tag: %s", b)
 	}
 
@@ -84,7 +85,7 @@ func TestSchemaStampedOnEveryWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `"schema": 1`) {
+	if !strings.Contains(string(b), `"schema":1`) {
 		t.Errorf("settings carry no schema tag: %s", b)
 	}
 }
@@ -135,5 +136,46 @@ func TestUnknownSettingsSchemaFallsBackToDefaults(t *testing.T) {
 	// puzzle and there is no error path here to spend.
 	if got := decodeSettings([]byte(`{"theme":"nord","schema":99}`)); got != (Settings{}) {
 		t.Errorf("settings with unknown schema = %+v, want the defaults", got)
+	}
+}
+
+// Records and settings are written compact, which is what fits a full backup
+// into a browser's storage, and an indented record — every file written before
+// v0.7.0, and the legacy fixture — still reads. Whitespace is not part of the
+// format.
+func TestRecordsAreWrittenCompact(t *testing.T) {
+	b, err := os.ReadFile("testdata/legacy-puzzle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "\n  ") {
+		t.Fatal("the legacy fixture is no longer indented, so it pins nothing here")
+	}
+	g, err := DecodeRecord("legacy puzzle", b)
+	if err != nil {
+		t.Fatalf("an indented record no longer reads: %v", err)
+	}
+
+	tomb := *g.Tombstone()
+	settings, err := encodeSettings(Settings{Theme: "nord", DisplayName: "nick"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, enc := range map[string]func() ([]byte, error){
+		"puzzle":    func() ([]byte, error) { return EncodeRecord(g) },
+		"tombstone": func() ([]byte, error) { return EncodeRecord(&tomb) },
+		"settings":  func() ([]byte, error) { return settings, nil },
+	} {
+		out, err := enc()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, out); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if compact.String() != string(out) {
+			t.Errorf("%s is not written compact:\n%s", name, out)
+		}
 	}
 }

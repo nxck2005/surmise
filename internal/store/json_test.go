@@ -162,7 +162,7 @@ func TestStoreRefusesAnElapsedTimeThatWouldOverflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	patched := bytes.Replace(raw, []byte(`"elapsedMs": 0`), []byte(`"elapsedMs": 9223372036854775807`), 1)
+	patched := bytes.Replace(raw, []byte(`"elapsedMs":0`), []byte(`"elapsedMs":9223372036854775807`), 1)
 	if bytes.Equal(patched, raw) {
 		t.Fatal("the record does not carry elapsedMs")
 	}
@@ -560,8 +560,8 @@ func TestStoreRefusesWordsWithControlCharacters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	patched := bytes.Replace(b, []byte(`"answer": "`+g.Answer+`"`),
-		[]byte(`"answer": "cr\u001bne"`), 1)
+	patched := bytes.Replace(b, []byte(`"answer":"`+g.Answer+`"`),
+		[]byte(`"answer":"cr\u001bne"`), 1)
 	if bytes.Equal(patched, b) {
 		t.Fatal("the record does not carry the answer it was encoded with")
 	}

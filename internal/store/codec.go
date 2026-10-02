@@ -24,6 +24,13 @@ import (
 //
 // Sharing the codec has a second effect worth keeping: both stores hold the
 // same bytes under a different key, so moving a history between them is a copy.
+//
+// Every record and the settings are written as compact JSON, with no
+// indentation. Indented records were about twice the size, and size is the
+// whole budget in a browser: localStorage gives an origin about five million
+// characters, which held 7,000–9,000 indented puzzles and holds 12,000–14,000
+// compact ones — enough for a full backup. Whitespace is not part of the
+// format, so every reader since v0.1.0 reads both, and `schema` does not move.
 
 // schemaVersion is the save-format version stamped into every record and into
 // settings as they are written. A reader accepts its own version and 0 — 0 is
@@ -81,7 +88,7 @@ func encodeGame(g *game.Game) ([]byte, error) {
 	if g.Schema == 0 {
 		g.Schema = schemaVersion
 	}
-	b, err := json.MarshalIndent(g, "", "  ")
+	b, err := json.Marshal(g)
 	if err != nil {
 		return nil, fmt.Errorf("store: encode puzzle %s: %w", g.ID, err)
 	}
@@ -190,7 +197,7 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 	if g.Challenge != nil {
 		challenge = &game.ChallengeInfo{}
 	}
-	b, err := json.MarshalIndent(tombstoneRecord{
+	b, err := json.Marshal(tombstoneRecord{
 		Schema:    schemaVersion,
 		ID:        g.ID,
 		Length:    g.Length,
@@ -200,7 +207,7 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 		Custom:    g.Custom,
 		Challenge: challenge,
 		Deleted:   g.Deleted,
-	}, "", "  ")
+	})
 	if err != nil {
 		return nil, fmt.Errorf("store: encode tombstone %s: %w", g.ID, err)
 	}
@@ -222,7 +229,7 @@ func encodeSettings(v Settings) ([]byte, error) {
 	// the same bound its reader uses: the store must never write a settings
 	// file it would then refuse to read.
 	v.PlaytimeMS = clampPlaytime(v.PlaytimeMS)
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, fmt.Errorf("store: encode settings: %w", err)
 	}
@@ -279,7 +286,7 @@ func ValidateSettings(v Settings) error {
 			return fmt.Errorf("%s is longer than %d bytes", f.name, MaxSettingFieldBytes)
 		}
 	}
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := json.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("encode settings: %w", err)
 	}

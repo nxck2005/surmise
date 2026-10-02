@@ -169,8 +169,8 @@ func TestApplyCannotOverwriteALivePuzzleThroughAnAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "./`+g.ID+`"`), 1)
-	patched = bytes.Replace(patched, []byte(`"answer": "crane"`), []byte(`"answer": "slate"`), 1)
+	patched := bytes.Replace(raw, []byte(`"id":"`+g.ID+`"`), []byte(`"id":"./`+g.ID+`"`), 1)
+	patched = bytes.Replace(patched, []byte(`"answer":"crane"`), []byte(`"answer":"slate"`), 1)
 	body, err := json.Marshal(Archive{Format: Format, Version: Version, Puzzles: []json.RawMessage{patched}})
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +195,7 @@ func archiveWithID(t *testing.T, id string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	patched := bytes.Replace(raw, []byte(`"id": "`+g.ID+`"`), []byte(`"id": "`+id+`"`), 1)
+	patched := bytes.Replace(raw, []byte(`"id":"`+g.ID+`"`), []byte(`"id":"`+id+`"`), 1)
 	if bytes.Equal(patched, raw) {
 		t.Fatal("the record does not carry the id it was encoded with")
 	}
