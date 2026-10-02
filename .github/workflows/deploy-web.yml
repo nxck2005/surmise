@@ -218,6 +218,25 @@ jobs:
             fi
           }
 
+          # The production domain moves to a new deployment a moment after the
+          # CLI returns, and a check in that gap reads the old build: v0.6.7's
+          # first run got a 404 for an icon that was new in that release. So
+          # wait until the domain serves this build before checking anything.
+          # boot.js carries the wasm's hash, so it differs between any two
+          # builds. Staging needs no wait: the alias step above has already
+          # pointed it at this deployment.
+          if [ "$IS_PRODUCTION" = "true" ]; then
+            want=$(sha256sum <.vercel/output/static/boot.js)
+            for attempt in $(seq 1 12); do
+              if [ "$(get "${site}boot.js" | sha256sum)" = "$want" ]; then break; fi
+              if [ "$attempt" = 12 ]; then
+                echo "$site is still not serving this build after two minutes"
+                exit 1
+              fi
+              sleep 10
+            done
+          fi
+
           headers=$(get "$site" --head | tr -d '\r')
           echo "$headers" | grep -i '^content-security-policy:' || true
           for header in content-security-policy x-content-type-options x-frame-options referrer-policy; do
