@@ -55,6 +55,70 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.6.7 → v0.7.0: smaller saves, faster saves, and the 2026-10-02 audit
+
+This release changes how saves are written, though not what they say: `schema`
+does not move, and nothing an earlier build wrote changes meaning. No word list,
+challenge snapshot or bundled theme changed, so no daily answer moves.
+
+### Saves are no longer forced onto the disk
+
+**What changed.** Each save used to wait for the disk (`fsync`). It no longer
+does. A crash, a kill or a closed terminal still costs nothing that was saved;
+a power cut or an operating-system crash can now cost the last few seconds of
+saves. The full reasoning, and the design that was not chosen, is in
+[What a save survives](#what-a-save-survives) above.
+
+**What you will notice.** Probably nothing while playing — the wait was about
+4.5 ms a guess on Linux, more on macOS. A large restore is much faster: 10,000
+puzzles used to spend about 45 seconds waiting for the disk.
+
+### Saves and backups are written as compact JSON
+
+**What changed.** Puzzle records, `settings.json` and backup files are written
+on one line, without indentation. That makes a record about half the size.
+
+**Why.** For the browser build. A browser gives a site about five million
+characters of storage, which held 7,000–9,000 indented puzzles and holds
+12,000–14,000 compact ones — enough for a full backup to fit.
+
+**What you will notice.** Nothing in the game. Whitespace is not part of the
+format, so this build reads indented files, and every earlier build reads the
+compact ones; a backup made here restores into v0.6.7 and the other way round.
+Existing files keep their indentation until the game next writes them. To read
+one, `jq . file.json` puts the indentation back.
+
+### The browser build shows how full its storage is
+
+The backup screen now shows how much of the browser's storage is used, in red
+from 90%. When it is full, the board says `storage is full — not saved (see
+backup)` instead of passing on the browser's own error. Play continues, but
+nothing new is kept until there is room. Save a backup before then. See
+[`docs/WEB.md`](WEB.md).
+
+### Fixes from the 2026-10-02 audit
+
+- **A theme glyph is capped at 128 bytes as well as 16 cells.** v0.6.6 replaced
+  the 16-rune cap with a cell count and lost the byte bound with it, so a glyph
+  of thousands of zero-width marks passed. Such a glyph is now refused with a
+  warning. No bundled theme comes near either cap.
+- **The error line clears** on your next key press or click, instead of
+  staying on every screen until you quit. A value echoed back in an error — a
+  theme name from a link, for example — is cut to 40 characters.
+- **One backup load at a time.** A second press of "load a backup" while the
+  file picker was open used to start a second load, and a second merge beside
+  the first.
+- **A restored theme cannot be named after a Windows device** (`con`, `nul`,
+  `com1` and the rest), which Windows treats as the device whatever follows the
+  dot.
+- **`$NO_MOTION` is read**, as the README always said. Before, only
+  `$SURMISE_NO_MOTION` turned the animations off.
+- **The browser grants a clipboard write from the copy action**, not from the
+  bytes being written. See the correction in the v0.6.5 section below.
+- `install.sh` uses HTTPS only, checks the shape of the version it resolved,
+  and matches the checksum line exactly. The web deploy checks the value of
+  each security header, not only that it is there.
+
 ## v0.6.5 → v0.6.6: the rest of the 2026-09-26 audit
 
 Small fixes from the same audit. None changes the save format, and `schema`
@@ -188,6 +252,14 @@ learns whether it worked.
 **What you will notice.** Nothing. A clipboard write now needs the game to have
 asked for one, and the game only asks when you press the copy key or click the
 button.
+
+**Correction (v0.7.0).** The paragraph above claimed more than v0.6.5 did. The
+page armed its one-shot permission whenever the game's output *contained* a
+clipboard sequence, not when the game asked for a copy — so the gate trusted
+the very bytes it was meant to check. Nothing could exploit it, because the
+renderer drops such sequences from anything drawn on screen, but that was luck
+rather than the gate. From v0.7.0 the permission is granted by the copy action
+itself, and a test pins the renderer's behaviour.
 
 ### Smaller things
 
