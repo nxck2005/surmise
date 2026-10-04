@@ -436,3 +436,46 @@ func chooseMode(t *testing.T, m *Model, length int) {
 	}
 	t.Fatalf("no %d-letter entry on the menu", length)
 }
+
+// --- network consent ---
+
+func TestNetworkIsOffUntilChosen(t *testing.T) {
+	s, dir := newStore(t)
+	m := New(s, nil, Options{})
+	m.screen = screenMenu
+
+	openSettings(t, m)
+	if m.settings.network {
+		t.Fatal("network is on in a fresh install")
+	}
+
+	for m.settings.cursor < rowNetwork {
+		send(t, m, "down")
+	}
+	if m.settings.cursor != rowNetwork {
+		t.Fatalf("cursor on row %d, want the network row", m.settings.cursor)
+	}
+	if got := m.settings.note(); got != notes.networkOff {
+		t.Errorf("note = %q, want %q", got, notes.networkOff)
+	}
+
+	send(t, m, "right")
+	if !s.Settings().Network {
+		t.Fatal("turning network on was not saved")
+	}
+	if got := m.settings.note(); got != notes.networkOn {
+		t.Errorf("note = %q, want %q", got, notes.networkOn)
+	}
+
+	m2 := reopen(t, dir, Options{})
+	m2.screen = screenMenu
+	openSettings(t, m2)
+	if !m2.settings.network {
+		t.Error("the next launch does not show network as on")
+	}
+
+	send(t, m, "left")
+	if s.Settings().Network {
+		t.Error("turning network off was not saved")
+	}
+}

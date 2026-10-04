@@ -344,6 +344,23 @@ func TestApplyIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestApplyNeverTurnsOnTheNetwork pins the one preference a restore must not
+// fill in: consent to the network belongs to this install, not to an archive.
+func TestApplyNeverTurnsOnTheNetwork(t *testing.T) {
+	b := buildFrom(t, newStore(t), store.Settings{Network: true}, nil)
+
+	res, err := Apply(b, newStore(t), store.Settings{})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res.Settings.Network {
+		t.Error("a restore turned the network on")
+	}
+	if len(res.SettingsFilled) != 0 {
+		t.Errorf("filled = %v, want nothing", res.SettingsFilled)
+	}
+}
+
 func TestApplyMergesSettings(t *testing.T) {
 	archived := store.Settings{
 		Theme:        "dracula",

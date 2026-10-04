@@ -55,6 +55,20 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.7.0 → v0.7.1: a network setting, off
+
+Settings has a new row, **network**. It is off, and it stays off until you turn
+it on. In this release no feature uses it: the game still makes no network
+calls, whatever the row says. It is there so that later online features have
+your consent to ask for, and so that they do nothing until you give it.
+
+- **A backup does not carry it.** Restoring an archive never turns the network
+  on, even one made with it on. You choose it on each install.
+- **Downgrading forgets it.** v0.7.0 does not know the field, so the next time
+  it saves your settings the choice is lost, and it reads as off again.
+
+Nothing else changed: `schema` does not move, and no daily answer moves.
+
 ## v0.6.7 → v0.7.0: smaller saves, faster saves, and the 2026-10-02 audit
 
 This release changes how saves are written, though not what they say: `schema`

@@ -157,6 +157,11 @@ func mergeSettings(current store.Settings, from *store.Settings) (store.Settings
 		filled = append(filled, "remember last mode")
 	}
 
+	// Network is left alone on purpose. It is consent to use the network, and
+	// consent is given on this install's settings screen: an archive can come
+	// from another device or another person, and restoring one must not turn
+	// the network on.
+
 	// The counter: raised, never lowered, whichever side is behind. Two installs
 	// of the same history that were played apart both keep their own time, and
 	// the larger figure is the honest floor for the whole of it.

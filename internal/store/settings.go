@@ -64,6 +64,13 @@ type Settings struct {
 	// older settings file that never had the field.
 	SplashMillis int `json:"splash_ms,omitempty"`
 
+	// Network is the player's consent to features that use the network. Off
+	// by default, and the zero value is the off: the game is offline until
+	// someone turns this on, so an older settings file keeps that promise
+	// without a migration. It is consent, not a preference to fill in, so a
+	// restore never sets it — see backup.mergeSettings.
+	Network bool `json:"network,omitempty"`
+
 	// PlaytimeMS is the lifetime play counter, in milliseconds — the one field
 	// here that is not a preference. It lives with the preferences because both
 	// stores already carry this struct through one codec, so the browser build
