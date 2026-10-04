@@ -2283,6 +2283,7 @@ func (m *Model) commitSettings(row int) {
 	s.SplashDismiss = m.settings.splashMode.setting()
 	s.SplashMillis = int(m.settings.splashTime / time.Millisecond)
 	s.Motion = m.settings.motion.setting()
+	s.Network = m.settings.network
 	m.saveSettings(s)
 
 	if row == rowLength {

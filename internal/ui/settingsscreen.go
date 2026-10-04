@@ -15,7 +15,8 @@ import (
 )
 
 // settingsScreen edits the persisted preferences that are not the theme:
-// profile presentation, the opening mode, and the startup splash.
+// profile presentation, the opening mode, the startup splash, and consent to
+// use the network.
 //
 // Cycling preferences save on every step. The profile name is the one staged
 // value: enter keeps its text draft and esc discards it. The screen holds every
@@ -38,6 +39,10 @@ type settingsScreen struct {
 	// off is a real choice, and so is wanting more than the default.
 	motion motion
 
+	// network is consent to features that use the network. Off until the
+	// player turns it on here; nothing else sets it.
+	network bool
+
 	cursor int
 }
 
@@ -49,6 +54,10 @@ const (
 	// Before the splash block, so the dependent-row logic that block relies on
 	// stays a contiguous run.
 	rowMotion
+	// Also before the splash block, for the same reason. It is consent rather
+	// than a look-and-feel choice, so it sits apart from the rows above it in
+	// meaning, if not in place.
+	rowNetwork
 	rowSplash
 	rowSplashArt
 	rowSplashDismiss
@@ -88,6 +97,7 @@ func (m *settingsScreen) reload(s store.Settings) {
 	m.splashTime, _ = parseSplashDuration(s.SplashMillis)
 
 	m.motion, _ = parseMotion(s.Motion)
+	m.network = s.Network
 
 	m.cursor = 0
 }
@@ -210,6 +220,9 @@ func (m *settingsScreen) cycle(delta int) {
 		m.rememberLast = !m.rememberLast
 	case rowMotion:
 		m.motion = stepMotion(m.motion, delta)
+	case rowNetwork:
+		// Two values, so either direction is a toggle.
+		m.network = !m.network
 	case rowSplash:
 		m.splash = !m.splash
 	case rowSplashArt:
@@ -288,6 +301,7 @@ func (m *settingsScreen) view(h *hitMap) string {
 			onOff(m.rememberLast)),
 		m.renderNameRow(h),
 		m.renderRow(h, rowMotion, "motion", m.motion.label()),
+		m.renderRow(h, rowNetwork, "network", onOff(m.network)),
 		m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
 		m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
 		m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
@@ -403,6 +417,7 @@ var notes = struct {
 	art, randomArt, dismiss             string
 	splashTime, untimed                 string
 	motionOff, motionOn, motionLoud     string
+	networkOff, networkOn               string
 }{
 	length:         "the mode new puzzles start in",
 	remembering:    "playing a mode makes it the default",
@@ -418,6 +433,8 @@ var notes = struct {
 	motionOff:      "the board changes at once, with no animation",
 	motionOn:       "tiles turn one at a time, and a win is marked",
 	motionLoud:     "the same feedback, slower and repeated",
+	networkOff:     "nothing is sent: the game stays offline",
+	networkOn:      "online features may use the network",
 }
 
 func (m *settingsScreen) note() string {
@@ -459,6 +476,11 @@ func (m *settingsScreen) note() string {
 		return notes.dismiss
 	case rowSplashTime:
 		return notes.splashTime
+	case rowNetwork:
+		if m.network {
+			return notes.networkOn
+		}
+		return notes.networkOff
 	default:
 		return notes.length
 	}
@@ -478,7 +500,9 @@ func noteWidth() int {
 		lipgloss.Width(notes.untimed),
 		lipgloss.Width(notes.motionOff),
 		lipgloss.Width(notes.motionOn),
-		lipgloss.Width(notes.motionLoud))
+		lipgloss.Width(notes.motionLoud),
+		lipgloss.Width(notes.networkOff),
+		lipgloss.Width(notes.networkOn))
 }
 
 func onOff(b bool) string {
