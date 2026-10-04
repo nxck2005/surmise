@@ -3,6 +3,17 @@
   "private": true,
   "description": "Pins the Vercel CLI the deploy workflow runs, with a lockfile and integrity hashes. Not part of the app; nothing here ships.",
   "dependencies": {
-    "vercel": "58.9.0"
+    "vercel": "62.2.0"
+  },
+  "overrides": {
+    "@fastify/busboy": "3.2.2",
+    "ajv@8": "8.20.0",
+    "js-yaml@4": "4.3.2",
+    "minimatch@10": "10.2.6",
+    "path-to-regexp@6": "6.3.0",
+    "path-to-regexp@8": "8.4.2",
+    "smol-toml": "1.9.0",
+    "tar": "7.5.22",
+    "undici@5": "6.29.0"
   }
 }
