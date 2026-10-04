@@ -76,7 +76,10 @@ jobs:
           go-version-file: go.mod
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 22
+          # 24 for the npm it bundles (11). tools/deploy overrides undici@5 to
+          # a 6.x release, and npm 10 reads that override as a lockfile out of
+          # sync, so `npm ci` refuses it.
+          node-version: 24
 
       - name: build
         run: |
