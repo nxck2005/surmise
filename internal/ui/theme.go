@@ -427,6 +427,50 @@ func affordableSections(committed, optional []string, budget int) []string {
 	return optional
 }
 
+// panelSteps are the widths a panel's content is drawn at, narrowest first.
+// Sized to its own content, every screen had a different panel, and moving
+// between them made the frame grow and shrink under the pointer. Two widths
+// cover all of them at the default metrics: the narrow one holds the menu and
+// the list-like screens (the widest of them, settings and how to play, are 49),
+// and the wide one is the board's own width, which the result, the sprint and
+// challenge setups, custom and about fit inside. Content wider than the last
+// step — the profile with its stats, or a theme with bigger tiles — keeps its
+// own width.
+var panelSteps = []int{49, 63}
+
+// panelWidth is the content width a frame is drawn at: the smallest step that
+// holds the content, but never more than the terminal has room for (room, from
+// bodyWidth; zero is unmeasured, which is unbounded) and never less than the
+// content itself. A narrow terminal therefore gets the panels it always had.
+func panelWidth(content, room int) int {
+	for _, step := range panelSteps {
+		if step >= content {
+			if room > 0 {
+				step = min(step, room)
+			}
+			return max(step, content)
+		}
+	}
+	return content
+}
+
+// widen centres a block of equal-width lines in a wider one, padding each line
+// with spaces. It pads rather than restyles, so the hit map's zero-width
+// markers stay exactly where they were placed relative to their text.
+func widen(s string, width int) string {
+	w := lipgloss.Width(s)
+	if width <= w {
+		return s
+	}
+	left := (width - w) / 2
+	l, r := strings.Repeat(" ", left), strings.Repeat(" ", width-w-left)
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = l + line + strings.Repeat(" ", w-lipgloss.Width(line)) + r
+	}
+	return strings.Join(lines, "\n")
+}
+
 // bodyWidth is bodyBudget's other axis: how many columns a screen's body
 // may take before the panel outgrows the terminal. A screen that can lay itself
 // out more than one way — stacking what will not sit side by side — uses it to

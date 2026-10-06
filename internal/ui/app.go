@@ -2441,18 +2441,10 @@ func (m *Model) frame(h *hitMap) string {
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center, body, help)
+	// Drawn at one of a few widths rather than hugging this screen's content,
+	// so moving between screens does not resize the frame (panelSteps).
+	content = widen(content, panelWidth(lipgloss.Width(content), bodyWidth(m.width)))
 
-	// Box the content in a rounded, titled panel (btop-style) and centre that
-	// panel in the terminal. The border hugs the content, not the terminal
-	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
-	// panel is emitted on its own.
-	// A solved board accents the whole frame for a moment: the same runes at the
-	// same width, in the colour the theme already uses for emphasis. The accent
-	// rises and falls across that moment rather than switching on and off, so
-	// the frame answers a win the way the tiles do — by turning, not by
-	// blinking — and it lands back on the border colour it started from, which
-	// is the settled frame. On a terminal that cannot blend, the run is flat in
-	// the accent and this is the hard swap it always was.
 	// Box the content in a rounded, titled panel (btop-style) and centre that
 	// panel in the terminal. The border hugs the content, not the terminal
 	// edges. Before the first WindowSizeMsg the dimensions are zero, so the
