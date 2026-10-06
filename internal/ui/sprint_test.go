@@ -398,3 +398,27 @@ func TestSprintDurationsAreWellFormed(t *testing.T) {
 		}
 	}
 }
+
+// A sprint board is titled "sprint", and its header carries the puzzle's name
+// alone: the run's countdown leads the status line, so a second clock counting
+// up beside the code only made the player work out which one mattered.
+func TestSprintBoardShowsOneClock(t *testing.T) {
+	m := newModel(t)
+	startSprintRun(t, m)
+	typeWord(t, m, otherAnswer(t, m.game.g.Length, m.game.g.Answer))
+
+	if got := m.screenTitle(); got != "sprint" {
+		t.Errorf("a sprint board is titled %q, want sprint", got)
+	}
+	name := "#" + game.Code(m.game.g.ID)
+	for _, line := range strings.Split(plain(draw(t, m)), "\n") {
+		if !strings.Contains(line, name) {
+			continue
+		}
+		if rest := strings.TrimSpace(line[strings.Index(line, name)+len(name):]); strings.Trim(rest, "│ ") != "" {
+			t.Errorf("the sprint header carries %q after the puzzle's name", rest)
+		}
+		return
+	}
+	t.Errorf("no header names %s", name)
+}
