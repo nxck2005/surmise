@@ -156,6 +156,12 @@ func mergeSettings(current store.Settings, from *store.Settings) (store.Settings
 		out.RememberLast = true
 		filled = append(filled, "remember last mode")
 	}
+	// Tile outlines have the same shape: off is the zero value, so only
+	// turning them on adds anything.
+	if !out.TileOutlines && from.TileOutlines {
+		out.TileOutlines = true
+		filled = append(filled, "tile outlines")
+	}
 
 	// Network is left alone on purpose. It is consent to use the network, and
 	// consent is given on this install's settings screen: an archive can come

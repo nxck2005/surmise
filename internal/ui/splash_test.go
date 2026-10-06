@@ -278,7 +278,7 @@ func TestSplashSettingsPersist(t *testing.T) {
 	s, dir := newStore(t)
 	m := New(s, nil, Options{Splash: splashOff})
 	m.screen = screenMenu
-	openSettings(t, m)
+	openAppearance(t, m)
 
 	// Down to the art row, then one step: past the last banner is "random".
 	m.settings.cursor = rowSplashArt
@@ -305,7 +305,7 @@ func TestSplashSettingsPersist(t *testing.T) {
 // them, they offer nothing to click, and cycling them does nothing.
 func TestSplashRowsAreDisabledWhenItIsOff(t *testing.T) {
 	m := newModel(t)
-	openSettings(t, m)
+	openAppearance(t, m)
 
 	// Off, from the row that owns it.
 	m.settings.cursor = rowSplash
@@ -457,7 +457,7 @@ func indexOfDuration(d time.Duration) int {
 // The length row is dead while the dismissal has nothing to time.
 func TestSplashTimeRowFollowsTheDismissMode(t *testing.T) {
 	m := newModel(t)
-	openSettings(t, m)
+	openAppearance(t, m)
 
 	m.settings.splashMode = splashSkip
 	m.settings.cursor = rowSplashDismiss

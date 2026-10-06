@@ -368,6 +368,7 @@ func TestApplyMergesSettings(t *testing.T) {
 		Length:       6,
 		Motion:       "off",
 		RememberLast: true,
+		TileOutlines: true,
 		PlaytimeMS:   90_000,
 	}
 	b := buildFrom(t, newStore(t), archived, nil)
@@ -384,14 +385,14 @@ func TestApplyMergesSettings(t *testing.T) {
 	if got.Theme != "gruvbox" || got.Length != 4 {
 		t.Errorf("chosen preferences were overwritten: theme %q, length %d", got.Theme, got.Length)
 	}
-	if got.DisplayName != "them" || got.Motion != "off" || !got.RememberLast {
+	if got.DisplayName != "them" || got.Motion != "off" || !got.RememberLast || !got.TileOutlines {
 		t.Errorf("unset preferences were not filled in: %+v", got)
 	}
 	if got.PlaytimeMS != 90_000 || res.PlaytimeAdded != 60*time.Second {
 		t.Errorf("playtime = %dms (+%v), want it raised to 90000ms", got.PlaytimeMS, res.PlaytimeAdded)
 	}
-	if len(res.SettingsFilled) != 3 {
-		t.Errorf("filled = %v, want the three unset preferences named", res.SettingsFilled)
+	if len(res.SettingsFilled) != 4 {
+		t.Errorf("filled = %v, want the four unset preferences named", res.SettingsFilled)
 	}
 }
 

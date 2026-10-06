@@ -29,6 +29,24 @@ func openSettings(t *testing.T, m *Model) {
 	t.Fatal("no settings entry on the menu")
 }
 
+// openAppearance opens settings and walks down to the appearance row and into
+// it, the way a player would, so the test breaks if the row moves or stops
+// opening the page.
+func openAppearance(t *testing.T, m *Model) {
+	t.Helper()
+	openSettings(t, m)
+	for range settingRows {
+		if m.settings.cursor == rowAppearance {
+			break
+		}
+		send(t, m, "down")
+	}
+	send(t, m, "enter")
+	if m.settings.page != pageAppearance {
+		t.Fatal("the appearance row did not open its page")
+	}
+}
+
 // newStore is a store over a fresh directory, plus the directory, for the tests
 // that reopen it as a second process would.
 func newStore(t *testing.T) (*store.JSON, string) {
@@ -477,5 +495,88 @@ func TestNetworkIsOffUntilChosen(t *testing.T) {
 	send(t, m, "left")
 	if s.Settings().Network {
 		t.Error("turning network off was not saved")
+	}
+}
+
+// The appearance page holds the look-and-feel rows; the main page holds the
+// rest and a row that opens it. Neither page's cursor can reach the other's
+// rows, and esc on the appearance page returns to the main one, on the row
+// that opened it, before a second esc leaves for the menu.
+func TestAppearanceIsAPageOfSettings(t *testing.T) {
+	m := newModel(t)
+	openSettings(t, m)
+	for range settingRows {
+		send(t, m, "down")
+	}
+	if m.settings.cursor != rowAppearance {
+		t.Fatalf("the main page's cursor went to row %d, want it to stop at appearance", m.settings.cursor)
+	}
+	frame := plain(draw(t, m))
+	for _, gone := range []string{"splash art", "splash dismiss"} {
+		if strings.Contains(frame, gone) {
+			t.Errorf("the main page still shows %q:\n%s", gone, frame)
+		}
+	}
+
+	send(t, m, "enter")
+	if m.settings.page != pageAppearance || m.screenTitle() != "appearance" {
+		t.Fatalf("enter on appearance: page %d, title %q", m.settings.page, m.screenTitle())
+	}
+	for range settingRows {
+		send(t, m, "up")
+	}
+	if m.settings.cursor != rowOutlines {
+		t.Errorf("the appearance page's cursor went to row %d, want it to stop at its first", m.settings.cursor)
+	}
+
+	send(t, m, "esc")
+	if m.screen != screenSettings || m.settings.page != pageMain || m.settings.cursor != rowAppearance {
+		t.Fatalf("esc on appearance: screen %d, page %d, cursor %d", m.screen, m.settings.page, m.settings.cursor)
+	}
+	send(t, m, "esc")
+	if m.screen != screenMenu {
+		t.Errorf("a second esc left screen %d, want the menu", m.screen)
+	}
+}
+
+// The same by mouse: the row's value opens the page, and the help bar's esc
+// button turns back from it.
+func TestAppearanceByClickingOnly(t *testing.T) {
+	m := newModel(t)
+	openSettings(t, m)
+	click(t, m, action{kind: actSettingNext, index: rowAppearance})
+	if m.settings.page != pageAppearance {
+		t.Fatal("clicking the appearance row did not open its page")
+	}
+	click(t, m, action{kind: actBack})
+	if m.screen != screenSettings || m.settings.page != pageMain {
+		t.Errorf("clicking esc on appearance: screen %d, page %d", m.screen, m.settings.page)
+	}
+}
+
+// Tile outlines are off until a player turns them on, and turning them on
+// saves the choice and reaches the board.
+func TestTileOutlinesAreAnAppearanceSetting(t *testing.T) {
+	s, _ := newStore(t)
+	m := New(s, nil, Options{Splash: splashOff})
+	m.screen = screenMenu
+	if m.outlines {
+		t.Fatal("tile outlines start on")
+	}
+
+	openAppearance(t, m)
+	if m.settings.cursor != rowOutlines {
+		t.Fatalf("the appearance page opened on row %d, want tile outlines", m.settings.cursor)
+	}
+	send(t, m, "right")
+	if !s.Settings().TileOutlines || !m.outlines {
+		t.Fatalf("turning outlines on: saved %v, live %v", s.Settings().TileOutlines, m.outlines)
+	}
+
+	send(t, m, "esc", "esc")
+	m.menu.point(menuIndex(t, m, choiceNewGame, 5))
+	send(t, m, "enter")
+	if !m.game.outlines {
+		t.Error("a board opened after turning outlines on does not draw them")
 	}
 }

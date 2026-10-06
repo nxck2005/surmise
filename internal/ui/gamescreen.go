@@ -63,6 +63,10 @@ type gameScreen struct {
 	// its boards itself.
 	sprint *sprintSession
 
+	// outlines is the player's tile-outline setting, handed down by the root
+	// and kept up to date when it changes; see slotCell.
+	outlines bool
+
 	// width and height are the terminal's, pushed down by the root. The board is
 	// the tallest screen in the app, so it is the one that has to decide how
 	// much of itself it can afford to draw — see boardLayout. Zero means "not
@@ -483,7 +487,7 @@ func (m *gameScreen) view(h *hitMap) string {
 	}
 
 	sections = append(sections,
-		renderBoard(g, m.typing, h, m.anim, now, l.tiles, l.boardGap),
+		renderBoard(g, m.typing, h, m.anim, now, l.tiles, l.boardGap, m.outlines),
 		"",
 		renderKeyboard(m.lettersOf(), h, m.anim, now, l.kbdGap),
 		"",
