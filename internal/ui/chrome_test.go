@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 
@@ -316,5 +317,73 @@ func TestNoScreenRepeatsItsTitle(t *testing.T) {
 		m.social.cursor = i
 		send(t, m, "enter")
 		check(t, m, label)
+	}
+}
+
+// panelWidthOf is how wide the drawn panel is, from its top rule.
+func panelWidthOf(t *testing.T, frame string) int {
+	t.Helper()
+	for _, line := range strings.Split(plain(frame), "\n") {
+		if i := strings.Index(line, "╭"); i >= 0 {
+			return lipgloss.Width(strings.TrimRight(line[i:], " "))
+		}
+	}
+	t.Fatalf("no panel in the frame:\n%s", plain(frame))
+	return 0
+}
+
+// Screens are drawn at a few panel widths rather than each at its own, so the
+// frame does not grow and shrink as the player moves between them. The
+// list-like screens share the narrow width; the board and the setups that sit
+// beside it share the wide one.
+func TestPanelsComeInAFewWidths(t *testing.T) {
+	open := func(kind choiceKind, length int) *Model {
+		m := newModel(t)
+		if kind != choiceQuit {
+			m.menu.cursor = menuIndex(t, m, kind, length)
+			send(t, m, "enter")
+		}
+		return m
+	}
+	groups := map[string][]*Model{
+		"narrow": {open(choiceQuit, 0), open(choiceDaily, 0), open(choiceSocial, 0),
+			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0)},
+		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0), open(choiceAbout, 0)},
+	}
+	widths := map[string]int{}
+	for name, ms := range groups {
+		for i, m := range ms {
+			w := panelWidthOf(t, draw(t, m))
+			if i == 0 {
+				widths[name] = w
+			} else if w != widths[name] {
+				t.Errorf("%s screen %d is %d wide, want %d like the first", name, i, w, widths[name])
+			}
+		}
+	}
+	if widths["narrow"] >= widths["wide"] {
+		t.Errorf("narrow panels are %d, wide %d", widths["narrow"], widths["wide"])
+	}
+
+	// A terminal narrower than a step gets a panel that fits it, as before.
+	m := open(choiceSettings, 0)
+	const narrow = 60
+	m.Update(tea.WindowSizeMsg{Width: narrow, Height: testHeight})
+	if w := panelWidthOf(t, m.View().Content); w > narrow {
+		t.Errorf("the settings panel is %d wide on a %d-column terminal", w, narrow)
+	}
+}
+
+func TestPanelWidthSteps(t *testing.T) {
+	for _, tc := range []struct{ content, room, want int }{
+		{30, 0, panelSteps[0]},
+		{panelSteps[0] + 1, 0, panelSteps[1]},
+		{panelSteps[1] + 5, 0, panelSteps[1] + 5}, // wider than every step keeps its own
+		{30, 40, 40}, // the terminal is narrower than the step
+		{45, 40, 45}, // never narrower than the content
+	} {
+		if got := panelWidth(tc.content, tc.room); got != tc.want {
+			t.Errorf("panelWidth(%d, %d) = %d, want %d", tc.content, tc.room, got, tc.want)
+		}
 	}
 }
