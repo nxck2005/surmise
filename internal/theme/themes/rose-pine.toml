@@ -13,7 +13,7 @@ present   = "#f6c177"
 absent    = "#26233a"
 
 slot      = "#524f67"
-key_face  = "#403d52"
+key_face  = "#524f67"
 key_spent = "#1f1d2e"
 
 correct_text = "#e0def4"

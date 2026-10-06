@@ -158,7 +158,7 @@ func Default() *Theme {
 			Present:  mustColor("#e0af68"),
 			Absent:   mustColor("#292e42"),
 			Slot:     mustColor("#414868"),
-			KeyFace:  mustColor("#343b58"),
+			KeyFace:  mustColor("#414868"),
 			KeySpent: mustColor("#16161e"),
 		},
 		Glyphs: Glyphs{
