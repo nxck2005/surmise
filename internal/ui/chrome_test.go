@@ -279,3 +279,42 @@ func TestBoardIsTitledByItsKind(t *testing.T) {
 		}
 	}
 }
+
+// The panel's rule names the screen, so no body repeats that name as a line of
+// its own: it cost two rows on every screen, which a short terminal could not
+// spare.
+func TestNoScreenRepeatsItsTitle(t *testing.T) {
+	check := func(t *testing.T, m *Model, where string) {
+		t.Helper()
+		title := m.screenTitle()
+		lines := strings.Split(plain(draw(t, m)), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "╭") {
+				continue // the rule itself
+			}
+			if strings.Trim(line, " │") == title {
+				t.Errorf("%s: the body repeats the title %q", where, title)
+			}
+		}
+	}
+
+	menu := newModel(t)
+	check(t, menu, "menu")
+	for i, c := range menu.menu.choices {
+		if c.kind == choiceQuit {
+			continue
+		}
+		m := newModel(t)
+		m.menu.cursor = i
+		send(t, m, "enter")
+		check(t, m, c.label)
+	}
+	for i, label := range socialLabels {
+		m := newModel(t)
+		m.menu.cursor = menuIndex(t, m, choiceSocial, 0)
+		send(t, m, "enter")
+		m.social.cursor = i
+		send(t, m, "enter")
+		check(t, m, label)
+	}
+}

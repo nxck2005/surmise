@@ -54,18 +54,17 @@ func (m *profileScreen) reload(games []*game.Game, today daily.Day, displayName 
 
 func (m *profileScreen) view(h *hitMap) string {
 	if m.err != nil {
-		return titled(m.title(),
-			st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
+		return block(st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
 	}
 
 	s := m.summary
 	if s.Played == 0 && s.InPlay == 0 {
-		return titled(m.title(), st.muted.Render("no games played yet"))
+		return block(st.muted.Render("no games played yet"))
 	}
 
 	// The sections stay left-joined: these are label-over-value columns and a
-	// histogram, which only read if they share a left edge. titled centres the
-	// finished block.
+	// histogram, which only read if they share a left edge. block squares the
+	// finished block off so the panel centres it as one.
 	var sections []string
 	sections = append(sections,
 		renderStatRow([]stat{
@@ -113,14 +112,7 @@ func (m *profileScreen) view(h *hitMap) string {
 			sections = append(sections, "", extra)
 		}
 	}
-	return titled(m.title(), lipgloss.JoinVertical(lipgloss.Left, sections...))
-}
-
-func (m *profileScreen) title() string {
-	if m.displayName != "" {
-		return m.displayName
-	}
-	return "profile"
+	return block(lipgloss.JoinVertical(lipgloss.Left, sections...))
 }
 
 // affordable returns the leading run of extras that fits under the terminal's

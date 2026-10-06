@@ -314,8 +314,6 @@ func (m *settingsScreen) view(h *hitMap) string {
 		Render(st.muted.Render(m.note()))
 
 	return lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render("settings"),
-		"",
 		lipgloss.JoinVertical(lipgloss.Left, rows...),
 		"",
 		note,

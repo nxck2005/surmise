@@ -223,7 +223,7 @@ func (b *backupScreen) view(h *hitMap) string {
 		sections = append(sections, "", note)
 	}
 
-	return titled("backup", lipgloss.JoinVertical(lipgloss.Center, sections...))
+	return lipgloss.JoinVertical(lipgloss.Center, sections...)
 }
 
 // note is the report, the failure, or the waiting line — whichever the last

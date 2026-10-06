@@ -191,11 +191,9 @@ func (m *listScreen) clampOffset() {
 func (m *listScreen) view(h *hitMap) string {
 	switch {
 	case m.err != nil:
-		return titled("puzzles",
-			st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
+		return block(st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
 	case len(m.items) == 0:
-		return titled("puzzles",
-			st.muted.Render("no puzzles yet — start one from the menu"))
+		return block(st.muted.Render("no puzzles yet — start one from the menu"))
 	}
 
 	// The counter and the delete prompt join the rows in one block, so they
@@ -215,7 +213,7 @@ func (m *listScreen) view(h *hitMap) string {
 	if prompt := m.deletePrompt(h); prompt != "" {
 		lines = append(lines, "", prompt)
 	}
-	return titled("puzzles", strings.Join(lines, "\n"))
+	return block(strings.Join(lines, "\n"))
 }
 
 // deletePrompt is the armed confirmation, drawn under the rows. Both halves are

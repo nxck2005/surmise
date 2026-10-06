@@ -263,8 +263,6 @@ func (m *sprintScreen) view(h *hitMap) string {
 		Render(st.muted.Render(m.note()))
 
 	return lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render("sprint"),
-		"",
 		lipgloss.JoinVertical(lipgloss.Left, rows...),
 		"",
 		note,

@@ -183,8 +183,6 @@ func (m *customScreen) view(h *hitMap) string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render("custom"),
-		"",
 		lipgloss.JoinVertical(lipgloss.Left, rows...),
 		"",
 		lipgloss.NewStyle().Width(noteWidth()).Align(lipgloss.Center).

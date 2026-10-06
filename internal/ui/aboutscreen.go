@@ -142,7 +142,7 @@ func (a *aboutScreen) view(h *hitMap) string {
 		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(fitValue(safeText(r.value), room, r.path))
 	}
 
-	return titled("about", strings.Join(lines, "\n"))
+	return block(strings.Join(lines, "\n"))
 }
 
 // fitValue cuts a value to room cells, marking the cut with an ellipsis: from

@@ -61,7 +61,7 @@ func (m *socialScreen) view(h *hitMap) string {
 		cell := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(style.Render(label))
 		rows[i] = h.mark(action{kind: actSocialChoice, index: i}, prefix+cell+suffix)
 	}
-	return titled("social play", strings.Join(rows, "\n"))
+	return block(strings.Join(rows, "\n"))
 }
 
 func (m *socialScreen) help(h *hitMap) string {

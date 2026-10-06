@@ -353,18 +353,6 @@ func block(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// titled is the standard shape of a list-style screen: its title centred over
-// its body, with the body moved as a block so its rows keep the shared left edge
-// that makes their columns line up. Screens that lay out around a board
-// (gameScreen, themeScreen) centre their own sections instead.
-func titled(title, body string) string {
-	return lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render(title),
-		"",
-		block(body),
-	)
-}
-
 // scrollCounter is the "3–14 of 27" line under a scrolling list, with its two
 // ends as click targets.
 //
@@ -387,7 +375,7 @@ func scrollCounter(h *hitMap, first, last, total int) string {
 		end(action{kind: actJumpBottom}, st.glyph.JumpLast)
 }
 
-// bodyBudget is how many lines a titled screen's body may take before the panel
+// bodyBudget is how many lines a screen's body may take before the panel
 // outgrows the terminal.
 //
 // Overflowing is not merely ugly: nothing here truncates, so the renderer drops
@@ -395,20 +383,20 @@ func scrollCounter(h *hitMap, first, last, total int) string {
 // close box and whatever else was up there with it. A screen that can shed or
 // scroll should therefore know its budget.
 //
-// The subtraction is the chrome around the body: the title and the blank under
-// it that titled adds, the help bar and the blank above it, and the panel's
-// padding and border. A height of zero — the size before the first
+// The subtraction is the chrome around the body: the help bar and the blank
+// above it, and the panel's padding and border. There is no heading to take off:
+// the panel's rule names the screen, and a body that repeated it cost two rows
+// for nothing. A height of zero — the size before the first
 // WindowSizeMsg — means unbounded, and is reported as 0 for callers to skip.
 func bodyBudget(height int) int {
 	if height <= 0 {
 		return 0
 	}
 	const (
-		title = 2 // the title and the blank line under it
 		help  = 2 // the help bar and the blank line above it
 		frame = 2 // the panel's top and bottom border
 	)
-	return height - title - help - frame - 2*st.metric.PanelPadY
+	return height - help - frame - 2*st.metric.PanelPadY
 }
 
 // affordableSections returns the leading run of extras that fits in the budget,
@@ -439,7 +427,7 @@ func affordableSections(committed, optional []string, budget int) []string {
 	return optional
 }
 
-// bodyWidth is bodyBudget's other axis: how many columns a titled screen's body
+// bodyWidth is bodyBudget's other axis: how many columns a screen's body
 // may take before the panel outgrows the terminal. A screen that can lay itself
 // out more than one way — stacking what will not sit side by side — uses it to
 // choose. Zero is unbounded, as it is there.

@@ -2589,6 +2589,11 @@ func (m *Model) screenStatus() string {
 		if t := m.daily.trio(); t.done > 0 {
 			return fmt.Sprintf("%d/%d done", t.done, t.of)
 		}
+
+	case screenProfile:
+		// Whose profile it is. This was the body's heading until the body
+		// stopped repeating the rule; the name is the one part that did not.
+		return safeText(m.profile.displayName)
 	}
 	return ""
 }
@@ -2783,10 +2788,8 @@ func (m *menuScreen) view(h *hitMap) string {
 	if s := m.status(); s != "" {
 		under = s
 	}
-	heading := lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render(brand.Name),
-		st.muted.Render(under),
-	)
+	// The panel's rule carries the name, so the line under it leads the body.
+	heading := st.muted.Render(under)
 
 	// Labels are centred inside a column as wide as the longest, with the
 	// selection markers held in fixed-width gutters either side. The gutters are
