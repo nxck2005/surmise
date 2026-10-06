@@ -527,8 +527,8 @@ func (m *settingsScreen) help(h *hitMap) string {
 		helpItem{keys: "↑/↓", label: "move"},
 		// Two buttons rather than one: the hint said ←/→ while the target only
 		// ever stepped forward, so the bar promised something it would not do.
-		helpItem{keys: "←", label: "back", act: action{kind: actSettingPrev, index: m.cursor}},
-		helpItem{keys: "→", label: "change", act: action{kind: actSettingNext, index: m.cursor}},
+		helpItem{keys: "←", label: "previous", act: action{kind: actSettingPrev, index: m.cursor}},
+		helpItem{keys: "→", label: "next", act: action{kind: actSettingNext, index: m.cursor}},
 		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
 	)
 }

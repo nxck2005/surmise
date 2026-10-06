@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1061,5 +1062,52 @@ func TestEveryScreenHasItsOwnTitle(t *testing.T) {
 		if got := m.screenTitle(); got == brand.Name {
 			t.Errorf("screen %d is titled %q, the fallback", s, got)
 		}
+	}
+}
+
+// escLabel is what the help bar says esc does, or "" if it does not offer esc.
+func escLabel(view string) string {
+	if m := regexp.MustCompile(`\besc ([a-z]+)`).FindStringSubmatch(plain(view)); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// The help bar names where esc goes: "menu" when it lands on the menu, "back"
+// when it lands on the screen this one was opened from. Daily and the sprint
+// setup used to say "back" for the menu.
+func TestEscIsNamedForWhereItGoes(t *testing.T) {
+	check := func(t *testing.T, m *Model, view, where string) {
+		t.Helper()
+		// A text field owns esc while it is open, and says "cancel".
+		label := escLabel(view)
+		if label != "menu" && label != "back" {
+			return
+		}
+		send(t, m, "esc")
+		want := "back"
+		if m.screen == screenMenu {
+			want = "menu"
+		}
+		if label != want {
+			t.Errorf("%s: help bar says esc %s, but esc went to screen %d", where, label, m.screen)
+		}
+	}
+
+	menu := newModel(t)
+	for i, c := range menu.menu.choices {
+		if c.kind == choiceNewGame || c.kind == choiceQuit {
+			continue
+		}
+		m := newModel(t)
+		m.menu.cursor = i
+		check(t, m, send(t, m, "enter"), c.label)
+	}
+	for i, label := range socialLabels {
+		m := newModel(t)
+		m.menu.cursor = menuIndex(t, m, choiceSocial, 0)
+		send(t, m, "enter")
+		m.social.cursor = i
+		check(t, m, send(t, m, "enter"), label)
 	}
 }

@@ -1105,3 +1105,34 @@ func helpLine(t *testing.T, m *Model) string {
 	t.Fatal("no help bar in the frame")
 	return ""
 }
+
+// Each screen that steps a value offers both directions on its help bar, as
+// two buttons. A single "←/→" button could only ever step forward when clicked.
+func TestHelpBarStepsValuesBothWays(t *testing.T) {
+	m := newModel(t)
+	m.menu.cursor = menuIndex(t, m, choiceSprint, 0)
+	send(t, m, "enter")
+	frame := plain(draw(t, m))
+	for _, want := range []string{"← previous", "→ next"} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("sprint setup help bar has no %q:\n%s", want, frame)
+		}
+	}
+	lastZone(t, m, action{kind: actSprintPrev, index: m.sprints.cursor})
+
+	m = newModel(t)
+	m.menu.cursor = menuIndex(t, m, choiceSocial, 0)
+	send(t, m, "enter")
+	m.social.cursor = len(socialLabels) - 1
+	send(t, m, "enter")
+	if m.screen != screenCustom {
+		t.Fatalf("social play's last entry opened screen %d, want custom", m.screen)
+	}
+	frame = plain(draw(t, m))
+	for _, want := range []string{"← previous", "→ next"} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("custom help bar has no %q:\n%s", want, frame)
+		}
+	}
+	lastZone(t, m, action{kind: actCustomPrev, index: m.custom.cursor})
+}
