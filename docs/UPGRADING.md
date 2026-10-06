@@ -55,6 +55,42 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.7.2 → v0.7.3: clearer colours, and a tidier look
+
+This release changes how the game looks, not what it saves: `schema` does not
+move, no daily answer moves, and no word list changed.
+
+### Bundled themes changed colour
+
+- **An untouched key no longer looks like a ruled-out letter.** In every bundled
+  theme the untouched keycap was close to the colour of the "not in word" tile,
+  and in dracula and solarized it was the same colour. Each theme now draws it
+  lighter, in a colour from its own palette.
+- **A letter on a "not in word" tile is easier to read.** Matrix, solarized and
+  ember light changed their `absent_text`. The terminal theme now draws an
+  untouched key light grey with a black letter.
+
+### A custom theme can look different
+
+`absent_text` now follows `text`, not `muted`. If your theme does not set
+`absent_text`, the letter on a "not in word" tile is now your text colour. To
+keep the old look, add `absent_text = "muted"` to your theme. A theme that
+already sets it does not change.
+
+### The screens
+
+- A tall board draws the tiles you have not played yet as outlines, in your
+  theme's `border` glyphs. A one-row board does not change.
+- The board's panel title names the kind of board: puzzle, daily, custom,
+  challenge or sprint. The kind no longer starts the status at the right of
+  that rule.
+- A sprint board shows one clock, the countdown.
+- The help bars agree: `esc menu` when esc goes to the menu, `esc back` when it
+  goes to the screen before, and `← previous` / `→ next` wherever a value steps.
+- The theme list lines up a custom theme with the built-in ones, the backup
+  screen has its own title, and the about screen fits a long data path to the
+  terminal.
+
 ## v0.7.0 → v0.7.1: a network setting, off
 
 Settings has a new row, **network**. It is off, and it stays off until you turn
