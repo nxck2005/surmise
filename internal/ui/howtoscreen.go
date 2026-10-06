@@ -180,12 +180,7 @@ func howToRules() (required, optional []string) {
 			fmt.Sprintf("%-12s %d", fmt.Sprintf("%d letters", n), n+1)))
 	}
 
-	return []string{intro, strings.Join(rows, "\n")}, []string{
-		aside(
-			"guesses have to be real words. if the game",
-			"doesn't know a word, you don't lose a try.",
-		),
-	}
+	return []string{intro, strings.Join(rows, "\n")}, nil
 }
 
 func howToScoring() (required, optional []string) {
@@ -238,7 +233,6 @@ func howToSaving() (required, optional []string) {
 				"midnight UTC.",
 			),
 		}, []string{
-			aside("a puzzle you never guess on isn't saved."),
 			aside(
 				"custom puzzles are saved too, but they don't",
 				"count toward your stats.",

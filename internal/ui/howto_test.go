@@ -174,9 +174,9 @@ func TestHowToShedsExtrasOnAShortTerminal(t *testing.T) {
 
 	// The full-height frame is the one that carries everything, so the shedding
 	// really is a response to the terminal and not a page that lost content.
-	m.howTo.show(0)
+	m.howTo.show(1)
 	tall := drawAt(t, m, testHeight)
-	if !strings.Contains(sgr.ReplaceAllString(tall, ""), "real words") {
+	if !strings.Contains(sgr.ReplaceAllString(tall, ""), "aren't in it") {
 		t.Errorf("a tall terminal dropped an extra anyway:\n%s", tall)
 	}
 	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
