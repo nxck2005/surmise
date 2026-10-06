@@ -23,12 +23,12 @@ const (
 	tallTile = 3
 )
 
-func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time, tiles, gap int) string {
+func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time, tiles, gap int, outline bool) string {
 	rows := make([]string, 0, g.MaxAttempts)
 
 	for i, guess := range g.Guesses {
 		if shown, revealing := a.reveal(now, g.ID, i); revealing {
-			rows = append(rows, renderRevealingRow(guess, g.Marks[i], shown, tiles))
+			rows = append(rows, renderRevealingRow(guess, g.Marks[i], shown, tiles, outline))
 			continue
 		}
 		// A won row is walked once by a light after it has turned. It renders
@@ -42,11 +42,11 @@ func renderBoard(g *game.Game, typing string, h *hitMap, a *anims, now time.Time
 	}
 
 	if !g.Status.Done() {
-		rows = append(rows, renderTypingRow(typing, g.Length, h, a.rejected(now), tiles))
+		rows = append(rows, renderTypingRow(typing, g.Length, h, a.rejected(now), tiles, outline))
 	}
 
 	for len(rows) < g.MaxAttempts {
-		rows = append(rows, renderEmptyRow(g.Length, tiles))
+		rows = append(rows, renderEmptyRow(g.Length, tiles, outline))
 	}
 
 	return stackSpaced(rows, gap)
@@ -134,7 +134,7 @@ func tileStyle(mark game.Mark) lipgloss.Style {
 // were typed in. Both come from tile(), so both are exactly TileWidth wide — the
 // flip is a repaint, and the row resolves from what you wrote into what it
 // scored without anything moving.
-func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int) string {
+func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int, outline bool) string {
 	if shown >= len(guess) {
 		return renderScoredRowAt(guess, marks, tiles)
 	}
@@ -142,7 +142,7 @@ func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int) strin
 	for i := range guess {
 		letter := strings.ToUpper(string(guess[i]))
 		if i >= shown {
-			cells[i] = slotCell(st.tileActive, st.muted, letter, tiles)
+			cells[i] = slotCell(st.tileActive, st.muted, letter, tiles, outline)
 			continue
 		}
 		cells[i] = sized(tileStyle(marks[i]), tiles).Render(letter)
@@ -156,7 +156,7 @@ func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int) strin
 // and cost more than it is worth — the typed tiles are click targets (actTrim
 // below), and a target sliding under a stationary pointer trims to a slot the
 // player was not pointing at.
-func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles int) string {
+func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles int, outline bool) string {
 	cells := make([]string, length)
 	for i := range cells {
 		if i < len(typing) {
@@ -172,30 +172,30 @@ func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles 
 			}
 			// The whole cell is the target, however tall it is: mark records the
 			// atom's height, so a tall tile is clickable across all of it.
-			cells[i] = h.mark(trim, slotCell(style, st.muted, strings.ToUpper(string(typing[i])), tiles))
+			cells[i] = h.mark(trim, slotCell(style, st.muted, strings.ToUpper(string(typing[i])), tiles, outline))
 		} else if i == len(typing) {
 			// Mark the caret position so the player can see where input lands.
-			cells[i] = slotCell(st.caret, st.muted, st.glyph.Caret, tiles)
+			cells[i] = slotCell(st.caret, st.muted, st.glyph.Caret, tiles, outline)
 		} else {
-			cells[i] = slotCell(st.tileEmpty, st.muted, st.glyph.Empty, tiles)
+			cells[i] = slotCell(st.tileEmpty, st.muted, st.glyph.Empty, tiles, outline)
 		}
 	}
 	return joinTiles(cells)
 }
 
-func renderEmptyRow(length, tiles int) string {
+func renderEmptyRow(length, tiles int, outline bool) string {
 	cells := make([]string, length)
 	frame := lipgloss.NewStyle().Foreground(st.tileEmpty.GetForeground())
 	for i := range cells {
-		cells[i] = slotCell(st.tileEmpty, frame, st.glyph.Empty, tiles)
+		cells[i] = slotCell(st.tileEmpty, frame, st.glyph.Empty, tiles, outline)
 	}
 	return joinTiles(cells)
 }
 
 // slotCell draws a tile that has not been scored yet: an empty slot, or a
 // letter still being typed. One row tall it is the tile style alone, as it has
-// always been. A tall tile is drawn as a box in the theme's border glyphs
-// instead, because a filled tile three rows high beside a lone glyph in three
+// always been. With the tile-outline setting on (outline; off by default), a
+// tall tile is drawn as a box in the theme's border glyphs instead, because a filled tile three rows high beside a lone glyph in three
 // rows of nothing made the unplayed part of the board read as missing rather
 // than waiting. frame colours the box: the slot colour for an empty row, muted
 // for the row being typed, so the row that takes the next letter stands out.
@@ -205,9 +205,9 @@ func renderEmptyRow(length, tiles int) string {
 // repaint, never a move. A tile too narrow for a border and its content
 // keeps the flat form, and a block border, which would fill the ring
 // solid, outlines with the plain glyphs instead.
-func slotCell(style, frame lipgloss.Style, content string, tiles int) string {
+func slotCell(style, frame lipgloss.Style, content string, tiles int, outline bool) string {
 	w := st.metric.TileWidth
-	if tiles < tallTile || w < 3 {
+	if !outline || tiles < tallTile || w < 3 {
 		return sized(style, tiles).Render(content)
 	}
 	b := st.borderRunes()

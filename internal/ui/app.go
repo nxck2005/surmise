@@ -239,6 +239,10 @@ type Model struct {
 	// settle everything at once.
 	anim anims
 
+	// outlines is the tile-outline setting this run draws with: read at
+	// startup, and changed by the appearance page. Each board opened gets a copy.
+	outlines bool
+
 	// pendingResult holds the debrief back while the guess that finished the
 	// puzzle is still revealing. The puzzle is already banked and saved by then;
 	// this only defers which screen is showing. Any input gives up the wait.
@@ -352,6 +356,7 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	m.applyStartupDay(opts.Day)
 	m.applyStartupSplash(opts.Splash, saved)
 	m.applyStartupMotion(opts.Motion, saved)
+	m.outlines = saved.TileOutlines
 
 	if opts.Challenge != "" {
 		m.challenge = newChallengeJoin(opts.Challenge)
@@ -390,6 +395,7 @@ func (m *Model) openGame(g *game.Game, saved bool) {
 	m.game = newGameScreen(m.store, g, saved)
 	m.game.anim = &m.anim
 	m.game.playtime = m.bankPlaytime
+	m.game.outlines = m.outlines
 	m.game.resize(m.width, m.height)
 	m.screen = screenGame
 }
@@ -1527,6 +1533,12 @@ func (m *Model) back() tea.Cmd {
 	if m.screen == screenBackup && m.backup.restoring {
 		return nil
 	}
+	// The appearance page is a page of settings, so esc there turns back to
+	// the first page rather than leaving the screen.
+	if m.screen == screenSettings && m.settings.page == pageAppearance {
+		m.settings.closeAppearance()
+		return nil
+	}
 	// Whatever was animating belongs to the screen being left.
 	m.anim.clear()
 	m.pendingResult = false
@@ -2283,8 +2295,15 @@ func (m *Model) commitSettings(row int) {
 	s.SplashDismiss = m.settings.splashMode.setting()
 	s.SplashMillis = int(m.settings.splashTime / time.Millisecond)
 	s.Motion = m.settings.motion.setting()
+	s.TileOutlines = m.settings.outlines
 	s.Network = m.settings.network
 	m.saveSettings(s)
+
+	// Applied at once, to the board that is open as well as to the next one.
+	m.outlines = m.settings.outlines
+	if m.game != nil {
+		m.game.outlines = m.outlines
+	}
 
 	if row == rowLength {
 		// Take effect now rather than at the next launch.
@@ -2505,6 +2524,9 @@ func (m *Model) screenTitle() string {
 	case screenThemes:
 		return "themes"
 	case screenSettings:
+		if m.settings.page == pageAppearance {
+			return "appearance"
+		}
 		return "settings"
 	case screenCustom:
 		return "custom"

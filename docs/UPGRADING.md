@@ -55,6 +55,20 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.7.5 → v0.7.6: an appearance page, and tile outlines off
+
+- **Settings has an appearance page.** The last row of settings, appearance,
+  opens it. Tile outlines, motion and the four splash rows moved there; default
+  mode, remember last, profile name and network stay on the first page. esc on
+  the appearance page goes back to settings, and a second esc goes to the menu.
+- **Tile outlines are a setting now, and off by default.** v0.7.3 drew the
+  unplayed tiles of a tall board as boxes for everyone. Now a tall board shows
+  dots again, as before v0.7.3, unless you turn **tile outlines** on.
+
+Settings files gain a `tile_outlines` field. An older build ignores it, so a
+downgrade only forgets the choice. A restore can turn outlines on but never
+off, like remember last. `schema` does not move, and no daily answer moves.
+
 ## v0.7.4 → v0.7.5: plainer how-to-play text
 
 The how-to-play pages say the same rules in shorter, plainer sentences. Nothing

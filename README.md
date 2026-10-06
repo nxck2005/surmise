@@ -190,11 +190,15 @@ edits apply live — save the file and the colours change under you, no restart.
 ## settings
 
 the settings screen holds an optional local profile name, the mode new puzzles
-start in, whether playing a different mode makes *that* the new default, how
-much the board animates, and the splash: whether you get one, which ascii art it
-draws, how it goes away, and how long it stays up when it's timed. a fresh
-install waits for any key on the splash. cycling choices save immediately; the
-name editor saves on enter.
+start in, whether playing a different mode makes *that* the new default, and
+the network setting. its **appearance** row opens a second page: tile outlines,
+how much the board animates, and the splash — whether you get one, which ascii
+art it draws, how it goes away, and how long it stays up when it's timed. a
+fresh install waits for any key on the splash. cycling choices save
+immediately; the name editor saves on enter.
+
+**tile outlines** are off by default. turned on, a board tall enough for
+three-row tiles draws the tiles you haven't played yet as boxes.
 
 **motion** is `off`, `restrained` or `pronounced`. tiles turn one at a time, a
 refused guess flashes, keycaps light as you type, and a win accents the frame —

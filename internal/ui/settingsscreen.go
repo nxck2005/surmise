@@ -15,8 +15,13 @@ import (
 )
 
 // settingsScreen edits the persisted preferences that are not the theme:
-// profile presentation, the opening mode, the startup splash, and consent to
-// use the network.
+// profile presentation, the opening mode, consent to use the network, and — on
+// its appearance page — tile outlines, motion and the startup splash.
+//
+// The appearance page is a second page of this screen, not a screen of its
+// own: every row keeps its index, its click targets and its save path, and only
+// which rows are drawn and reachable changes. esc on it returns to the first
+// page, through the root's back so a click on the help bar does the same.
 //
 // Cycling preferences save on every step. The profile name is the one staged
 // value: enter keeps its text draft and esc discards it. The screen holds every
@@ -43,21 +48,44 @@ type settingsScreen struct {
 	// player turns it on here; nothing else sets it.
 	network bool
 
+	// outlines draws a tall board's unscored tiles as boxes. Off by default.
+	outlines bool
+
+	page   settingsPage
 	cursor int
 }
 
-// The rows, in display order. Their order is the index carried by a click.
+// settingsPage is which of the screen's two pages is showing.
+type settingsPage int
+
+const (
+	pageMain settingsPage = iota
+	pageAppearance
+)
+
+// rows is the run of rows a page draws, as [first, end).
+func (p settingsPage) rows() (first, end int) {
+	if p == pageAppearance {
+		return rowOutlines, settingRows
+	}
+	return rowLength, rowOutlines
+}
+
+// The rows, in display order, the main page's first and the appearance page's
+// after. Their order is the index carried by a click.
 const (
 	rowLength = iota
 	rowRememberLast
 	rowProfileName
+	// Consent rather than a look-and-feel choice, so it stays on the main page.
+	rowNetwork
+	// Opens the appearance page; it holds no value of its own.
+	rowAppearance
+
+	rowOutlines
 	// Before the splash block, so the dependent-row logic that block relies on
 	// stays a contiguous run.
 	rowMotion
-	// Also before the splash block, for the same reason. It is consent rather
-	// than a look-and-feel choice, so it sits apart from the rows above it in
-	// meaning, if not in place.
-	rowNetwork
 	rowSplash
 	rowSplashArt
 	rowSplashDismiss
@@ -98,8 +126,22 @@ func (m *settingsScreen) reload(s store.Settings) {
 
 	m.motion, _ = parseMotion(s.Motion)
 	m.network = s.Network
+	m.outlines = s.TileOutlines
 
+	m.page = pageMain
 	m.cursor = 0
+}
+
+// openAppearance turns to the appearance page, on its first row.
+func (m *settingsScreen) openAppearance() {
+	m.page = pageAppearance
+	m.cursor = rowOutlines
+}
+
+// closeAppearance turns back to the main page, on the row that opened it.
+func (m *settingsScreen) closeAppearance() {
+	m.page = pageMain
+	m.cursor = rowAppearance
 }
 
 // enabled reports whether a row can be changed. A row whose value would do
@@ -112,6 +154,10 @@ func (m *settingsScreen) reload(s store.Settings) {
 func (m *settingsScreen) enabled(row int) bool {
 	if m.name.editing {
 		return row == rowProfileName
+	}
+	// A row on the other page is not on screen, so nothing may reach it.
+	if first, end := m.page.rows(); row < first || row >= end {
+		return false
 	}
 	switch row {
 	case rowSplashArt, rowSplashDismiss:
@@ -139,14 +185,17 @@ func (m *settingsScreen) update(msg tea.KeyPressMsg) (changed, back bool) {
 	case "down", "j":
 		m.move(1)
 	case "left", "h":
-		if m.cursor != rowProfileName {
+		if m.cursor != rowProfileName && m.cursor != rowAppearance {
 			m.cycle(-1)
 			return true, false
 		}
 	case "right", "l", "enter", " ":
-		if m.cursor == rowProfileName {
+		switch m.cursor {
+		case rowProfileName:
 			m.beginNameEdit()
-		} else {
+		case rowAppearance:
+			m.openAppearance()
+		default:
 			m.cycle(1)
 			return true, false
 		}
@@ -223,6 +272,14 @@ func (m *settingsScreen) cycle(delta int) {
 	case rowNetwork:
 		// Two values, so either direction is a toggle.
 		m.network = !m.network
+	case rowAppearance:
+		// The row's › and its value are the click targets that open the page;
+		// there is nothing behind it to step back to.
+		if delta > 0 {
+			m.openAppearance()
+		}
+	case rowOutlines:
+		m.outlines = !m.outlines
 	case rowSplash:
 		m.splash = !m.splash
 	case rowSplashArt:
@@ -300,12 +357,18 @@ func (m *settingsScreen) view(h *hitMap) string {
 		m.renderRow(h, rowRememberLast, "remember last",
 			onOff(m.rememberLast)),
 		m.renderNameRow(h),
-		m.renderRow(h, rowMotion, "motion", m.motion.label()),
 		m.renderRow(h, rowNetwork, "network", onOff(m.network)),
-		m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
-		m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
-		m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
-		m.renderRow(h, rowSplashTime, "splash time", splashDurationLabel(m.splashTime)),
+		m.renderLinkRow(h, rowAppearance, "appearance"),
+	}
+	if m.page == pageAppearance {
+		rows = []string{
+			m.renderRow(h, rowOutlines, "tile outlines", onOff(m.outlines)),
+			m.renderRow(h, rowMotion, "motion", m.motion.label()),
+			m.renderRow(h, rowSplash, "splash", onOff(m.splash)),
+			m.renderRow(h, rowSplashArt, "splash art", m.splashArt),
+			m.renderRow(h, rowSplashDismiss, "splash dismiss", m.splashMode.label()),
+			m.renderRow(h, rowSplashTime, "splash time", splashDurationLabel(m.splashTime)),
+		}
 	}
 
 	// The note is padded to the widest one there is, so moving the cursor does
@@ -367,6 +430,34 @@ func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) stri
 		arrow(next, st.glyph.ValueNext)
 }
 
+// renderLinkRow lays out a row that opens a page rather than holding a value,
+// in the same columns as the others: no ‹, and a › after a value cell that
+// says where it goes. Both the cell and the › open it.
+func (m *settingsScreen) renderLinkRow(h *hitMap, row int, label string) string {
+	open := action{kind: actSettingNext, index: row}
+
+	prefix := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
+	labelStyle, valueStyle, arrowStyle := st.muted, st.muted, st.muted
+	if row == m.cursor {
+		prefix = st.cursor.Render(st.glyph.Cursor)
+		labelStyle, valueStyle = st.text, st.accent
+	}
+	if h.hovered(open) {
+		valueStyle, arrowStyle = st.hover(valueStyle), st.hover(st.accent)
+	}
+
+	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
+	cell := valueBox.Render(valueStyle.Render("open"))
+	arrow := arrowStyle.Render(st.glyph.ValueNext)
+	if m.enabled(row) {
+		cell, arrow = h.mark(open, cell), h.mark(open, arrow)
+	}
+	return prefix +
+		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
+		strings.Repeat(" ", lipgloss.Width(st.glyph.ValuePrev)) +
+		cell + arrow
+}
+
 func (m *settingsScreen) renderNameRow(h *hitMap) string {
 	return renderFieldRow(h, rowProfileName, m.cursor == rowProfileName,
 		"profile name", &m.name, "not set")
@@ -416,6 +507,7 @@ var notes = struct {
 	splashTime, untimed                 string
 	motionOff, motionOn, motionLoud     string
 	networkOff, networkOn               string
+	appearance, outlinesOff, outlinesOn string
 }{
 	length:         "the mode new puzzles start in",
 	remembering:    "playing a mode makes it the default",
@@ -433,6 +525,9 @@ var notes = struct {
 	motionLoud:     "the same feedback, slower and repeated",
 	networkOff:     "nothing is sent: the game stays offline",
 	networkOn:      "online features may use the network",
+	appearance:     "tile outlines, motion and the splash",
+	outlinesOff:    "a tall board shows dots for unplayed tiles",
+	outlinesOn:     "a tall board draws boxes for unplayed tiles",
 }
 
 func (m *settingsScreen) note() string {
@@ -479,6 +574,13 @@ func (m *settingsScreen) note() string {
 			return notes.networkOn
 		}
 		return notes.networkOff
+	case rowAppearance:
+		return notes.appearance
+	case rowOutlines:
+		if m.outlines {
+			return notes.outlinesOn
+		}
+		return notes.outlinesOff
 	default:
 		return notes.length
 	}
@@ -500,7 +602,10 @@ func noteWidth() int {
 		lipgloss.Width(notes.motionOn),
 		lipgloss.Width(notes.motionLoud),
 		lipgloss.Width(notes.networkOff),
-		lipgloss.Width(notes.networkOn))
+		lipgloss.Width(notes.networkOn),
+		lipgloss.Width(notes.appearance),
+		lipgloss.Width(notes.outlinesOff),
+		lipgloss.Width(notes.outlinesOn))
 }
 
 func onOff(b bool) string {
@@ -514,11 +619,24 @@ func (m *settingsScreen) help(h *hitMap) string {
 	if m.name.editing {
 		return fieldHelp(h, rowProfileName, "save")
 	}
-	if m.cursor == rowProfileName {
+	// esc leaves the appearance page for the main one, and the main one for
+	// the menu.
+	esc := helpItem{keys: "esc", label: "menu", act: action{kind: actBack}}
+	if m.page == pageAppearance {
+		esc.label = "back"
+	}
+	switch m.cursor {
+	case rowProfileName:
 		return renderHelp(h,
 			helpItem{keys: "↑/↓", label: "move"},
 			helpItem{keys: "enter", label: "edit", act: action{kind: actFieldEdit, index: rowProfileName}},
-			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+			esc,
+		)
+	case rowAppearance:
+		return renderHelp(h,
+			helpItem{keys: "↑/↓", label: "move"},
+			helpItem{keys: "enter", label: "open", act: action{kind: actSettingNext, index: rowAppearance}},
+			esc,
 		)
 	}
 	return renderHelp(h,
@@ -527,6 +645,6 @@ func (m *settingsScreen) help(h *hitMap) string {
 		// ever stepped forward, so the bar promised something it would not do.
 		helpItem{keys: "←", label: "previous", act: action{kind: actSettingPrev, index: m.cursor}},
 		helpItem{keys: "→", label: "next", act: action{kind: actSettingNext, index: m.cursor}},
-		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+		esc,
 	)
 }

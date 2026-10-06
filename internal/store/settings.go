@@ -57,6 +57,11 @@ type Settings struct {
 	// is deliberate and overrides both.
 	Motion string `json:"motion,omitempty"`
 
+	// TileOutlines draws the tiles a tall board has not scored yet as boxes in
+	// the theme's border glyphs. Off by default, and the zero value is the off,
+	// so a bool can carry it: "never chosen" and "chosen off" look the same.
+	TileOutlines bool `json:"tile_outlines,omitempty"`
+
 	// SplashMillis is how long a timed splash stays up. Zero is "nothing
 	// chosen", which the UI reads as its own default — the same rule Length
 	// follows, and the reason this is not a time.Duration: a duration's zero is

@@ -129,11 +129,12 @@ func TestOnlyTheBoardGrows(t *testing.T) {
 	}
 }
 
-// A tall board outlines the tiles it has not scored, in the theme's border
-// glyphs, so the unplayed rows read as slots; a scored tile stays a filled
-// block, and a flat board draws no outline at all.
+// With tile outlines on, a tall board outlines the tiles it has not scored, in
+// the theme's border glyphs, so the unplayed rows read as slots; a scored tile
+// stays a filled block, and a flat board draws no outline at all.
 func TestTallBoardOutlinesUnscoredTiles(t *testing.T) {
 	m := gameModel(t)
+	m.game.outlines = true // the setting, which is off by default
 	m.game.g.Answer = "crane"
 	send(t, m, "a", "b", "o", "u", "t", "enter", "c", "r")
 	b := st.borderRunes()
