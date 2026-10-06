@@ -167,9 +167,8 @@ func (s *howToScreen) help(h *hitMap) string {
 
 func howToRules() (required, optional []string) {
 	intro := prose(
-		"a hidden word, and a handful of tries to find it.",
-		"type a word, press enter, and the tiles tell you",
-		"how close you were.",
+		"guess the hidden word. type a word, press enter,",
+		"and the tiles show how close you got.",
 	)
 
 	// Built from the modes that actually ship, and from the same n+1 the game
@@ -183,8 +182,8 @@ func howToRules() (required, optional []string) {
 
 	return []string{intro, strings.Join(rows, "\n")}, []string{
 		aside(
-			"a guess has to be a word the game knows.",
-			"anything else is refused, and costs you nothing.",
+			"guesses have to be real words. if the game",
+			"doesn't know a word, you don't lose a try.",
 		),
 	}
 }
@@ -201,26 +200,26 @@ func howToScoring() (required, optional []string) {
 	// has the height for it and not the width, and every entry still renders
 	// through the very styles the tiles do.
 	key := lines(
-		legendEntry(st.tileCorrect, "the right letter, in the right place"),
-		legendEntry(st.tilePresent, "in the word, somewhere else"),
-		legendEntry(st.tileAbsent, "not in the word at all"),
+		legendEntry(st.tileCorrect, "right letter, right spot"),
+		legendEntry(st.tilePresent, "in the word, wrong spot"),
+		legendEntry(st.tileAbsent, "not in the word"),
 	)
 
 	return []string{
 			key,
-			example(prose("the answer is CARGO, and you guess:"), "crane", "cargo"),
+			example(prose("say the answer is CARGO and you guess CRANE:"), "crane", "cargo"),
 		}, []string{
 			aside(
-				"c is exactly right. r and a are in the word",
-				"but somewhere else. n and e are not in it.",
+				"C is in the right spot. R and A are in the",
+				"word, but in other spots. N and E aren't in it.",
 			),
 			example(prose(
-				"a letter counts only as often as it occurs.",
-				"the answer is ABIDE:",
+				"a letter only lights up as many times as it's",
+				"in the answer. if the answer is ABIDE:",
 			), "geese", "abide"),
 			aside(
-				"ABIDE has one e. the last one matches exactly",
-				"and claims it, so the earlier ones stay dark.",
+				"ABIDE has one E. the last E in GEESE is in the",
+				"right spot, so the other E's don't light up.",
 			),
 		}
 }
@@ -228,28 +227,25 @@ func howToScoring() (required, optional []string) {
 func howToSaving() (required, optional []string) {
 	return []string{
 			prose(
-				"every guess is saved as you make it. leave",
-				"whenever — puzzles, in the menu, has them all,",
-				"finished or half-played.",
+				"the game saves after every guess, so you can",
+				"quit whenever you like. everything you've",
+				"played is under puzzles in the menu.",
 			),
-			prose("tab then enter starts another puzzle."),
+			prose("press tab, then enter, for a new puzzle."),
 			prose(
-				"the daily is one board per mode per day, the",
-				"same board for everyone. it turns over at",
-				"midnight UTC, and there is only the one.",
+				"there's one daily for each length, and it's",
+				"the same for everyone. a new one comes out at",
+				"midnight UTC.",
 			),
 		}, []string{
+			aside("a puzzle you never guess on isn't saved."),
 			aside(
-				"a board you never guessed on is not saved,",
-				"so opening one and walking away costs nothing.",
+				"custom puzzles are saved too, but they don't",
+				"count toward your stats.",
 			),
 			aside(
-				"custom puzzles are saved too, and count for",
-				"nothing on your profile.",
-			),
-			aside(
-				"challenge codes reproduce one shared board. they",
-				"are saved and count like ordinary puzzles.",
+				"a challenge code gives everyone the same board.",
+				"it's saved and counted like any other puzzle.",
 			),
 		}
 }
@@ -271,19 +267,17 @@ func howToControls() (required, optional []string) {
 
 	return []string{strings.Join(rows, "\n")}, []string{
 		aside(
-			"anything the keys do, a click does too: the",
-			"on-screen keyboard types, a typed tile erases",
-			"the row back to itself, the hints along the",
-			"bottom are buttons, and the × quits.",
+			"the mouse works too. click the keyboard to",
+			"type, click a typed letter to erase back to it,",
+			"and click the hints at the bottom. × quits.",
 		),
 		aside(
-			"in a sprint there is no restart to ask for:",
-			"the run deals its own boards, and esc ends",
-			"it at once — the summary follows.",
+			"in a sprint, tab does nothing. esc ends the",
+			"run and shows your results.",
 		),
 		aside(
-			"daily, challenge and custom boards do not reroll:",
-			"open another from their menu instead.",
+			"daily, challenge and custom boards can't be",
+			"swapped with tab. open another from its menu.",
 		),
 	}
 }

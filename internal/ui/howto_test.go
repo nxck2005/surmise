@@ -59,7 +59,7 @@ func TestHowToStatesTheAttemptsForEveryMode(t *testing.T) {
 
 // The worked examples are computed from game.Score, so the lesson cannot drift
 // from the rules. This pins the duplicate-letter one, which is the whole reason
-// the page exists: ABIDE has one E, the exact match at the end claims it, and
+// the page exists: ABIDE has one E, the exact match at the end takes it, and
 // the earlier ones score absent.
 func TestHowToScoresItsExamplesLikeTheGame(t *testing.T) {
 	m := newModel(t)
@@ -176,7 +176,7 @@ func TestHowToShedsExtrasOnAShortTerminal(t *testing.T) {
 	// really is a response to the terminal and not a page that lost content.
 	m.howTo.show(0)
 	tall := drawAt(t, m, testHeight)
-	if !strings.Contains(sgr.ReplaceAllString(tall, ""), "refused") {
+	if !strings.Contains(sgr.ReplaceAllString(tall, ""), "real words") {
 		t.Errorf("a tall terminal dropped an extra anyway:\n%s", tall)
 	}
 	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
