@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/build"
@@ -275,6 +276,35 @@ func TestAboutScreenShowsDataDir(t *testing.T) {
 		if r.value == "" {
 			t.Errorf("empty value for row %q with no data dir", r.label)
 		}
+	}
+}
+
+// A data path longer than the terminal is wide is cut from the left, keeping
+// the end that tells it apart; before, it widened the panel past the edge.
+func TestAboutScreenFitsALongDataDirToTheWidth(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewJSON: %v", err)
+	}
+	dir := "/home/someone/" + strings.Repeat("deeply/nested/", 8) + "surmise-data"
+	m := New(s, nil, Options{DataDir: dir})
+	m.screen = screenMenu
+	m.menu.point(menuIndex(t, m, choiceAbout, 0))
+	send(t, m, "enter")
+
+	const width = 80
+	m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+	view := plain(m.View().Content)
+	for _, line := range strings.Split(view, "\n") {
+		if w := lipgloss.Width(line); w > width {
+			t.Fatalf("a line is %d cells on a %d-cell terminal:\n%s", w, width, view)
+		}
+	}
+	if !strings.Contains(view, "/nested/surmise-data ") || !strings.Contains(view, "data     …/") {
+		t.Errorf("the data path lost its end:\n%s", view)
+	}
+	if !strings.Contains(view, license) {
+		t.Errorf("a value that fits was cut:\n%s", view)
 	}
 }
 
