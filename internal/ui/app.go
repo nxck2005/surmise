@@ -2500,6 +2500,8 @@ func (m *Model) closeBox(h *hitMap) string {
 // screenTitle is the label shown in the panel's top border.
 func (m *Model) screenTitle() string {
 	switch m.screen {
+	case screenGame:
+		return m.boardTitle()
 	case screenResult:
 		return "result"
 	case screenList:
@@ -2531,6 +2533,29 @@ func (m *Model) screenTitle() string {
 	}
 }
 
+// boardTitle names the kind of board being played. The board's header already
+// carries the product name with the puzzle's code — that pair is the puzzle's
+// name, the same one the result screen and the shared text use — so a title of
+// the product name as well said it twice and left the kind of board to the
+// status inlay. The inlay now leaves the kind to this.
+func (m *Model) boardTitle() string {
+	if m.game == nil {
+		return brand.Name
+	}
+	g := m.game.g
+	switch {
+	case m.sprint != nil:
+		return "sprint"
+	case g.Daily != "":
+		return "daily"
+	case g.Custom:
+		return "custom"
+	case g.Challenge != nil:
+		return "challenge"
+	}
+	return "puzzle"
+}
+
 // screenStatus is what the panel's top rule carries at its right end: the one
 // fact about the screen that is worth reading without looking away from what
 // you are doing. It is a label, never a control, and the panel drops it rather
@@ -2544,15 +2569,12 @@ func (m *Model) screenStatus() string {
 		if m.game == nil {
 			return ""
 		}
+		// The kind of board is the title (boardTitle); the date is not, and
+		// it is what tells one daily from another.
 		g := m.game.g
 		what := fmt.Sprintf("%d letters", g.Length)
-		switch {
-		case g.Daily != "":
-			what = fmt.Sprintf("daily %s · %s", g.Daily, what)
-		case g.Custom:
-			what = fmt.Sprintf("custom · %s", what)
-		case g.Challenge != nil:
-			what = fmt.Sprintf("challenge · %s", what)
+		if g.Daily != "" {
+			what = fmt.Sprintf("%s · %s", g.Daily, what)
 		}
 		return fmt.Sprintf("%s · %d/%d", what, g.Attempts(), g.MaxAttempts)
 

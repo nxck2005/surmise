@@ -3,8 +3,6 @@ package ui
 import (
 	"strings"
 	"testing"
-
-	"github.com/nxck2005/surmise/internal/brand"
 )
 
 // boardModel starts a board in one mode, the way every height sweep below needs
@@ -70,7 +68,7 @@ func TestEveryModeFitsAClassicTerminal(t *testing.T) {
 			lines = lines[len(lines)-height:]
 		}
 		visible := strings.Join(lines, "\n")
-		if !strings.Contains(visible, brand.Name) {
+		if !strings.Contains(visible, "─ "+m.screenTitle()+" ") {
 			t.Errorf("the panel's title rule is off the top of a %d-letter board:\n%s", length, visible)
 		}
 		if !strings.Contains(visible, "×") {

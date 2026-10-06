@@ -8,6 +8,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // withColorProfile pretends the terminal has a given depth, and puts the real
@@ -198,15 +200,16 @@ func TestPanelDropsAStatusItCannotAfford(t *testing.T) {
 	}
 }
 
-// The board's mode and score live on the rule now, not in the header, so the
-// two must not both carry them.
+// The board's kind, mode and score live on the rule now, not in the header, so
+// the two must not both carry them: the kind as the title, the rest as the
+// status.
 func TestBoardStateLivesInTheChrome(t *testing.T) {
 	m := dailyModel(t, Options{})
 	playDaily(t, m, 5)
 	send(t, m, "a", "b", "o", "u", "t", "enter")
 	frame := sgr.ReplaceAllString(draw(t, m), "")
 
-	for _, want := range []string{"daily " + testDay, "5 letters", "1/6"} {
+	for _, want := range []string{"─ daily ", testDay, "5 letters", "1/6"} {
 		if !strings.Contains(frame, want) {
 			t.Errorf("the frame does not say %q:\n%s", want, frame)
 		}
@@ -253,4 +256,26 @@ func countColors(s string) int {
 	}
 	delete(seen, "\x1b[m")
 	return len(seen)
+}
+
+// The board is titled by its kind, and the status inlay does not say it again.
+func TestBoardIsTitledByItsKind(t *testing.T) {
+	m := boardModel(t, 5)
+	g := m.game.g
+	for _, tc := range []struct {
+		want string
+		set  func()
+	}{
+		{"puzzle", func() {}},
+		{"custom", func() { g.Custom = true }},
+		{"challenge", func() { g.Custom = false; g.Challenge = &game.ChallengeInfo{} }},
+	} {
+		tc.set()
+		if got := m.screenTitle(); got != tc.want {
+			t.Errorf("title = %q, want %q", got, tc.want)
+		}
+		if status := m.screenStatus(); strings.Contains(status, tc.want) {
+			t.Errorf("the status %q repeats the title %q", status, tc.want)
+		}
+	}
 }
