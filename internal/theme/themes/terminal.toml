@@ -16,11 +16,11 @@ present   = 3
 absent    = 8
 
 slot      = 8
-key_face  = 8
+key_face  = 7
 key_spent = 0
 
 correct_text    = 0
 present_text    = 0
-absent_text     = 7
-key_unused_text = 15
+absent_text     = 15
+key_unused_text = 0
 key_absent_text = 8

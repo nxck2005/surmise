@@ -98,7 +98,7 @@ func TestDailyOpensTheDaysPuzzle(t *testing.T) {
 		t.Errorf("Daily = %q, want %q", m.game.g.Daily, testDay)
 	}
 	// The board says which day it is, since the daily turns over in UTC.
-	if frame := m.View().Content; !strings.Contains(frame, "daily "+testDay) {
+	if frame := m.View().Content; !strings.Contains(frame, testDay) || m.screenTitle() != "daily" {
 		t.Error("the board does not name the day it is the daily for")
 	}
 }

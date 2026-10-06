@@ -69,7 +69,7 @@ rather than match the background:
 | key | follows |
 |---|---|
 | `correct_text`, `present_text` | `bg` |
-| `absent_text` | `muted` |
+| `absent_text` | `text` |
 | `key_correct_text`, `key_present_text` | `bg` |
 | `key_absent_text` | `muted` |
 | `key_unused_text` | `text` |
@@ -109,7 +109,10 @@ did not choose.
 
 Also layout-changing. Tile *height* is not themeable: the board draws one row
 tall, and grows to three by itself when the terminal has room for the whole
-screen at that size. Width is the knob you have.
+screen at that size. Width is the knob you have. A tall board outlines the
+tiles it has not scored yet in your `border` glyphs (`block` outlines with the
+`normal` ones), coloured `slot` for an empty row and `muted` for the row being
+typed; a `tile_width` under 3 leaves no room for that and keeps the flat look.
 
 ```toml
 [metrics]

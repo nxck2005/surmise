@@ -20,7 +20,7 @@ present = "#ffb454"
 absent  = "#242b36"
 
 slot     = "#39434f"
-key_face = "#2e3947"
+key_face = "#3d4a5c"
 key_spent = "#171d26"
 
 correct_text = "#0c1117"

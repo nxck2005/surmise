@@ -142,7 +142,7 @@ func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int) strin
 	for i := range guess {
 		letter := strings.ToUpper(string(guess[i]))
 		if i >= shown {
-			cells[i] = sized(st.tileActive, tiles).Render(letter)
+			cells[i] = slotCell(st.tileActive, st.muted, letter, tiles)
 			continue
 		}
 		cells[i] = sized(tileStyle(marks[i]), tiles).Render(letter)
@@ -172,12 +172,12 @@ func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles 
 			}
 			// The whole cell is the target, however tall it is: mark records the
 			// atom's height, so a tall tile is clickable across all of it.
-			cells[i] = h.mark(trim, sized(style, tiles).Render(strings.ToUpper(string(typing[i]))))
+			cells[i] = h.mark(trim, slotCell(style, st.muted, strings.ToUpper(string(typing[i])), tiles))
 		} else if i == len(typing) {
 			// Mark the caret position so the player can see where input lands.
-			cells[i] = sized(st.caret, tiles).Render(st.glyph.Caret)
+			cells[i] = slotCell(st.caret, st.muted, st.glyph.Caret, tiles)
 		} else {
-			cells[i] = sized(st.tileEmpty, tiles).Render(st.glyph.Empty)
+			cells[i] = slotCell(st.tileEmpty, st.muted, st.glyph.Empty, tiles)
 		}
 	}
 	return joinTiles(cells)
@@ -185,10 +185,43 @@ func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles 
 
 func renderEmptyRow(length, tiles int) string {
 	cells := make([]string, length)
+	frame := lipgloss.NewStyle().Foreground(st.tileEmpty.GetForeground())
 	for i := range cells {
-		cells[i] = sized(st.tileEmpty, tiles).Render(st.glyph.Empty)
+		cells[i] = slotCell(st.tileEmpty, frame, st.glyph.Empty, tiles)
 	}
 	return joinTiles(cells)
+}
+
+// slotCell draws a tile that has not been scored yet: an empty slot, or a
+// letter still being typed. One row tall it is the tile style alone, as it has
+// always been. A tall tile is drawn as a box in the theme's border glyphs
+// instead, because a filled tile three rows high beside a lone glyph in three
+// rows of nothing made the unplayed part of the board read as missing rather
+// than waiting. frame colours the box: the slot colour for an empty row, muted
+// for the row being typed, so the row that takes the next letter stands out.
+//
+// The box occupies exactly the cells the tile did — the border takes the
+// outer cells and the content keeps the middle — so scoring a row is still a
+// repaint, never a move. A tile too narrow for a border and its content
+// keeps the flat form, and a block border, which would fill the ring
+// solid, outlines with the plain glyphs instead.
+func slotCell(style, frame lipgloss.Style, content string, tiles int) string {
+	w := st.metric.TileWidth
+	if tiles < tallTile || w < 3 {
+		return sized(style, tiles).Render(content)
+	}
+	b := st.borderRunes()
+	if st.glyph.Border == "block" {
+		b = lipgloss.NormalBorder()
+	}
+	inner := strings.Split(sized(style.Width(w-2), tiles-2).Render(content), "\n")
+	lines := make([]string, 0, tiles)
+	lines = append(lines, frame.Render(b.TopLeft+strings.Repeat(b.Top, w-2)+b.TopRight))
+	for _, l := range inner {
+		lines = append(lines, frame.Render(b.Left)+l+frame.Render(b.Right))
+	}
+	lines = append(lines, frame.Render(b.BottomLeft+strings.Repeat(b.Bottom, w-2)+b.BottomRight))
+	return strings.Join(lines, "\n")
 }
 
 // joinTiles separates board cells with a gutter. Without it the filled

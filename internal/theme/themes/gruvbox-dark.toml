@@ -13,5 +13,5 @@ present   = "#d79921"
 absent    = "#3c3836"
 
 slot      = "#665c54"
-key_face  = "#504945"
+key_face  = "#665c54"
 key_spent = "#1d2021"

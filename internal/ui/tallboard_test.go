@@ -91,10 +91,11 @@ func TestTallTilesKeepTheirClickTargets(t *testing.T) {
 	if r.h != tallTile {
 		t.Errorf("the target is %d rows tall, want %d", r.h, tallTile)
 	}
-	// The letter sits in the middle row of the tile, which is where a click at
-	// the target's centre lands.
+	// The letter sits in the middle row of the tile, between the sides of its
+	// outline, which is where a click at the target's centre lands.
 	middle := rect{x: r.x, y: r.y + r.h/2, w: r.w, h: 1}
-	if got := strings.TrimSpace(at(t, frame, middle)); got != "R" {
+	b := st.borderRunes()
+	if got := strings.Trim(at(t, frame, middle), " "+b.Left+b.Right); got != "R" {
 		t.Errorf("the middle of the target covers %q, want %q", got, "R")
 	}
 
@@ -125,5 +126,34 @@ func TestOnlyTheBoardGrows(t *testing.T) {
 	if tallRows-tallHeight != flatRows-testHeight {
 		t.Errorf("the debrief changed height with the terminal: %d at %d, %d at %d",
 			tallRows, tallHeight, flatRows, testHeight)
+	}
+}
+
+// A tall board outlines the tiles it has not scored, in the theme's border
+// glyphs, so the unplayed rows read as slots; a scored tile stays a filled
+// block, and a flat board draws no outline at all.
+func TestTallBoardOutlinesUnscoredTiles(t *testing.T) {
+	m := gameModel(t)
+	m.game.g.Answer = "crane"
+	send(t, m, "a", "b", "o", "u", "t", "enter", "c", "r")
+	b := st.borderRunes()
+	box := b.TopLeft + strings.Repeat(b.Top, st.metric.TileWidth-2) + b.TopRight
+
+	frame := sgr.ReplaceAllString(drawAt(t, m, tallHeight), "")
+	if m.game.tileRows() != tallTile {
+		t.Fatalf("the board did not grow at %d rows", tallHeight)
+	}
+	// Every tile but the five scored ones is outlined.
+	want := m.game.g.Length * (m.game.g.MaxAttempts - 1)
+	if got := strings.Count(frame, box); got != want {
+		t.Errorf("%d outlined tiles on a tall board, want %d:\n%s", got, want, frame)
+	}
+
+	frame = sgr.ReplaceAllString(drawAt(t, m, floor(m)+2), "")
+	if m.game.tileRows() != flatTile {
+		t.Fatalf("the board stayed tall at %d rows", floor(m)+2)
+	}
+	if strings.Contains(frame, box) {
+		t.Errorf("a flat board outlined its tiles:\n%s", frame)
 	}
 }

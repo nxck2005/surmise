@@ -469,14 +469,17 @@ func (m *gameScreen) view(h *hitMap) string {
 	// keeps what is the board's own: which puzzle, and how long you have been
 	// at it. It is the first thing given up after the legend — the code is in
 	// the puzzle list and the clock reappears in the status line on a win.
+	//
+	// A sprint board leaves its own clock out: the run's countdown leads the
+	// status line, and two clocks, one counting up and one down, made the
+	// player work out which one mattered.
 	if l.header {
-		sections = append(sections,
-			lipgloss.JoinHorizontal(lipgloss.Top,
-				st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID))),
-				st.muted.Render("   "+formatDuration(m.elapsed())),
-			),
-			"",
-		)
+		header := st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID)))
+		if m.sprint == nil {
+			header = lipgloss.JoinHorizontal(lipgloss.Top,
+				header, st.muted.Render("   "+formatDuration(m.elapsed())))
+		}
+		sections = append(sections, header, "")
 	}
 
 	sections = append(sections,

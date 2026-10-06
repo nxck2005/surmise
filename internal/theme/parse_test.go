@@ -63,6 +63,16 @@ func TestDerivedColoursFollowTheirSource(t *testing.T) {
 		t.Errorf("correct_text = %v, want to follow bg %v", got, want)
 	}
 
+	// A finished absent tile is read back, so its letter follows text rather
+	// than receding with muted, as the spent keycap's does.
+	th = parse(t, "text = \"#123456\"\nmuted = \"#654321\"\n")
+	if got, want := rgb(th.Color("absent_text")), rgb(mustColor("#123456")); got != want {
+		t.Errorf("absent_text = %v, want to follow text %v", got, want)
+	}
+	if got, want := rgb(th.Color("key_absent_text")), rgb(mustColor("#654321")); got != want {
+		t.Errorf("key_absent_text = %v, want to follow muted %v", got, want)
+	}
+
 	th = parse(t, `
 bg = "#ffffff"
 correct_text = "#010203"
