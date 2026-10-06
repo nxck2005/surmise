@@ -55,6 +55,12 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.7.4 → v0.7.5: plainer how-to-play text
+
+The how-to-play pages say the same rules in shorter, plainer sentences. Nothing
+else changed: `schema` does not move, no daily answer moves, and no theme or
+word list changed.
+
 ## v0.7.3 → v0.7.4: steadier panels, two more rows
 
 This release changes only how screens are laid out: `schema` does not move, no
