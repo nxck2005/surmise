@@ -55,6 +55,24 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.7.3 → v0.7.4: steadier panels, two more rows
+
+This release changes only how screens are laid out: `schema` does not move, no
+daily answer moves, and no theme or word list changed.
+
+- **A screen no longer repeats its name under the panel's title.** The rule at
+  the top of the panel already names the screen. Each screen gains two rows, so
+  the puzzle list, the about screen and how to play fit more on a short
+  terminal, and the splash art shows on a terminal two rows shorter than before.
+  A heading that says something else stays, such as "new challenge". Your
+  profile name, if you set one, is now on the right of the profile's rule.
+- **Panels come in two widths.** Before, each screen sized its panel to its own
+  content, so the frame grew and shrank as you moved between screens. The menu
+  and the list-like screens now share one width, and the board, the result and
+  the setups share a wider one. The profile, which is wider than both, keeps
+  its own. On a terminal too narrow for a width, a panel fits the terminal as
+  before.
+
 ## v0.7.2 → v0.7.3: clearer colours, and a tidier look
 
 This release changes how the game looks, not what it saves: `schema` does not
