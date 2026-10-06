@@ -316,7 +316,7 @@ func (m *dailyScreen) help(h *hitMap) string {
 			keys: "c", label: "copy", act: action{kind: actDailyCopy},
 		})
 	}
-	items = append(items, helpItem{keys: "esc", label: "back", act: action{kind: actBack}})
+	items = append(items, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
 	return renderHelp(h, items...)
 }
 

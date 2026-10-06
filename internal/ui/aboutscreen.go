@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/build"
@@ -38,10 +39,13 @@ func (a *aboutScreen) resize(w, h int) { a.width, a.height = w, h }
 
 // aboutRow is one label/value line. optional marks a row the screen may drop
 // when the terminal is too short for all of them — the credits, which are a
-// courtesy rather than something a bug report needs.
+// courtesy rather than something a bug report needs. path marks a value that is
+// cut from the left when it does not fit, because the end of a path is the part
+// that tells two of them apart.
 type aboutRow struct {
 	label, value string
 	optional     bool
+	path         bool
 }
 
 // reload rebuilds the content. dataDir may be empty, meaning the UI was never
@@ -69,8 +73,8 @@ func aboutRows(dataDir string) []aboutRow {
 
 	if dataDir != "" {
 		rows = append(rows,
-			aboutRow{label: "data", value: dataDir},
-			aboutRow{label: "themes", value: theme.Dir(dataDir)},
+			aboutRow{label: "data", value: dataDir, path: true},
+			aboutRow{label: "themes", value: theme.Dir(dataDir), path: true},
 		)
 	}
 
@@ -123,15 +127,36 @@ func (a *aboutScreen) view(h *hitMap) string {
 	}
 	// The gutter keeps the two columns apart once the labels are padded.
 	label := lipgloss.NewStyle().Width(width + 2)
+	// What is left of the panel for a value. Nothing else on the screen is that
+	// wide, so a value the terminal cannot hold would widen the panel past its
+	// edge rather than wrap; zero is an unmeasured terminal, which is unbounded.
+	room := 0
+	if w := bodyWidth(a.width); w > 0 {
+		room = max(w-(width+2), 1)
+	}
 
 	lines := make([]string, len(rows))
 	for i, r := range rows {
 		// A value can be a path from -data, which is the shell's to choose and
 		// so reaches the frame unvalidated; labels are all literals.
-		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(safeText(r.value))
+		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(fitValue(safeText(r.value), room, r.path))
 	}
 
 	return titled("about", strings.Join(lines, "\n"))
+}
+
+// fitValue cuts a value to room cells, marking the cut with an ellipsis: from
+// the left for a path, from the right for anything else. A room of zero leaves
+// it whole.
+func fitValue(v string, room int, path bool) string {
+	over := lipgloss.Width(v) - room
+	if room <= 0 || over <= 0 {
+		return v
+	}
+	if path {
+		return ansi.TruncateLeft(v, over+1, "…")
+	}
+	return ansi.Truncate(v, room, "…")
 }
 
 func (a *aboutScreen) help(h *hitMap) string {

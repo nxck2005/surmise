@@ -3,11 +3,13 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/build"
@@ -275,6 +277,35 @@ func TestAboutScreenShowsDataDir(t *testing.T) {
 		if r.value == "" {
 			t.Errorf("empty value for row %q with no data dir", r.label)
 		}
+	}
+}
+
+// A data path longer than the terminal is wide is cut from the left, keeping
+// the end that tells it apart; before, it widened the panel past the edge.
+func TestAboutScreenFitsALongDataDirToTheWidth(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewJSON: %v", err)
+	}
+	dir := "/home/someone/" + strings.Repeat("deeply/nested/", 8) + "surmise-data"
+	m := New(s, nil, Options{DataDir: dir})
+	m.screen = screenMenu
+	m.menu.point(menuIndex(t, m, choiceAbout, 0))
+	send(t, m, "enter")
+
+	const width = 80
+	m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+	view := plain(m.View().Content)
+	for _, line := range strings.Split(view, "\n") {
+		if w := lipgloss.Width(line); w > width {
+			t.Fatalf("a line is %d cells on a %d-cell terminal:\n%s", w, width, view)
+		}
+	}
+	if !strings.Contains(view, "/nested/surmise-data ") || !strings.Contains(view, "data     …/") {
+		t.Errorf("the data path lost its end:\n%s", view)
+	}
+	if !strings.Contains(view, license) {
+		t.Errorf("a value that fits was cut:\n%s", view)
 	}
 }
 
@@ -1014,5 +1045,69 @@ func TestLegendMatchesTheTilesItExplains(t *testing.T) {
 	tile := st.tileCorrect.Render(legendSample)
 	if n := strings.Count(view, tile); n < 2 {
 		t.Errorf("legend swatch and scored tile render differently: %d matches for %q", n, tile)
+	}
+}
+
+// Every screen past the menu names itself on the panel rule. The brand is the
+// fallback for the menu, the board and the splash only; a screen that reaches
+// it has been left out of screenTitle.
+func TestEveryScreenHasItsOwnTitle(t *testing.T) {
+	m := newModel(t)
+	for s := screenMenu; s <= screenSplash; s++ {
+		switch s {
+		case screenMenu, screenGame, screenSplash:
+			continue
+		}
+		m.screen = s
+		if got := m.screenTitle(); got == brand.Name {
+			t.Errorf("screen %d is titled %q, the fallback", s, got)
+		}
+	}
+}
+
+// escLabel is what the help bar says esc does, or "" if it does not offer esc.
+func escLabel(view string) string {
+	if m := regexp.MustCompile(`\besc ([a-z]+)`).FindStringSubmatch(plain(view)); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// The help bar names where esc goes: "menu" when it lands on the menu, "back"
+// when it lands on the screen this one was opened from. Daily and the sprint
+// setup used to say "back" for the menu.
+func TestEscIsNamedForWhereItGoes(t *testing.T) {
+	check := func(t *testing.T, m *Model, view, where string) {
+		t.Helper()
+		// A text field owns esc while it is open, and says "cancel".
+		label := escLabel(view)
+		if label != "menu" && label != "back" {
+			return
+		}
+		send(t, m, "esc")
+		want := "back"
+		if m.screen == screenMenu {
+			want = "menu"
+		}
+		if label != want {
+			t.Errorf("%s: help bar says esc %s, but esc went to screen %d", where, label, m.screen)
+		}
+	}
+
+	menu := newModel(t)
+	for i, c := range menu.menu.choices {
+		if c.kind == choiceNewGame || c.kind == choiceQuit {
+			continue
+		}
+		m := newModel(t)
+		m.menu.cursor = i
+		check(t, m, send(t, m, "enter"), c.label)
+	}
+	for i, label := range socialLabels {
+		m := newModel(t)
+		m.menu.cursor = menuIndex(t, m, choiceSocial, 0)
+		send(t, m, "enter")
+		m.social.cursor = i
+		check(t, m, send(t, m, "enter"), label)
 	}
 }

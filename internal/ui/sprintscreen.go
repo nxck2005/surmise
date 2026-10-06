@@ -324,9 +324,9 @@ func (m *sprintScreen) help(h *hitMap) string {
 	}
 	return renderHelp(h,
 		helpItem{keys: "↑/↓", label: "move"},
-		helpItem{keys: "←/→", label: "change",
-			act: action{kind: actSprintNext, index: m.cursor}},
+		helpItem{keys: "←", label: "previous", act: action{kind: actSprintPrev, index: m.cursor}},
+		helpItem{keys: "→", label: "next", act: action{kind: actSprintNext, index: m.cursor}},
 		helpItem{keys: "enter", label: "start", act: action{kind: actSprintStart}},
-		helpItem{keys: "esc", label: "back", act: action{kind: actBack}},
+		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
 	)
 }

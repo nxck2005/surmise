@@ -270,8 +270,9 @@ func (m *customScreen) help(h *hitMap) string {
 		items = append(items, helpItem{keys: "enter", label: "type",
 			act: action{kind: actFieldEdit, index: customRowSecret}})
 	} else {
-		items = append(items, helpItem{keys: "←/→", label: "change",
-			act: action{kind: actCustomNext, index: m.cursor}})
+		items = append(items,
+			helpItem{keys: "←", label: "previous", act: action{kind: actCustomPrev, index: m.cursor}},
+			helpItem{keys: "→", label: "next", act: action{kind: actCustomNext, index: m.cursor}})
 	}
 	// Hand over is always a button, whichever row the cursor is on. It is the
 	// one thing this screen is for, so it must never be a target the pointer has
