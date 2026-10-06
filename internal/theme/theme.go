@@ -41,10 +41,15 @@ var baseKeys = []string{
 // themes work: printing on a green tile wants the background colour on a dark
 // theme and something else entirely on a light one. A theme that says nothing
 // about them gets the sensible follow-on, so most themes never mention them.
+//
+// absent_text follows text, not muted: an absent tile is already the darkest
+// fill on the board, and muted letters on it read at about 2:1 in most of the
+// bundled themes, which made a finished row hard to read back. The spent keycap
+// keeps muted, because a letter you can no longer use is meant to recede.
 var derivedKeys = map[string]string{
 	"correct_text":     Bg,
 	"present_text":     Bg,
-	"absent_text":      Muted,
+	"absent_text":      Text,
 	"key_correct_text": Bg,
 	"key_present_text": Bg,
 	"key_absent_text":  Muted,

@@ -69,7 +69,7 @@ rather than match the background:
 | key | follows |
 |---|---|
 | `correct_text`, `present_text` | `bg` |
-| `absent_text` | `muted` |
+| `absent_text` | `text` |
 | `key_correct_text`, `key_present_text` | `bg` |
 | `key_absent_text` | `muted` |
 | `key_unused_text` | `text` |
