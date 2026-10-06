@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
@@ -479,4 +480,31 @@ func moveThemeSelection(t *testing.T, m *Model) {
 		return
 	}
 	send(t, m, "down")
+}
+
+// A custom theme says "custom" where a bundled one says "built-in", two cells
+// shorter. The list is centred as one block, so every name starts in the same
+// column whatever its row says about where it came from.
+func TestThemeListAlignsCustomRows(t *testing.T) {
+	dir := t.TempDir()
+	writeTheme(t, dir, "mine.toml", "name = \"mine\"\naccent = \"#ff00ff\"\n")
+	m := hotModel(t, dir)
+	openThemes(t, m)
+	if len(m.themes.entries) > m.themes.rows() {
+		t.Fatal("the list scrolls at this size; the test needs every row on screen")
+	}
+
+	column := func(name string) int {
+		t.Helper()
+		for _, line := range strings.Split(plain(draw(t, m)), "\n") {
+			if i := strings.Index(line, name+" "); i >= 0 {
+				return lipgloss.Width(line[:i])
+			}
+		}
+		t.Fatalf("no row for %q", name)
+		return 0
+	}
+	if mine, dracula := column("mine"), column("dracula"); mine != dracula {
+		t.Errorf("custom row starts in column %d, built-in row in column %d", mine, dracula)
+	}
 }
