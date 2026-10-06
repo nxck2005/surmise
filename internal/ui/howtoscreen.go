@@ -96,11 +96,10 @@ func (s *howToScreen) view(h *hitMap) string {
 	page := howToPages[s.page]
 	required, optional := page.render()
 
-	// The heading costs one line more than titled's, which bodyBudget already
-	// accounts for: the page name and dots sit under the title.
+	// The page name and its dots lead the body, with a blank under them.
 	budget := bodyBudget(s.height)
 	if budget > 0 {
-		budget--
+		budget = max(budget-2, 1)
 	}
 	// Spaced out first, so the blank lines between the required sections are
 	// part of what the optional ones are measured against.
@@ -117,12 +116,8 @@ func (s *howToScreen) view(h *hitMap) string {
 		}
 	}
 
-	// The page name belongs tight under the title rather than in it, so this
-	// screen composes its own heading instead of going through titled.
-	heading := lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render("how to play"),
-		st.muted.Render(page.name)+st.help.Render(st.glyph.Separator)+s.dots(h),
-	)
+	// The panel's rule names the screen; the page and its dots lead the body.
+	heading := st.muted.Render(page.name) + st.help.Render(st.glyph.Separator) + s.dots(h)
 	// Squared off first, so the join slides the body under the heading as one
 	// block instead of centring every line of it on its own.
 	return lipgloss.JoinVertical(lipgloss.Center, heading, "",

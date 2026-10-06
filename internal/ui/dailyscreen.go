@@ -156,12 +156,9 @@ func (m *dailyScreen) view(h *hitMap) string {
 		when += " · resets in " + until(m.day.ResetsAt())
 	}
 
-	// The date belongs to the title, tight under it, so this screen composes its
-	// own heading rather than going through titled.
-	heading := lipgloss.JoinVertical(lipgloss.Center,
-		st.title.Render("daily"),
-		st.muted.Render(when),
-	)
+	// The panel's rule names the screen; the date, which it does not, leads
+	// the body.
+	heading := st.muted.Render(when)
 
 	if m.err != nil {
 		return lipgloss.JoinVertical(lipgloss.Center, heading, "",

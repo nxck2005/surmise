@@ -168,8 +168,7 @@ func (m *themeScreen) clampOffset() {
 
 func (m *themeScreen) view(h *hitMap) string {
 	if len(m.entries) == 0 {
-		return st.title.Render("themes") + "\n\n" +
-			st.muted.Render("no themes found")
+		return st.muted.Render("no themes found")
 	}
 
 	var list strings.Builder
@@ -190,8 +189,6 @@ func (m *themeScreen) view(h *hitMap) string {
 	}
 
 	sections := []string{
-		st.title.Render("themes"),
-		"",
 		rows,
 		"",
 		renderThemePreview(),
