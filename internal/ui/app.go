@@ -2524,6 +2524,8 @@ func (m *Model) screenTitle() string {
 		return "how to play"
 	case screenAbout:
 		return "about"
+	case screenBackup:
+		return "backup"
 	default:
 		return brand.Name
 	}

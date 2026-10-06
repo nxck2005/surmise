@@ -1016,3 +1016,20 @@ func TestLegendMatchesTheTilesItExplains(t *testing.T) {
 		t.Errorf("legend swatch and scored tile render differently: %d matches for %q", n, tile)
 	}
 }
+
+// Every screen past the menu names itself on the panel rule. The brand is the
+// fallback for the menu, the board and the splash only; a screen that reaches
+// it has been left out of screenTitle.
+func TestEveryScreenHasItsOwnTitle(t *testing.T) {
+	m := newModel(t)
+	for s := screenMenu; s <= screenSplash; s++ {
+		switch s {
+		case screenMenu, screenGame, screenSplash:
+			continue
+		}
+		m.screen = s
+		if got := m.screenTitle(); got == brand.Name {
+			t.Errorf("screen %d is titled %q, the fallback", s, got)
+		}
+	}
+}
