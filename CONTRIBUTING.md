@@ -14,15 +14,14 @@ go test -race ./internal/...
 ```
 
 CI runs the tests on Linux, macOS and Windows, plus a WebAssembly build and a
-headless browser smoke test. `gofmt` and `go vet` are checked, along with
+headless smoke test that runs the WebAssembly build against xterm.js in Node. `gofmt` and `go vet` are checked, along with
 known vulnerabilities in the Go module and the browser shell's npm
 dependencies (`govulncheck` and `npm audit`); run gofmt and vet before pushing.
 
 ## The traps
 
-These are the things that bite a first contribution. The full operational guide
-is [`AGENTS.md`](AGENTS.md) — written for coding agents, but the most precise
-map of the repository there is.
+These are the things that bite a first contribution. The package comments and
+the docs under [`docs/`](docs) cover the rest.
 
 - **Charm libraries are v2**, under `charm.land/...`, not
   `github.com/charmbracelet/...`. v2 differs from v1 in ways that break copied
@@ -36,8 +35,11 @@ map of the repository there is.
 - **The word lists are load-bearing.** A daily puzzle's answer is an index into
   them, so regenerating moves every unplayed date's word for everyone. Do not
   regenerate casually; to extend the blocklists, edit
-  `internal/words/data/blocked.txt` or `profanity.txt`, never a generated list,
-  then run `go run ./tools/genwords`.
+  `internal/words/data/blocked.txt`, `profanity.txt` or `pruned.txt`, never a
+  generated list, then run `go run ./tools/genwords`. The three files differ
+  in direction: `blocked.txt` removes a word from the game entirely, and the
+  other two keep it as a guess but never choose it as an answer.
+  `internal/words/data/SOURCES.md` explains each one.
 - **Keep keyboard and mouse at parity.** Anything a key can do, a click must do
   too. Adding a keybind means adding its click target, and both paths should go
   through one shared method rather than two copies of the handler.
@@ -63,16 +65,18 @@ map of the repository there is.
   the opened descriptor so the cap is the target's, a backup export skips
   linked names and reports them, and writes use `O_EXCL` and never create or
   cross one.
-- **New dependencies need an argument.** The direct set is deliberately three
-  Charm modules. The theme reader is hand-rolled, UUIDs come from
+- **New dependencies need an argument.** The direct set is deliberately four
+  Charm modules: bubbletea, lipgloss, colorprofile and x/ansi. The theme reader is hand-rolled, UUIDs come from
   `crypto/rand`, and that is on purpose — say why nothing smaller exists before
   adding a module.
 
 ## Docs move with the change
 
-- A substantial change appends to [`notes/PLAN.md`](notes/PLAN.md) (the living
-  design doc) and gets a write-up in `notes/plans/`. The non-obvious decisions
-  belong there, not just in the diff.
+- The non-obvious decisions in a change belong in comments beside the code it
+  touches, not only in the diff. A comment says why, so the next person does
+  not undo it.
+- A change that a player can see, or that alters a saved file, gets an entry in
+  [`docs/UPGRADING.md`](docs/UPGRADING.md) when it is released.
 - Changing a keybind means updating **both** places players read it: the
   how-to-play controls page (`internal/ui/howtoscreen.go`) and README's key
   table.

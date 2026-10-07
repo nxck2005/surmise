@@ -51,6 +51,7 @@ The flags have query-string equivalents, under the same names:
 | `?length=6` | `-length 6` |
 | `?day=2026-08-06` | `-day 2026-08-06` |
 | `?splash=off` | `-splash off` |
+| `?motion=off` | `-motion off` |
 | `?challenge=4500-820C-20A1-G73J` | `-challenge 4500-820C-20A1-G73J` |
 
 Combine them with `&`: `?theme=nord&challenge=4500-820C-20A1-G73J`. A
@@ -140,7 +141,7 @@ presses and mouse movement into terminal escape sequences, and Bubble Tea
 already parses them, so the browser build gets key and mouse parity with the
 terminal build for free.
 
-Two implementation notes worth knowing before changing `internal/web`:
+Three implementation notes worth knowing before changing `internal/web`:
 
 - **A `js.Func` callback must never block.** Go on WebAssembly runs on the
   single JavaScript thread. A callback that waits for something another event
