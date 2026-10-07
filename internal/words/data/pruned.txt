@@ -1,0 +1,145 @@
+# Answers removed by hand, 2026-08-13 (PR #39). genwords subtracts every word
+# here from the answer lists only; each one stays a valid guess. Without this
+# file, a regeneration would put all of them back and move every future daily.
+#
+# Unlike profanity.txt this is not "words nobody should see". It is "words that
+# make a poor answer": names, -s plurals, crude words, interjections, slang,
+# foreign words, British spellings, archaic and obscure words. Regular -ed and
+# -ing forms were kept on purpose.
+#
+# Adding a word here removes it from the answers on the next genwords run, and
+# that moves the daily for every date not yet played. Edit it deliberately.
+
+# length 4, name
+alan alec alma anna beth brad cain carl chad cole cory hank hart holt hong
+jake jane jess jill john josh kane kent khan kirk kris lang lars mack marc
+mars matt maya mike mina milo noel otto rick ruth saul shaw tate toby tony
+tory trey troy turk vera
+
+# length 4, plural
+acts adds ages aids ants arms arts asks bags bars bats beds bees bets bits
+boys bugs buns buys cans cars cats cops cows cubs cups cuts dads days dies
+does dogs dots ears eats eggs ends eyes fans feds fees fits gets gods goes
+guns guts guys hats hips hits jaws jets jobs keys kids labs lads laws legs
+lets lies lips logs lots maps moms nuns nuts odds ones owes owns pals pays
+peas pets pies pigs pins pops pots puts rats rays revs ribs runs says seas
+sees sets sins sits sobs sons tens ties tips toes tons tops toys uses vows
+wars ways wins
+
+# length 4, crude
+dong fart jock poop puke puss
+
+# length 4, interjection
+ahem blah dang darn geez gosh heck jeez meow nope oops phew psst shoo whew
+whoa yeah yuck
+
+# length 4, foreign
+baba ciao lire raja yang yuan
+
+# length 4, archaic
+cant hath thee thou unto wont
+
+# length 4, obscure
+ling tong
+
+# length 4, slang
+chow gran lulu nana quid
+
+# length 5, name
+ariel bates benny billy bobby brent buffy burke chang china colin costa devon
+donna dutch erica fritz gemma ginny greek harry henry hogan japan jenny jerry
+jesse jimmy jones judas kelly lacey laura lewis liang logan louie louis maria
+marge molly monte morse nancy paris pedro perry peter ralph riley roger roman
+romeo sally shawn shiva swiss tammy terry texas tommy wales wally willy
+
+# length 5, plural
+acres areas ashes atoms backs balls bands bangs banks barks bases beans bears
+beats beeps beers bells belts bikes bills birds bites blows blues boats bombs
+bonds bones books boots boxes bucks bulls burns buses butts cakes calls camps
+cards cares cases caves cells cents chaps chefs chips chops claws clubs clues
+coats codes coins comes cooks costs crabs crews cries crops crows cuffs dares
+dates deals debts deeds dings docks dolls doors draws drops drugs drums ducks
+dudes edges euros exams exits faces facts fades fails falls farms farts fears
+feeds feels files fills films finds fires fists flags flies flows folks foods
+fools forms fries frogs funds games gangs gasps gates genes gifts girls gives
+goals goats goods grabs grams grows hairs halls hands hangs hates heads hears
+heels helps herbs hides hills holds holes homes honks hopes horns hours hurts
+ideas items jeans jerks jokes jumps keeps kicks kills kilos kinds kings knees
+knots knows lands lasts leads liars likes limbs lines links lions lists lives
+loads loans locks looks lords loses loves lungs makes males marks masks mates
+meals means meets miles mills minds mines moans monks moves nails names needs
+noses notes opens packs pages pains pairs pants parks parts paths picks pills
+pipes plans plays poems poles posts pulls punks races rains ranks rates reads
+rides rings rises risks roads roars rocks roles rolls rooms roots ropes roses
+ruins rules sakes sales sands saves scars seals seats seeds seems sells sends
+ships shoes shops shots shows shuts sides sighs signs sings sites skies slams
+slips snaps socks songs sorts souls spies spits spots stars stays steps stops
+sucks suits tails takes tales talks tanks tapes taxes teams tears tells terms
+tests texts thuds thugs times tires tools towns traps trees tries trips tubes
+tunes turns twins types units veins views votes wages waits wakes walks walls
+wants waves wears weeks wells winds wings wires wives woods words works worms
+yards years yells
+
+# length 5, crude
+booty butch fanny randy sissy
+
+# length 5, informal
+ahold aunty cutie doggy fella gimme howdy kiddo legit mamma missy momma piggy
+psych sarge sonny takin telly tummy yummy
+
+# length 5, foreign
+amigo lakhs senor
+
+# length 5, british
+tyres
+
+# length 5, nonword
+whats
+
+# length 6, name
+alaska amazon apollo arabic bailey batman berlin billie bonnie boston brazil
+burton caesar carmen carter dalton danish daphne dexter french geneva german
+gibson gloria graham harper hector holden johnny jordan joseph marcel martin
+merlin mickey morgan morris murphy nelson newton oxford palmer parker phoebe
+regina rogers romans santos sawyer sheila shelly sierra soviet stella tarzan
+warner warsaw wright
+
+# length 6, plural
+actors adults agents agrees alarms aliens allies allows angels apples armies
+arrows assets awaits awards babies beasts begins beings blacks blades blares
+blocks boards bodies bosses brains brakes breaks bricks brings brooks bushes
+buzzes causes chains chairs charts checks cheeks cheers chicks chimes chores
+cigars cities claims clears clicks closes clouds clowns colors comics copies
+coughs counts courts covers cracks creaks creeps crimes crowds dances deaths
+demons depths devils dishes doubts dozens dreams drinks drives duties elders
+enters equals events exists favors fields fights finals flames floors forces
+francs freaks fruits ghosts giants gloves grades grapes graves groans groups
+growls grunts guards guests habits hearts heroes honors horses hotels houses
+humans ideals idiots images inches issues jewels judges kisses knives knocks
+ladies laughs layers leaves levels lights limits locals losers losses lovers
+lyrics masses medals meters miners misses models months morons mouths movies
+nerves nights noises novels nurses occurs oceans offers onions orders organs
+others owners papers passes pearls phones photos pieces pilots places plains
+planes plants plates points pounds powers prices prints proves pupils queens
+rebels rifles rights rivers robots rounds routes rumors rupees saints scales
+scares scenes scoffs scores scouts screws senses serves shades shakes shapes
+shares sharks sheets shells shifts shines shirts shoots shorts shouts sights
+sirens skills slaves sleeps smells smiles smokes snacks snakes sniffs snorts
+sounds spaces sparks speaks spells spends sports stages stains stairs stakes
+stamps stands starts states steals sticks stinks stocks stones stores storms
+sweets swords tables tastes thanks thighs things thinks throws thumbs tigers
+towels towers traces tracks trains treats trials tribes tricks troops trucks
+trusts values videos visits voices waters weighs whales wheels whites wishes
+wolves worlds wounds wrists writes
+
+# length 6, interjection
+hooray whoops
+
+# length 6, informal
+buster fellas missus psycho shorty weirdo auntie
+
+# length 6, foreign
+madame
+
+# length 6, british
+centre cheque colour favour honour humour labour metres petrol whilst
