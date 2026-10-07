@@ -23,14 +23,12 @@ on:
   push:
     branches: [main]
   workflow_call:
-    # Declared so release.yml can pass exactly these three by name. A push or
-    # a manual dispatch reads the same names from the repository as usual.
+    # Declared so release.yml can pass exactly these two by name. A push or a
+    # manual dispatch reads the same names from the repository as usual.
     secrets:
-      VERCEL_TOKEN:
+      CLOUDFLARE_API_TOKEN:
         required: true
-      VERCEL_ORG_ID:
-        required: true
-      VERCEL_PROJECT_ID:
+      CLOUDFLARE_ACCOUNT_ID:
         required: true
   workflow_dispatch:
 
@@ -46,11 +44,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Without this the repo shows no deployment history at all: those records
-    # normally come from Vercel's GitHub App, and this project has no Git
-    # integration on purpose — Vercel's image has no Go and its build would
-    # fail beside every good one. GitHub writes the record itself for a job
-    # that names an environment, which gives the history without the app.
+    # GitHub writes a deployment record for a job that names an environment,
+    # which gives the repo a deployment history with no app installed.
     environment:
       # The same expression as IS_PRODUCTION below, because environment.name
       # cannot read the job's own env: a manual dispatch on a stable tag still
@@ -58,15 +53,15 @@ jobs:
       name: ${{ github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') && 'production' || 'staging' }}
       url: ${{ steps.deploy.outputs.url }}
     env:
-      # The CLI reads these from the environment, and they identify the project
-      # a prebuilt deploy lands in. Neither is a secret in the usual sense, but
-      # both come from the same `vercel link` step, so they are kept together.
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # wrangler reads both from the environment, so the token never appears on
+      # a command line. With the account ID set, wrangler does not have to list
+      # the token's accounts, which would need a permission the token lacks.
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
       # Production only when a non-prerelease tag reached here without a manual
       # dispatch. Every shell step below reads this one value, so the deploy
-      # target, the alias and the header check cannot disagree about which kind
-      # of run this is.
+      # target and the header check cannot disagree about which kind of run
+      # this is.
       IS_PRODUCTION: ${{ github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -76,9 +71,6 @@ jobs:
           go-version-file: go.mod
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          # 24 for the npm it bundles (11). tools/deploy overrides undici@5 to
-          # a 6.x release, and npm 10 reads that override as a lockfile out of
-          # sync, so `npm ci` refuses it.
           node-version: 24
 
       - name: build
@@ -98,181 +90,145 @@ jobs:
           fi
           bash scripts/build-web.sh "$version"
 
-      # Vercel's build image ships Node and not Go, so the wasm cannot be built
-      # there at all. Deploying prebuilt keeps the build on a runner that
-      # already has the toolchain, the pinned xterm.js and the go.work view of
-      # the vendored bubbletea copy.
-      #
-      # web/vercel-output.json is the Build Output API config. It carries no
-      # comments, because it is copied to config.json verbatim, and it is
-      # written as `routes` rather than the `headers` key from vercel.json.
-      # That distinction is not cosmetic and cost two deploys to find: the
-      # Build Output config has no `headers` key at all — vercel.json's is
-      # compiled into routes during Vercel's own build, which a prebuilt deploy
-      # never runs — so a `headers` block here is valid JSON that is silently
-      # ignored. `continue: true` applies the header and then lets the file be
-      # served normally.
-      #
-      # It sets two things. A catch-all route sends the security headers:
-      # nosniff, a deny for framing, no-referrer, and a self-only CSP with the
-      # one escape wasm needs. Nothing the page loads is off-origin — the
-      # stylesheets, scripts, xterm.js and wasm all come from here — so a
-      # strict policy has nothing to break; verify the served headers against
-      # staging after a deploy, since no local check sees Vercel's routing.
-      #
-      # The second route: the wasm caches for a year. boot.js appends
-      # ?v=<hash of the wasm>, so every build asks for a URL the browser has
-      # never seen and an immutable year can never go stale. Everything else
-      # keeps a constant filename and is left on Vercel's default of
-      # `public, max-age=0, must-revalidate`, which is what those files want —
-      # caching one of them hard would pin a visitor to an old build for a year
-      # with no way to recover.
-      - name: stage the build output
-        run: |
-          mkdir -p .vercel/output/static
-          cp -r web/dist/. .vercel/output/static/
-          cp web/vercel-output.json .vercel/output/config.json
-
-      # The CLI is installed from tools/deploy's lockfile, not fetched by npx:
-      # a lockfile pins the whole dependency tree with integrity hashes, so the
+      # The CLI is installed from worker/'s lockfile, not fetched by npx: a
+      # lockfile pins the whole dependency tree with integrity hashes, so the
       # deploy runs the same bytes every time rather than trusting whatever the
       # registry serves for a version string.
       #
       # It is installed into the runner's temp directory rather than the
-      # checkout: vercel's dependency tree contains Go source (its @vercel/fun
-      # runtimes), and a nested module anywhere under the repository makes
-      # `go vet ./...` and `go test ./...` refuse to walk it. The lockfile
-      # stays in the tree; the install does not.
+      # checkout, so nothing it brings in can sit under the repository where
+      # `go vet ./...` walks. The lockfile stays in the tree; the install does
+      # not.
       #
-      # --ignore-scripts because this job holds VERCEL_TOKEN two steps later:
-      # a lifecycle script in a compromised dependency could rewrite the
-      # binary that step runs. esbuild and fsevents in the locked tree declare
-      # install scripts; neither is needed by `deploy --prebuilt`, which builds
-      # nothing.
+      # --ignore-scripts because this job holds the Cloudflare token one step
+      # later: a lifecycle script in a compromised dependency could rewrite the
+      # binary that step runs. Uploading static assets needs none of them.
       - name: install the deploy CLI
         run: |
-          cp tools/deploy/package.json tools/deploy/package-lock.json "$RUNNER_TEMP/"
+          cp worker/package.json worker/package-lock.json "$RUNNER_TEMP/"
           npm ci --ignore-scripts --prefix "$RUNNER_TEMP"
 
       - name: deploy
         id: deploy
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
         run: |
           # Production only for a release tag that did not arrive by hand.
-          # Everything else — main, a manual dispatch, an rc tag — stays on a
-          # preview URL, which is what makes main safe to push to.
+          # Everything else — main, a manual dispatch, an rc tag — goes to the
+          # staging Worker, which is what makes main safe to push to.
           #
           # A pre-release tag (v1.2.3-rc1) is deliberately not production: it
           # still deploys, so the exact tagged build can be opened and played
           # before the real tag promotes it, but it lands on staging. The *-*
           # test matches release.yml's prerelease flag, so one tag cannot be a
           # prerelease on GitHub and the live site at the same time.
-          target=
-          if [ "$IS_PRODUCTION" = "true" ]; then target=--prod; fi
+          #
+          # --env= with nothing after it names the top level, production, out
+          # loud; leaving the flag off does the same but makes wrangler warn.
+          env=--env=
+          if [ "$IS_PRODUCTION" != "true" ]; then env=--env=staging; fi
+          "$RUNNER_TEMP/node_modules/.bin/wrangler" deploy --config worker/wrangler.jsonc "$env"
 
-          # The CLI prints the deployment URL on stdout and its progress on
-          # stderr, so the URL can be captured without parsing anything.
-          url=$("$RUNNER_TEMP/node_modules/.bin/vercel" deploy --prebuilt $target --token "$VERCEL_TOKEN")
+          # wrangler writes what it deployed as JSON lines, so the address is
+          # read rather than scraped from its progress output. It is the
+          # Worker's workers.dev address: the account's subdomain is not
+          # written down anywhere in the repo.
+          url=$(jq -r 'select(.type == "deploy") | .targets[0] // empty' "$WRANGLER_OUTPUT_FILE_PATH")
+          if [ -z "$url" ]; then
+            echo "wrangler reported no address for this deploy"
+            exit 1
+          fi
+          url="${url%/}/"
           echo "url=$url" >>"$GITHUB_OUTPUT"
           echo "deployed $url" >>"$GITHUB_STEP_SUMMARY"
 
-      # A preview URL is unique per deploy, so without an alias the staging
-      # address changes every push and cannot be bookmarked. This is deliberately
-      # not fatal: the deploy above already succeeded, and a taken or unavailable
-      # alias is not a reason to report the deployment as failed.
-      # Runs for anything that did not go to production, so an rc tag takes the
-      # staging alias over from main. That is the point of an rc: the address
-      # you hand someone to try is the tagged build, until main moves again.
-      - name: point the staging alias at it
-        if: ${{ env.IS_PRODUCTION != 'true' }}
-        # The URL comes in through env rather than being written into the
-        # script, so nothing in it can be read as shell.
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-        run: |
-          alias=surmise-staging.vercel.app
-          if "$RUNNER_TEMP/node_modules/.bin/vercel" alias set "$DEPLOY_URL" "$alias" \
-              --token "$VERCEL_TOKEN"; then
-            echo "staging: https://$alias" >>"$GITHUB_STEP_SUMMARY"
-          else
-            echo "could not alias $alias; the deploy URL above still works" \
-              >>"$GITHUB_STEP_SUMMARY"
-          fi
-
       # The headers are checked on every deploy, production included: the CSP
-      # is the page's whole XSS defence, and a config change that drops it
-      # must not reach the live site unobserved. This is the only place the
-      # security headers in web/vercel-output.json can be proven — the config
-      # says they should be served, but only the deployed site shows whether
-      # Vercel applied the route. The favicon is checked here too, because
-      # build-web.sh copies files by name and a missing one fails silently.
+      # is the page's whole XSS defence, and a change that drops it must not
+      # reach the live site unobserved. This is the only place the headers in
+      # web/_headers can be proven — the file says they should be served, but
+      # only the deployed site shows whether Cloudflare applied it. The icons
+      # are checked here too, because build-web.sh copies files by name and a
+      # missing one fails silently.
       #
-      # Production is public, and its domain is what a visitor loads, so it is
-      # checked with a plain request. Staging sits behind Vercel's Deployment
-      # Protection, so a plain curl gets the SSO redirect rather than the app;
-      # the CLI's curl command attaches the bypass the token is entitled to.
+      # The check runs against the workers.dev address of the Worker that was
+      # just deployed, which is public for staging and production alike.
       - name: verify the deployed site
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SITE: ${{ steps.deploy.outputs.url }}
         run: |
-          if [ "$IS_PRODUCTION" = "true" ]; then
-            site=https://surmise.nxck.dev/
-          else
-            site=https://surmise-staging.vercel.app/
-          fi
-          # get URL [curl options...]
-          get() {
-            if [ "$IS_PRODUCTION" = "true" ]; then
-              curl --silent --show-error "${@:2}" "$1"
-            else
-              "$RUNNER_TEMP/node_modules/.bin/vercel" curl "$1" --yes -- --silent --show-error "${@:2}"
-            fi
-          }
+          get() { curl --silent --show-error "${@:2}" "$1"; }
 
-          # The production domain moves to a new deployment a moment after the
-          # CLI returns, and a check in that gap reads the old build: v0.6.7's
-          # first run got a 404 for an icon that was new in that release. So
-          # wait until the domain serves this build before checking anything.
-          # boot.js carries the wasm's hash, so it differs between any two
-          # builds. Staging needs no wait: the alias step above has already
-          # pointed it at this deployment.
-          if [ "$IS_PRODUCTION" = "true" ]; then
-            want=$(sha256sum <.vercel/output/static/boot.js)
-            for attempt in $(seq 1 12); do
-              if [ "$(get "${site}boot.js" | sha256sum)" = "$want" ]; then break; fi
-              if [ "$attempt" = 12 ]; then
-                echo "$site is still not serving this build after two minutes"
+          # A new version can take a moment to reach every edge, and a check
+          # in that gap reads the old build. So wait until the site serves this
+          # build before checking anything. boot.js carries the wasm's hash, so
+          # it differs between any two builds.
+          want=$(sha256sum <web/dist/boot.js)
+          for attempt in $(seq 1 12); do
+            if [ "$(get "${SITE}boot.js" | sha256sum)" = "$want" ]; then break; fi
+            if [ "$attempt" = 12 ]; then
+              echo "$SITE is still not serving this build after two minutes"
+              exit 1
+            fi
+            sleep 10
+          done
+
+          # rule PATH HEADER: the value web/_headers sets for HEADER under the
+          # exact rule line PATH.
+          rule() {
+            awk -v path="$1" -v h="$2" '
+              /^[^ \t#]/ { inblock = ($0 == path); next }
+              inblock && tolower($1) == tolower(h) ":" {
+                sub(/^[ \t]*[^:]*:[ \t]*/, ""); print; exit
+              }' web/_headers
+          }
+          # check URL PATH HEADER...: each header URL sends must equal the
+          # value web/_headers sets. Compared, not only looked for: a weakened
+          # CSP is still a CSP header, and only the value says whether it is
+          # the policy that was meant.
+          check() {
+            local url=$1 path=$2 headers header want got
+            shift 2
+            headers=$(get "$url" --head | tr -d '\r')
+            for header in "$@"; do
+              want=$(rule "$path" "$header")
+              if [ -z "$want" ]; then
+                echo "web/_headers sets no $header for $path" >&2
                 exit 1
               fi
-              sleep 10
+              got=$(echo "$headers" | grep -i "^$header:" | head -n1 | cut -d: -f2- | sed 's/^ *//')
+              if [ "$got" != "$want" ]; then
+                echo "$url serves $header: '$got'" >&2
+                echo "web/_headers sets: '$want'" >&2
+                exit 1
+              fi
             done
+            # The headers go to stdout for a caller that checks more; the
+            # failures above go to stderr, so a caller capturing this still
+            # shows them.
+            echo "$headers"
+          }
+
+          check "$SITE" '/*' content-security-policy x-content-type-options x-frame-options referrer-policy >/dev/null
+          wasm=$(check "${SITE}surmise.wasm" /surmise.wasm cache-control)
+          # Browsers refuse to stream-compile wasm served as anything else.
+          if ! echo "$wasm" | grep -qi '^content-type: application/wasm'; then
+            echo "${SITE}surmise.wasm is not served as application/wasm:"
+            echo "$wasm" | grep -i '^content-type:' || echo "(no content-type)"
+            exit 1
           fi
 
-          # Each header is compared with the value the config sets, not only
-          # looked for: a weakened CSP is still a CSP header, and only the
-          # value says whether it is the policy that was meant.
-          headers=$(get "$site" --head | tr -d '\r')
-          echo "$headers" | grep -i '^content-security-policy:' || true
-          for header in content-security-policy x-content-type-options x-frame-options referrer-policy; do
-            want=$(jq -r --arg h "$header" '.routes[0].headers[$h] // empty' .vercel/output/config.json)
-            if [ -z "$want" ]; then
-              echo "the config sets no $header"
-              exit 1
-            fi
-            got=$(echo "$headers" | grep -i "^$header:" | head -n1 | cut -d: -f2- | sed 's/^ *//')
-            if [ "$got" != "$want" ]; then
-              echo "$site serves $header: '$got'"
-              echo "the config sets:  '$want'"
+          for file in favicon.svg apple-touch-icon.png; do
+            status=$(get "$SITE$file" --output /dev/null --write-out '%{http_code}')
+            if [ "$status" != 200 ]; then
+              echo "$SITE$file returned $status"
               exit 1
             fi
           done
 
-          for file in favicon.svg apple-touch-icon.png; do
-            status=$(get "$site$file" --output /dev/null --write-out '%{http_code}')
-            if [ "$status" != 200 ]; then
-              echo "$site$file returned $status"
-              exit 1
-            fi
-          done
+          # _headers is configuration, and Cloudflare must not serve it.
+          status=$(get "${SITE}_headers" --output /dev/null --write-out '%{http_code}')
+          if [ "$status" = 200 ]; then
+            echo "${SITE}_headers is served as a file"
+            exit 1
+          fi

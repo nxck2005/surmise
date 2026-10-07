@@ -1,0 +1,12 @@
+{
+  "name": "surmise-worker",
+  "private": true,
+  "description": "Pins the wrangler CLI the deploy workflow runs, with a lockfile and integrity hashes. Not part of the app; nothing here ships.",
+  "dependencies": {
+    "wrangler": "4.137.0"
+  },
+  "overrides": {
+    "sharp": "0.35.5",
+    "undici@7": "7.29.1"
+  }
+}
