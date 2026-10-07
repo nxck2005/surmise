@@ -1,8 +1,8 @@
 # Word list sources
 
 Regenerate with `go run ./tools/genwords`. Do not edit the word lists by
-hand — `blocked.txt` and `profanity.txt` below are the two files here that are
-hand-maintained.
+hand — `blocked.txt`, `profanity.txt` and `pruned.txt` below are the three
+files here that are hand-maintained, and genwords reads all three.
 
 Both sources are pinned to a commit, not a branch: an answer list that shifts
 under us changes the word of the day for every date not yet played, so a
@@ -24,8 +24,9 @@ is used instead of a general word list such as dwyl/english-words, which admits
 ## answers{4,5,6}.txt — puzzle solutions
 
 The intersection of the corresponding guess list with the top 10000 entries of a
-frequency-ranked list of common English, minus `profanity.txt`, so solutions are
-words people actually know and would not mind seeing.
+frequency-ranked list of common English, minus `profanity.txt` and
+`pruned.txt`, so solutions are words people actually know, would not mind
+seeing, and would expect as an answer.
 
 - Source: https://raw.githubusercontent.com/hermitdave/FrequencyWords/525f9b560de4/content/2018/en/en_50k.txt
 - Revision: 525f9b560de45753a5ea01069454e72e9aa541c6
@@ -59,3 +60,16 @@ guess" invariant is untouched — the subtraction only ever runs one way.
 
 The distinction is the point. A slur is not a word this game accepts; a swear is
 a word it accepts but does not choose.
+
+## pruned.txt — poor answers, kept out of answers only
+
+981 answers removed by hand on 2026-08-13 after every answer was read: names,
+`-s` plurals, crude words, interjections, slang, foreign words, British
+spellings, archaic and obscure words. Regular `-ed` and `-ing` forms were
+kept. Like `profanity.txt` these stay in the guess lists.
+
+The file is what makes the prune survive a regeneration: without it, genwords
+would put every one of these words back and move every unplayed daily. Adding
+a word removes it from the answers on the next run, which moves the dailies
+too, so edit it as deliberately as the pinned sources. `words` has a test
+asserting that no pruned word is an answer and that every one is a guess.

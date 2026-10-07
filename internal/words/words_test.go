@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -63,6 +64,13 @@ var blockedList string
 //
 //go:embed data/profanity.txt
 var profaneList string
+
+// prunedList is the third hand-maintained input: answers removed by hand
+// because they make poor solutions. Like profanity it is subtracted from the
+// answers only. Embedded here for the same reason as blockedList.
+//
+//go:embed data/pruned.txt
+var prunedList string
 
 // wordsIn reads one of the hand-maintained lists, which carry section comments
 // that strings.Fields alone would happily return as words.
@@ -193,6 +201,33 @@ func TestProfanityIsGuessableButNeverTheAnswer(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Error("no profane word is an accepted guess — the lists have been collapsed")
+	}
+}
+
+// TestPrunedWordsAreGuessesButNeverAnswers pins pruned.txt to the lists. Every
+// entry was an answer once, so every one must still be accepted as a guess;
+// none may be an answer again. A genwords run that ignored the file would put
+// all of them back, which fails here before it can move a daily.
+func TestPrunedWordsAreGuessesButNeverAnswers(t *testing.T) {
+	pruned := wordsIn(prunedList)
+	if len(pruned) == 0 {
+		t.Fatal("data/pruned.txt is empty")
+	}
+	for _, w := range pruned {
+		if !slices.Contains(Lengths, len(w)) {
+			t.Errorf("%q has no mode of its length", w)
+			continue
+		}
+		l, err := get(len(w))
+		if err != nil {
+			t.Fatalf("length %d: %v", len(w), err)
+		}
+		if _, ok := l.guesses[w]; !ok {
+			t.Errorf("%q was pruned from the answers but is not a valid guess", w)
+		}
+		if _, found := slices.BinarySearch(l.answers, w); found {
+			t.Errorf("%q is in pruned.txt and must not be an answer", w)
+		}
 	}
 }
 
