@@ -55,6 +55,22 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.7.6 → v0.8.0: the web version moves to Cloudflare
+
+The browser version at <https://surmise.nxck.dev> now runs on Cloudflare
+instead of Vercel. The address stays the same, and so does the game. It is
+the same build with the same security headers, and your saves stay in your
+browser as before. They were never on the host, so the move does not touch
+them.
+
+Why move: later online features (a daily player count, and shared results for
+a challenge code) need a small server, and Cloudflare can run it on the same
+address as the game. Those features are not in this release, and the
+**network** setting still does nothing.
+
+The downloaded app has no changes at all. `schema` does not move, and no daily
+answer moves.
+
 ## v0.7.5 → v0.7.6: an appearance page, and tile outlines off
 
 - **Settings has an appearance page.** The last row of settings, appearance,
