@@ -17,6 +17,10 @@
 // number of them, so this file is the one part of the pipeline that is edited
 // by hand; it is length-agnostic, so it keeps covering any word length added
 // later.
+//
+// Two more hand-maintained files are subtracted from the answers only, so their
+// words stay valid guesses: profanity.txt (vulgar words) and pruned.txt (words
+// that make a poor answer, removed by hand on 2026-08-13).
 package main
 
 import (
@@ -55,10 +59,12 @@ const (
 
 	outDir = "internal/words/data"
 
-	// blockedFile and profaneFile live in outDir but, unlike the lists beside
-	// them, are inputs: they are written by hand and read on every run.
+	// blockedFile, profaneFile and prunedFile live in outDir but, unlike the
+	// lists beside them, are inputs: they are written by hand and read on every
+	// run.
 	blockedFile = "blocked.txt"
 	profaneFile = "profanity.txt"
+	prunedFile  = "pruned.txt"
 )
 
 // lengths mirrors words.Lengths; the game modes are 4, 6 and 6 letters.
@@ -85,6 +91,14 @@ func main() {
 	}
 	log.Printf("profane: %d words", len(profane))
 
+	// The hand prune is an input for the same reason: without it a run would
+	// put every pruned word back and move every unplayed daily.
+	pruned, err := readWordFile(prunedFile)
+	if err != nil {
+		log.Fatalf("read pruned list: %v", err)
+	}
+	log.Printf("pruned:  %d words", len(pruned))
+
 	enable, err := fetchWords(enableURL)
 	if err != nil {
 		log.Fatalf("fetch enable1: %v", err)
@@ -106,15 +120,19 @@ func main() {
 		guesses := filterLen(enable, n, blocked)
 
 		// Answers must also be valid guesses, so intersect with the guess list
-		// rather than filtering the common list independently. Profanity is
-		// subtracted only here: a player who types one should still be told it
-		// is a real word, it just must never be the word of the day.
+		// rather than filtering the common list independently. Profanity and
+		// the hand prune are subtracted only here: a player who types one
+		// should still be told it is a real word, it just must never be the
+		// word of the day.
 		answers := make([]string, 0, len(guesses))
 		for _, w := range guesses {
 			if _, ok := common[w]; !ok {
 				continue
 			}
 			if _, bad := profane[w]; bad {
+				continue
+			}
+			if _, poor := pruned[w]; poor {
 				continue
 			}
 			answers = append(answers, w)
@@ -252,8 +270,8 @@ func writeSources() {
 	doc := `# Word list sources
 
 Regenerate with ` + "`go run ./tools/genwords`" + `. Do not edit the word lists by
-hand — ` + "`blocked.txt`" + ` and ` + "`profanity.txt`" + ` below are the two files here that are
-hand-maintained.
+hand — ` + "`blocked.txt`" + `, ` + "`profanity.txt`" + ` and ` + "`pruned.txt`" + ` below are the three
+files here that are hand-maintained, and genwords reads all three.
 
 Both sources are pinned to a commit, not a branch: an answer list that shifts
 under us changes the word of the day for every date not yet played, so a
@@ -275,8 +293,9 @@ is used instead of a general word list such as dwyl/english-words, which admits
 ## answers{4,5,6}.txt — puzzle solutions
 
 The intersection of the corresponding guess list with the top ` + strconv.Itoa(commonRank) + ` entries of a
-frequency-ranked list of common English, minus ` + "`profanity.txt`" + `, so solutions are
-words people actually know and would not mind seeing.
+frequency-ranked list of common English, minus ` + "`profanity.txt`" + ` and
+` + "`pruned.txt`" + `, so solutions are words people actually know, would not mind
+seeing, and would expect as an answer.
 
 - Source: https://raw.githubusercontent.com/hermitdave/FrequencyWords/` + commonRev[:12] + `/content/2018/en/en_50k.txt
 - Revision: ` + commonRev + `
@@ -310,6 +329,19 @@ guess" invariant is untouched — the subtraction only ever runs one way.
 
 The distinction is the point. A slur is not a word this game accepts; a swear is
 a word it accepts but does not choose.
+
+## pruned.txt — poor answers, kept out of answers only
+
+981 answers removed by hand on 2026-08-13 after every answer was read: names,
+` + "`-s`" + ` plurals, crude words, interjections, slang, foreign words, British
+spellings, archaic and obscure words. Regular ` + "`-ed`" + ` and ` + "`-ing`" + ` forms were
+kept. Like ` + "`profanity.txt`" + ` these stay in the guess lists.
+
+The file is what makes the prune survive a regeneration: without it, genwords
+would put every one of these words back and move every unplayed daily. Adding
+a word removes it from the answers on the next run, which moves the dailies
+too, so edit it as deliberately as the pinned sources. ` + "`words`" + ` has a test
+asserting that no pruned word is an answer and that every one is a guess.
 `
 	if err := os.WriteFile(filepath.Join(outDir, "SOURCES.md"), []byte(doc), 0o644); err != nil {
 		log.Fatal(err)
