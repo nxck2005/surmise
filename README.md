@@ -30,11 +30,11 @@ curl -fsSL https://raw.githubusercontent.com/nxck2005/surmise/main/install.sh | 
 
 it verifies the checksum, installs to `~/.local/bin` (override with
 `SURMISE_INSTALL_DIR`), and never needs sudo. pin a version with
-`SURMISE_VERSION=v0.5.1`, or grab an archive by hand — every release carries one:
+`SURMISE_VERSION=v0.8.0`.
 
 it will not write through a symlink already sitting where the binary goes, and
-will not install an archive whose `surmise` is one — `SURMISE_FORCE=1` replaces
-a file that is there, it does not follow a link to somewhere else:
+will not install an archive whose `surmise` is one. `SURMISE_FORCE=1` replaces
+a file that is there, it does not follow a link to somewhere else.
 
 on windows, use [scoop](https://scoop.sh) instead of either:
 
@@ -42,6 +42,8 @@ on windows, use [scoop](https://scoop.sh) instead of either:
 scoop bucket add nxck2005 https://github.com/nxck2005/scoop-bucket
 scoop install surmise
 ```
+
+or grab an archive by hand — every release carries one:
 
 | platform | file |
 | --- | --- |

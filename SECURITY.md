@@ -61,7 +61,7 @@ features invite.
 
 ## Design notes that bound the risk
 
-- The dependency set is deliberately three Charm modules; everything else,
+- The dependency set is deliberately four Charm modules; everything else,
   including the TOML-ish theme reader and UUID generation, is hand-rolled and in
   this repository.
 - Saves are written atomically (temp file + rename) under the user config
