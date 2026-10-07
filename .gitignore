@@ -37,9 +37,14 @@ profile.cov
 /web/dist/
 /web/node_modules/
 
-# `vercel link` writes the project ids here, and deploy-web.yml stages the
-# build output under it. Same reason as above: release.yml needs a clean tree.
+# `vercel link` wrote the project ids here when the site was on Vercel. Kept
+# until that project is deleted, so a local copy is never committed.
 /.vercel/
+
+# wrangler's local state, and an install of the deploy CLI if one is ever run
+# in place. Same reason as above: release.yml needs a clean tree.
+/worker/node_modules/
+/worker/.wrangler/
 
 # Local scratch
 notes/

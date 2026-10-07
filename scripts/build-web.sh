@@ -37,7 +37,7 @@ fi
 # than fetched from a CDN, so a build is reproducible and the page works with no
 # third-party host involved.
 # --ignore-scripts: nothing here needs a lifecycle script, and the deploy job
-# that runs this holds VERCEL_TOKEN later on.
+# that runs this holds the Cloudflare token later on.
 npm ci --ignore-scripts --prefix web --silent
 cp web/node_modules/@xterm/xterm/lib/xterm.js "$out/vendor/"
 cp web/node_modules/@xterm/xterm/css/xterm.css "$out/vendor/"
@@ -45,6 +45,9 @@ cp web/node_modules/@xterm/addon-fit/lib/addon-fit.js "$out/vendor/"
 
 cp web/index.html web/style.css web/boot.js web/clipboard.js "$out/"
 cp web/favicon.svg web/apple-touch-icon.png "$out/"
+# Read by Cloudflare at deploy time, not served. A local static server will
+# serve it as a file, which is harmless.
+cp web/_headers "$out/"
 
 # Cache-bust the wasm. index.html is served with no-cache and names a URL that
 # changes with the build, so a deploy is picked up immediately while the wasm

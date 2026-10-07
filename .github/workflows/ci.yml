@@ -92,12 +92,10 @@ jobs:
       # govulncheck reports only what the module graph actually reaches, so a
       # transitive package nobody calls does not fail the build. The npm audit
       # covers the browser shell, whose only shipped dependencies are xterm.js
-      # and its fit addon, both pinned exactly. tools/deploy is deliberately
-      # out of scope: it is CI-only and nothing from it ships. Its package.json
-      # overrides every transitive package that has a fixed release, so the
-      # Dependabot alerts on its lockfile stay closed; what is left is braces,
-      # which has no fixed release, in build runtimes this workflow never
-      # invokes (`deploy --prebuilt`).
+      # and its fit addon, both pinned exactly. worker/ is deliberately out of
+      # scope: it pins the deploy CLI, which is CI-only, and nothing from it
+      # ships. Its package.json overrides every transitive package that has a
+      # fixed release, so the Dependabot alerts on its lockfile stay closed.
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0

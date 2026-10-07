@@ -160,18 +160,19 @@ v2.0.8 plus two small additive files; see
 
 ## How it is deployed
 
-<https://surmise.nxck.dev>, on Vercel, from `.github/workflows/deploy-web.yml`.
+<https://surmise.nxck.dev>, on a Cloudflare Worker, from
+`.github/workflows/deploy-web.yml`.
 
-The build happens in GitHub Actions and the result is uploaded ready-made, with
-`vercel deploy --prebuilt`. That is not a preference: Vercel's build image ships
-Node and no Go, so it cannot compile the wasm at all. For the same reason the
-project has no Git integration — if it had one, Vercel would run its own build
-on every push and fail beside every good deploy.
+The build happens in GitHub Actions and the result is uploaded ready-made with
+`wrangler deploy`. The Worker is static assets only: it has no script, so every
+request is answered from `web/dist` and none of our code runs. Its config is
+`worker/wrangler.jsonc`, and `worker/package.json` pins the `wrangler` the job
+runs, with a lockfile.
 
 | what happened | where it goes |
 |---|---|
-| push to `main` | `surmise-staging.vercel.app` |
-| tag `v0.3.0` | production, `surmise.nxck.dev` |
+| push to `main` | staging, the `surmise-staging` Worker |
+| tag `v0.3.0` | production, the `surmise` Worker |
 | tag `v0.3.0-rc1` | staging, by the same `*-*` test that marks a GitHub prerelease |
 
 Production is reached only by a non-prerelease tag, through the call from
@@ -179,19 +180,26 @@ Production is reached only by a non-prerelease tag, through the call from
 from a stable tag, so nothing can promote a build the release chain did not
 test.
 
-The staging address needs a Vercel login, because Deployment Protection covers
-everything except production. Production is public.
+Staging is a separate Worker, not a preview of the production one, so it keeps
+one address and will get its own data when the site gains an API. Both Workers
+have a public `workers.dev` address, which the job prints in its summary.
+`surmise.nxck.dev` is a custom domain on the production Worker, attached in the
+Cloudflare dashboard rather than in the config, so the deploy token needs no
+DNS access.
 
-`web/vercel-output.json`, copied to `.vercel/output/config.json`, sets two
+`web/_headers`, copied into `web/dist` by `scripts/build-web.sh`, sets two
 things. `surmise.wasm` caches for a year, which is safe because `boot.js`
 requests it as `surmise.wasm?v=<hash>` and a new build asks for a URL the
 browser has never seen; every other file keeps a constant name and stays on
-Vercel's revalidating default. And a catch-all route sends the security
-headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+Cloudflare's revalidating default. And every path gets the security headers:
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 `Referrer-Policy: no-referrer`, and a self-only Content-Security-Policy with
 `'wasm-unsafe-eval'` — the one allowance WebAssembly needs. Nothing the page
-loads is off-origin. Note that both are written as `routes`, not the `headers`
-key from `vercel.json` — the Build Output API has no `headers` key, and one put
-there is ignored without an error.
+loads is off-origin.
+
+After every deploy the job reads the site back and compares each of those
+headers with the value in `web/_headers`. It also checks that the wasm is
+served as `application/wasm`, that both icons exist, and that `_headers` itself
+is not served.
 
 [xterm.js]: https://xtermjs.org

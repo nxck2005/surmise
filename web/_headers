@@ -1,0 +1,18 @@
+# Cloudflare Workers static-asset headers. scripts/build-web.sh copies this into
+# web/dist; Cloudflare reads it there and does not serve it as a file. The
+# deploy job compares every value below with what the deployed site sends.
+#
+# Every path gets the security headers: nosniff, a deny for framing,
+# no-referrer, and a self-only CSP with the one escape wasm needs. Nothing the
+# page loads is off-origin.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+
+# The wasm caches for a year. boot.js asks for surmise.wasm?v=<hash of the
+# wasm>, so every build requests a URL the browser has never seen. Every other
+# file keeps a constant name and stays on Cloudflare's revalidating default.
+/surmise.wasm
+  Cache-Control: public, max-age=31536000, immutable
