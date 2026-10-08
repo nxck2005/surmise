@@ -203,4 +203,10 @@ headers with the value in `web/_headers`. It also checks that the wasm is
 served as `application/wasm`, that both icons exist, and that `_headers` itself
 is not served.
 
+It reads the Worker's `workers.dev` address first. A production deploy is then
+checked a second time at `surmise.nxck.dev`. The job does not attach that
+domain, so only this check finds a domain that was removed in the dashboard, a
+changed DNS record or a bad certificate. Without it, those faults would leave
+the live site broken and the deploy green.
+
 [xterm.js]: https://xtermjs.org
