@@ -431,11 +431,12 @@ func affordableSections(committed, optional []string, budget int) []string {
 // Sized to its own content, every screen had a different panel, and moving
 // between them made the frame grow and shrink under the pointer. Two widths
 // cover all of them at the default metrics: the narrow one holds the menu and
-// the list-like screens (the widest of them, settings and how to play, are 49),
+// the list-like screens and about (the widest of them, settings and how to
+// play, are 49),
 // and the wide one is the board's own width, which the result, the sprint and
-// challenge setups, custom and about fit inside. Content wider than the last
-// step — the profile with its stats, or a theme with bigger tiles — keeps its
-// own width.
+// challenge setups and custom fit inside. About is narrow too, unless a long
+// data path widens it. Content wider than the last step — the profile with its
+// stats, or a theme with bigger tiles — keeps its own width.
 var panelSteps = []int{49, 63}
 
 // panelWidth is the content width a frame is drawn at: the smallest step that
