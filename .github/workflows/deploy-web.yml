@@ -152,26 +152,19 @@ jobs:
       # missing one fails silently.
       #
       # The check runs against the workers.dev address of the Worker that was
-      # just deployed, which is public for staging and production alike.
+      # just deployed, which is public for staging and production alike. A
+      # production deploy is then checked again at the custom domain, the
+      # address players use. That domain is attached in the Cloudflare
+      # dashboard, not by this job, so a deploy cannot prove it is still
+      # attached: a removed domain, a changed DNS record or a bad certificate
+      # breaks it while workers.dev keeps working. Staging has no custom
+      # domain.
       - name: verify the deployed site
         env:
           SITE: ${{ steps.deploy.outputs.url }}
+          CUSTOM_DOMAIN: https://surmise.nxck.dev/
         run: |
           get() { curl --silent --show-error "${@:2}" "$1"; }
-
-          # A new version can take a moment to reach every edge, and a check
-          # in that gap reads the old build. So wait until the site serves this
-          # build before checking anything. boot.js carries the wasm's hash, so
-          # it differs between any two builds.
-          want=$(sha256sum <web/dist/boot.js)
-          for attempt in $(seq 1 12); do
-            if [ "$(get "${SITE}boot.js" | sha256sum)" = "$want" ]; then break; fi
-            if [ "$attempt" = 12 ]; then
-              echo "$SITE is still not serving this build after two minutes"
-              exit 1
-            fi
-            sleep 10
-          done
 
           # rule PATH HEADER: the value web/_headers sets for HEADER under the
           # exact rule line PATH.
@@ -209,26 +202,49 @@ jobs:
             echo "$headers"
           }
 
-          check "$SITE" '/*' content-security-policy x-content-type-options x-frame-options referrer-policy >/dev/null
-          wasm=$(check "${SITE}surmise.wasm" /surmise.wasm cache-control)
-          # Browsers refuse to stream-compile wasm served as anything else.
-          if ! echo "$wasm" | grep -qi '^content-type: application/wasm'; then
-            echo "${SITE}surmise.wasm is not served as application/wasm:"
-            echo "$wasm" | grep -i '^content-type:' || echo "(no content-type)"
-            exit 1
-          fi
+          # verify SITE: everything below, against one address of the Worker.
+          verify() {
+            local site=$1 want attempt wasm file status
 
-          for file in favicon.svg apple-touch-icon.png; do
-            status=$(get "$SITE$file" --output /dev/null --write-out '%{http_code}')
-            if [ "$status" != 200 ]; then
-              echo "$SITE$file returned $status"
+            # A new version can take a moment to reach every edge, and a check
+            # in that gap reads the old build. So wait until the site serves
+            # this build before checking anything. boot.js carries the wasm's
+            # hash, so it differs between any two builds.
+            want=$(sha256sum <web/dist/boot.js)
+            for attempt in $(seq 1 12); do
+              if [ "$(get "${site}boot.js" | sha256sum)" = "$want" ]; then break; fi
+              if [ "$attempt" = 12 ]; then
+                echo "$site is still not serving this build after two minutes"
+                exit 1
+              fi
+              sleep 10
+            done
+
+            check "$site" '/*' content-security-policy x-content-type-options x-frame-options referrer-policy >/dev/null
+            wasm=$(check "${site}surmise.wasm" /surmise.wasm cache-control)
+            # Browsers refuse to stream-compile wasm served as anything else.
+            if ! echo "$wasm" | grep -qi '^content-type: application/wasm'; then
+              echo "${site}surmise.wasm is not served as application/wasm:"
+              echo "$wasm" | grep -i '^content-type:' || echo "(no content-type)"
               exit 1
             fi
-          done
 
-          # _headers is configuration, and Cloudflare must not serve it.
-          status=$(get "${SITE}_headers" --output /dev/null --write-out '%{http_code}')
-          if [ "$status" = 200 ]; then
-            echo "${SITE}_headers is served as a file"
-            exit 1
-          fi
+            for file in favicon.svg apple-touch-icon.png; do
+              status=$(get "$site$file" --output /dev/null --write-out '%{http_code}')
+              if [ "$status" != 200 ]; then
+                echo "$site$file returned $status"
+                exit 1
+              fi
+            done
+
+            # _headers is configuration, and Cloudflare must not serve it.
+            status=$(get "${site}_headers" --output /dev/null --write-out '%{http_code}')
+            if [ "$status" = 200 ]; then
+              echo "${site}_headers is served as a file"
+              exit 1
+            fi
+            echo "verified $site" >>"$GITHUB_STEP_SUMMARY"
+          }
+
+          verify "$SITE"
+          if [ "$IS_PRODUCTION" = "true" ]; then verify "$CUSTOM_DOMAIN"; fi
