@@ -347,8 +347,8 @@ func TestPanelsComeInAFewWidths(t *testing.T) {
 	}
 	groups := map[string][]*Model{
 		"narrow": {open(choiceQuit, 0), open(choiceDaily, 0), open(choiceSocial, 0),
-			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0)},
-		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0), open(choiceAbout, 0)},
+			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0), open(choiceAbout, 0)},
+		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0)},
 	}
 	widths := map[string]int{}
 	for name, ms := range groups {

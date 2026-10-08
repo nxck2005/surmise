@@ -188,15 +188,27 @@ func (m *themeScreen) view(h *hitMap) string {
 		rows += "\n\n" + scrollCounter(h, m.offset+1, end, len(m.entries))
 	}
 
-	sections := []string{
+	return lipgloss.JoinVertical(lipgloss.Center,
 		rows,
 		"",
 		renderThemePreview(),
+		"",
+		m.noteBox(),
+	)
+}
+
+// noteBox is the note in a box as big as the biggest note any theme in the
+// list has. The screen is centred as a whole, so a note that came and went —
+// "by …" on one theme, nothing on the next — made everything above it jump up
+// and down as the cursor moved. A fixed box keeps the list and the preview
+// still, and only the words in it change.
+func (m *themeScreen) noteBox() string {
+	w, h := 0, 1
+	for _, e := range m.entries {
+		n := m.noteFor(e)
+		w, h = max(w, lipgloss.Width(n)), max(h, lipgloss.Height(n))
 	}
-	if note := m.note(); note != "" {
-		sections = append(sections, "", note)
-	}
-	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Top, m.note())
 }
 
 // renderRow lays out one theme: the name, where it came from, and a tick on the
@@ -236,6 +248,10 @@ func (m *themeScreen) note() string {
 	if !ok {
 		return ""
 	}
+	return m.noteFor(e)
+}
+
+func (m *themeScreen) noteFor(e theme.Entry) string {
 	switch {
 	case e.Err != nil:
 		return st.err.Render(safeText(fmt.Sprintf("%s: %v", e.Source, e.Err)))

@@ -508,3 +508,41 @@ func TestThemeListAlignsCustomRows(t *testing.T) {
 		t.Errorf("custom row starts in column %d, built-in row in column %d", mine, dracula)
 	}
 }
+
+// Some bundled themes credit an author under the preview and some do not. The
+// screen is centred as one block, so a note that came and went moved the whole
+// panel up and down as the cursor passed over it. Every theme in the list, a
+// broken one with a longer note included, must draw the panel in one place.
+func TestThemePickerDoesNotMoveAsTheCursorDoes(t *testing.T) {
+	dir := t.TempDir()
+	writeTheme(t, dir, "broken.toml", "name = \"broken\"\naccent = \"not a colour\"\n")
+	m := hotModel(t, dir)
+	openThemes(t, m)
+	send(t, m, "home")
+
+	// where is the panel's outline: the first and last drawn lines, and the
+	// column the top border starts in.
+	where := func() [3]int {
+		lines := strings.Split(plain(draw(t, m)), "\n")
+		top, bottom := -1, -1
+		for i, l := range lines {
+			if strings.TrimSpace(l) != "" {
+				if top < 0 {
+					top = i
+				}
+				bottom = i
+			}
+		}
+		left := len(lines[top]) - len(strings.TrimLeft(lines[top], " "))
+		return [3]int{top, bottom, left}
+	}
+
+	want := where()
+	for i := range m.themes.entries {
+		if got := where(); got != want {
+			t.Errorf("%s: panel at (top, bottom, left) %v, the first theme's at %v",
+				m.themes.entries[i].Name, got, want)
+		}
+		send(t, m, "down")
+	}
+}
