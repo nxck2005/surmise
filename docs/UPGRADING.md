@@ -55,6 +55,17 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## v0.8.0 → v0.8.1: a steadier theme picker
+
+- **The theme picker stays still.** Some themes show who made them under the
+  preview and some do not, and the whole screen used to jump up and down as
+  you moved between them. The space for that line is now always there.
+- **The about screen's license line is shorter.** It now reads
+  `MIT — deps under their own terms`. LICENSE still has the full text.
+
+Nothing else changed: `schema` does not move, no daily answer moves, and no
+theme or word list changed.
+
 ## v0.7.6 → v0.8.0: the web version moves to Cloudflare
 
 The browser version at <https://surmise.nxck.dev> now runs on Cloudflare
