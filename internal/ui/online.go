@@ -17,6 +17,21 @@ import (
 // netTimeout bounds one network call made from the UI.
 const netTimeout = online.Timeout
 
+// maxNoteRunes bounds text from the server that lands on Model.note. The
+// server is ours, but a message is drawn on one line inside the panel, and an
+// over-long one would widen the frame past the terminal.
+const maxNoteRunes = 120
+
+// serverNote is server text made fit for Model.note: cut to maxNoteRunes,
+// ending in "…" when it was cut. safeText still runs when it is drawn.
+func serverNote(s string) string {
+	r := []rune(s)
+	if len(r) <= maxNoteRunes {
+		return s
+	}
+	return string(r[:maxNoteRunes-1]) + "…"
+}
+
 type statusMsg struct {
 	status online.Status
 	err    error
@@ -67,7 +82,7 @@ func (m *Model) markGone(err error) bool {
 		return false
 	}
 	m.gone = true
-	m.note = gone.Message
+	m.note = serverNote(gone.Message)
 	return true
 }
 

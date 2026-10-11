@@ -184,8 +184,8 @@ from a stable tag, so nothing can promote a build the release chain did not
 test.
 
 Staging is a separate Worker, not a preview of the production one, so it keeps
-one address and has its own D1 database. Both Workers
-have a public `workers.dev` address, which the job prints in its summary.
+one address and has its own D1 database. Both Workers have a public
+`workers.dev` address, which the job prints in its summary.
 `surmise.nxck.dev` is a custom domain on the production Worker, attached in the
 Cloudflare dashboard rather than in the config, so the deploy token needs no
 DNS access.

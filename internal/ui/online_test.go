@@ -103,7 +103,10 @@ func winDaily(t *testing.T, m *Model) {
 func TestNothingOnlineWithoutConsent(t *testing.T) {
 	f := &fakeOnline{}
 	m := newOnlineModel(t, f, false)
-	runCmd(t, m, m.Init())
+	m.Init() // not drained: its batch holds the clock
+	if m.statusAsked {
+		t.Error("Init asked for the status without consent")
+	}
 	winDaily(t, m)
 	send(t, m, "esc") // back to the menu
 	openDaily(t, m)
@@ -115,22 +118,25 @@ func TestNothingOnlineWithoutConsent(t *testing.T) {
 func TestStatusIsAskedOnceWithConsent(t *testing.T) {
 	f := &fakeOnline{}
 	m := newOnlineModel(t, f, true)
-	runCmd(t, m, m.Init())
-	if n := len(f.calls); n != 1 || f.calls[0] != "status" {
-		t.Fatalf("calls = %v, want exactly one status", f.calls)
+	// Init is not drained (its batch holds the clock); asking is what marks
+	// the status as asked, and only statusCmd does that.
+	m.Init()
+	if !m.statusAsked {
+		t.Fatal("Init did not ask for the status with consent")
 	}
 
-	// Toggling the network off and on in settings asks nothing again.
+	// Toggling the network off and on in settings asks nothing again, with
+	// every command each key returns drained.
 	m.menu.cursor = menuIndex(t, m, choiceSettings, 0)
-	send(t, m, "enter") // the settings screen
+	press(t, m, "enter") // the settings screen
 	send(t, m, "down", "down", "down")
 	if m.settings.cursor != rowNetwork {
 		t.Fatalf("cursor = %d, want the network row", m.settings.cursor)
 	}
-	send(t, m, "right") // off; a commit runs, and asks nothing
-	send(t, m, "right") // on; likewise
-	if n := len(f.calls); n != 1 {
-		t.Errorf("calls = %v, want the one status still", f.calls)
+	press(t, m, "right") // off
+	press(t, m, "right") // on
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %v, want none: the status was already asked this run", f.calls)
 	}
 }
 
@@ -168,11 +174,14 @@ func TestFinishingADailyPostsOnce(t *testing.T) {
 	}
 
 	// Reviewing the finished board and pressing enter again is not a second
-	// result.
-	send(t, m, "enter")
-	send(t, m, "enter")
+	// result. press drains what each key asks for, so a post would be seen.
+	press(t, m, "enter") // review
+	if m.screen != screenGame {
+		t.Fatalf("screen = %v, want the reviewed board", m.screen)
+	}
+	press(t, m, "enter") // back to the result
 	if _, n := f.posts(); n != 1 {
-		t.Errorf("after re-entering a finished board, posts = %v", posts)
+		t.Errorf("after re-entering a finished board, posts = %v", f.calls)
 	}
 }
 
@@ -214,7 +223,7 @@ func TestNobodySolvedLine(t *testing.T) {
 func TestGoneStopsEverything(t *testing.T) {
 	f := &fakeOnline{statusErr: &online.GoneError{Message: "please update"}}
 	m := newOnlineModel(t, f, true)
-	runCmd(t, m, m.Init())
+	runCmd(t, m, m.statusCmd())
 
 	if frame := draw(t, m); !strings.Contains(frame, "please update") {
 		t.Errorf("frame does not say why the server refused this client:\n%s", frame)
@@ -238,7 +247,7 @@ func TestGoneStopsEverything(t *testing.T) {
 func TestStatusCanSwitchTheDailyOff(t *testing.T) {
 	f := &fakeOnline{status: online.Status{Features: online.Features{Daily: false}}}
 	m := newOnlineModel(t, f, true)
-	runCmd(t, m, m.Init())
+	runCmd(t, m, m.statusCmd())
 
 	winDaily(t, m)
 	if _, n := f.posts(); n != 0 {
@@ -254,7 +263,7 @@ func TestStatusCanSwitchTheDailyOff(t *testing.T) {
 func TestStatusMessageShowsOnce(t *testing.T) {
 	f := &fakeOnline{status: online.Status{Message: "maintenance tonight"}}
 	m := newOnlineModel(t, f, true)
-	runCmd(t, m, m.Init())
+	runCmd(t, m, m.statusCmd())
 
 	if frame := draw(t, m); !strings.Contains(frame, "maintenance tonight") {
 		t.Errorf("frame does not carry the server's message:\n%s", frame)
@@ -291,5 +300,21 @@ func TestMostIn(t *testing.T) {
 		if got := mostIn(online.DailyCount{Distribution: d}); got != want {
 			t.Errorf("mostIn(%v) = %d, want %d", d, got, want)
 		}
+	}
+}
+
+func TestServerNoteIsCapped(t *testing.T) {
+	long := strings.Repeat("é", 500)
+	f := &fakeOnline{statusErr: &online.GoneError{Message: long}}
+	m := newOnlineModel(t, f, true)
+	runCmd(t, m, m.statusCmd())
+	if n := len([]rune(m.note)); n != maxNoteRunes {
+		t.Errorf("note is %d runes, want %d", n, maxNoteRunes)
+	}
+	if !strings.HasSuffix(m.note, "…") {
+		t.Errorf("a cut note should end in an ellipsis: %q", m.note)
+	}
+	if got := serverNote("short"); got != "short" {
+		t.Errorf("serverNote(short) = %q", got)
 	}
 }

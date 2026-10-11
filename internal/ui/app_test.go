@@ -75,46 +75,48 @@ func animModel(t *testing.T) *Model {
 	return newModelWithMotion(t, motionPronouncedName)
 }
 
-// runCmd drains a command the way the framework would: its messages go back
-// through Update, and a tea.BatchMsg is expanded and drained in order, each
-// sub-command's message fed back in turn.
+// runCmd drains a command the way the framework would: its message goes back
+// through Update, a tea.BatchMsg is expanded and drained in order, and every
+// command that comes back is drained in turn.
 //
-// A command that waits — a tick, the theme watch — is dropped rather than
-// pumped: tea.Tick really sleeps, and the test runner would pay a second of
-// wall clock for it on every drain. pump drops ticks, but only after paying
-// for the sleep; a batch needs the speed, so the budget below answers "is
-// anything coming back soon enough to be one of this test's commands" and
-// drops the rest. The real commands here answer in microseconds; only ticks
-// ever meet the budget.
-const runCmdBudget = 500 * time.Millisecond
-
+// It runs everything synchronously, so it must never be handed a command that
+// waits: the one-second clock (tick) or a tea.Tick of any kind. That is why
+// the online tests never drain Init — its batch holds the clock — and ask for
+// the status with statusCmd instead. A tickMsg that does arrive ends the drain,
+// as it does in pump. The depth bound turns a command loop into a failure
+// rather than a hang.
 func runCmd(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	drainCmd(t, m, cmd, 0)
+}
+
+func drainCmd(t *testing.T, m *Model, cmd tea.Cmd, depth int) {
 	t.Helper()
 	if cmd == nil {
 		return
 	}
-	msg := make(chan tea.Msg, 1)
-	go func() {
-		msg <- cmd()
-	}()
-	var got tea.Msg
-	select {
-	case got = <-msg:
-	case <-time.After(runCmdBudget):
-		return // a waiting command — the clock's tick or the theme watch
+	if depth > 32 {
+		t.Fatal("commands did not settle")
 	}
-	switch got := got.(type) {
-	case nil:
+	switch msg := cmd().(type) {
+	case nil, tickMsg:
 		return
 	case tea.BatchMsg:
-		for _, c := range got {
-			runCmd(t, m, c)
+		for _, c := range msg {
+			drainCmd(t, m, c, depth+1)
 		}
-		return
 	default:
-		_, next := m.Update(got)
-		runCmd(t, m, next)
+		_, next := m.Update(msg)
+		drainCmd(t, m, next, depth+1)
 	}
+}
+
+// press sends one key and drains whatever it asks for, unlike send, which
+// drops the commands a key returns.
+func press(t *testing.T, m *Model, k string) {
+	t.Helper()
+	_, cmd := m.Update(key(k))
+	runCmd(t, m, cmd)
 }
 
 // reloadProfile shows the profile the way opening it does, from one read of the
