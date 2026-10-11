@@ -1,8 +1,10 @@
 # security
 
-Surmise is a single-player game that runs offline. There is no account, no
-server and no telemetry, so the surface is small — but the app does read text it
-did not write, and this page says how to report a problem with that safely.
+Surmise is a word game that runs offline unless the player turns network on.
+There is no account and no telemetry. With network on it talks to one small API
+at surmise.nxck.dev/api/v1, described below. The surface is small — but the app
+does read text it did not write, and this page says how to report a problem
+with that safely.
 
 ## Supported versions
 
@@ -41,6 +43,11 @@ In scope:
   repository, or scripts injected beyond the app's own bundle.
 - Anything that lets a puzzle record, settings file or backup escape the data
   directory without the player asking it to.
+- The API under `https://surmise.nxck.dev/api/v1` — the Worker script in
+  `worker/`: its input validation and rate limits, anything that lets a
+  request read or change data it should not, and anything that makes the
+  Worker serve code other than this repository's.
+- How the game handles what the server sends back.
 
 Not in scope:
 
@@ -52,12 +59,23 @@ Not in scope:
 - The vendored Bubble Tea copy's upstream defects — those belong to
   [bubbletea](https://github.com/charmbracelet/bubbletea/security), though say so
   in the report and the local copy will be patched too.
+- A flood of requests against the API. It has rate limits, but absorbing a
+  determined flood is Cloudflare's job, not a defect in this code.
 
 The line is the file you open, not the directory it ends up in. A backup or a
 theme that came from somebody else is in scope even though restoring it puts it
 in your data directory: so is one that leaves the app unusable, slow or
 unrecoverable through its own screens, because sharing these files is what the
 features invite.
+
+## What the server stores
+
+- **Daily counts.** For each day and word length: how many players solved it
+  in each number of guesses, and how many did not. No name, no id, no IP
+  address. Kept 90 days, then deleted by a daily job.
+
+The Worker writes no logs of its own. Cloudflare's request logs are outside
+this repository.
 
 ## Design notes that bound the risk
 

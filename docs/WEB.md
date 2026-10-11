@@ -165,10 +165,12 @@ v2.0.8 plus two small additive files; see
 `.github/workflows/deploy-web.yml`.
 
 The build happens in GitHub Actions and the result is uploaded ready-made with
-`wrangler deploy`. The Worker is static assets only: it has no script, so every
-request is answered from `web/dist` and none of our code runs. Its config is
-`worker/wrangler.jsonc`, and `worker/package.json` pins the `wrangler` the job
-runs, with a lockfile.
+`wrangler deploy`. Static files are answered straight from `web/dist` and run
+none of our code. Only `/api/*` runs the Worker script in `worker/src/`
+(`run_worker_first`). It keeps its data in a D1 database — `surmise-production`,
+and `surmise-staging` for staging — and a daily cron deletes rows past their
+retention. Its config is `worker/wrangler.jsonc`, and `worker/package.json` pins
+the `wrangler` the job runs, with a lockfile.
 
 | what happened | where it goes |
 |---|---|
@@ -182,7 +184,7 @@ from a stable tag, so nothing can promote a build the release chain did not
 test.
 
 Staging is a separate Worker, not a preview of the production one, so it keeps
-one address and will get its own data when the site gains an API. Both Workers
+one address and has its own D1 database. Both Workers
 have a public `workers.dev` address, which the job prints in its summary.
 `surmise.nxck.dev` is a custom domain on the production Worker, attached in the
 Cloudflare dashboard rather than in the config, so the deploy token needs no
@@ -208,5 +210,11 @@ checked a second time at `surmise.nxck.dev`. The job does not attach that
 domain, so only this check finds a domain that was removed in the dashboard, a
 changed DNS record or a bad certificate. Without it, those faults would leave
 the live site broken and the deploy green.
+
+Before each deploy the job applies any new D1 migrations from
+`worker/migrations/`, so the schema is ready before the code that needs it.
+After the deploy it runs `scripts/smoke-api.mjs`: in full against staging,
+and read-only against production, so a release never adds a fake player to a
+real day.
 
 [xterm.js]: https://xtermjs.org
