@@ -37,6 +37,20 @@ func (f *fakeOnline) Daily(_ context.Context, day string, length int) (online.Da
 	return f.daily[length], f.dailyErr
 }
 
+// The room half of the client. PR 8 replaces these with the real fakes; the
+// zero answers keep the rest of the UI tests compiling while the client lands.
+func (f *fakeOnline) CreateRoom(context.Context, online.RoomOptions) (online.Created, error) {
+	return online.Created{}, online.ErrOff
+}
+
+func (f *fakeOnline) Results(context.Context, string, string) (online.Results, error) {
+	return online.Results{}, online.ErrOff
+}
+
+func (f *fakeOnline) Dial(context.Context, string) (online.Conn, error) {
+	return nil, online.ErrOff
+}
+
 // posts reports how many result posts were recorded, and the one there was.
 func (f *fakeOnline) posts() ([]string, int) {
 	var got []string

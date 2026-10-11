@@ -65,8 +65,10 @@ the docs under [`docs/`](docs) cover the rest.
   the opened descriptor so the cap is the target's, a backup export skips
   linked names and reports them, and writes use `O_EXCL` and never create or
   cross one.
-- **New dependencies need an argument.** The direct set is deliberately four
-  Charm modules: bubbletea, lipgloss, colorprofile and x/ansi. The theme reader is hand-rolled, UUIDs come from
+- **New dependencies need an argument.** The direct set is deliberately small:
+  four Charm modules (bubbletea, lipgloss, colorprofile and x/ansi) and
+  coder/websocket, which online rooms need and which works in the browser
+  build too. The theme reader is hand-rolled, UUIDs come from
   `crypto/rand`, and that is on purpose — say why nothing smaller exists before
   adding a module.
 

@@ -69,7 +69,25 @@ type Client interface {
 	Status(ctx context.Context) (Status, error)
 	PostDaily(ctx context.Context, day string, length int, solved bool, guesses int) error
 	Daily(ctx context.Context, day string, length int) (DailyCount, error)
+	CreateRoom(ctx context.Context, opts RoomOptions) (Created, error)
+	Results(ctx context.Context, code, key string) (Results, error)
+	Dial(ctx context.Context, code string) (Conn, error)
 }
+
+// Conn is one open connection to a room.
+type Conn interface {
+	// Send writes one message.
+	Send(ctx context.Context, m ClientMsg) error
+	// Receive blocks for the next message from the room. The heartbeat's
+	// "pong" and frames that are not JSON objects are skipped, never
+	// returned. An error means the connection is over.
+	Receive(ctx context.Context) (ServerMsg, error)
+	// Close ends the connection. It is safe to call more than once.
+	Close() error
+}
+
+// DialTimeout bounds opening a room connection.
+const DialTimeout = 10 * time.Second
 
 // ClientName is the X-Surmise-Client value: "surmise/0.9.0 (linux/amd64)".
 // Characters the header's grammar does not allow are dropped from the

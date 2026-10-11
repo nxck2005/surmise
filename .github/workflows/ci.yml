@@ -76,8 +76,9 @@ jobs:
           go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
           staticcheck ./...
 
-      # The dependency set is deliberately Charm-only; this keeps an unused
-      # module from drifting back into go.mod unnoticed.
+      # The dependency set is deliberately small — the Charm modules plus
+      # coder/websocket for online rooms; this keeps an unused module from
+      # drifting back into go.mod unnoticed.
       #
       # GOWORK=off on purpose: the check has to measure the go.mod a downstream
       # consumer resolves, not the one the workspace happens to build.
