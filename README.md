@@ -231,6 +231,9 @@ server at surmise.nxck.dev:
 - when you finish a daily, it sends whether you solved it and in how many
   guesses — no name, no id. the daily screen then shows how everyone did on
   the modes you've finished.
+- the menu's status line adds how many dailies everyone has played today —
+  every finished board in every mode, so someone who plays all three counts
+  three times.
 
 every request also says which version of surmise you're on and your os, so an
 old version can be told to update. your ip address reaches cloudflare like it

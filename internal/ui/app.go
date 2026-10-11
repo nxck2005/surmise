@@ -227,6 +227,10 @@ type Model struct {
 	status *online.Status
 	// statusAsked stops a second status request in one run.
 	statusAsked bool
+	// menuCountAt is when the menu last asked for the day's count, and
+	// menuCountBusy whether that ask is still out. See menuCountCmd.
+	menuCountAt   time.Time
+	menuCountBusy bool
 	// note is a one-line message that is not an error: the server's status
 	// message, or why online features stopped. It is shown under the body
 	// like err, and dismissed the same way.
@@ -1016,8 +1020,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.sprintExpired() {
 			m.endSprint()
 		}
-		// Redraw so the clock advances and expired messages disappear.
-		return m, tick()
+		// Redraw so the clock advances and expired messages disappear. The
+		// menu's daily count rides the same clock: it asks only when the menu
+		// is up and its last answer has gone stale.
+		return m, tea.Batch(tick(), m.menuCountCmd())
 
 	case animMsg:
 		// The chain is re-armed by Update's wrapper, not here: clearing the flag
@@ -1065,6 +1071,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = &msg.status
 		if msg.status.Message != "" {
 			m.note = serverNote(msg.status.Message)
+		}
+		return m, nil
+
+	case menuCountMsg:
+		m.menuCountBusy = false
+		if msg.err != nil {
+			m.markGone(msg.err)
+			return m, nil
+		}
+		if msg.day == m.day.String() {
+			m.menu.played = msg.played
 		}
 		return m, nil
 
@@ -1639,6 +1656,11 @@ func (m *Model) back() tea.Cmd {
 // last visit would all otherwise be missed.
 func (m *Model) openMenu() {
 	m.menu.reload(m.store, m.day)
+	// The day's count is the server's, not the disk's, so reload leaves it
+	// alone; it goes when the player has turned the network off since.
+	if !m.dailyOnline() {
+		m.menu.played = 0
+	}
 	m.screen = screenMenu
 }
 
@@ -2761,6 +2783,11 @@ type menuScreen struct {
 	modesDone int
 	modesOf   int
 	streak    int
+
+	// played is how many daily boards everyone has finished today, all modes
+	// summed, from the server. Zero shows nothing. Unlike the two above it is
+	// not derived from disk, so reload does not touch it; see menuCountCmd.
+	played int
 }
 
 // reload derives the status line from what is on disk. One pass over the saves
@@ -2795,6 +2822,12 @@ func (m *menuScreen) status() string {
 	}
 	if m.streak > 0 {
 		parts = append(parts, fmt.Sprintf("streak %d", m.streak))
+	}
+	switch {
+	case m.played == 1:
+		parts = append(parts, "1 daily today")
+	case m.played > 1:
+		parts = append(parts, formatCount(m.played)+" dailies today")
 	}
 	return strings.Join(parts, " · ")
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/store"
@@ -316,5 +317,125 @@ func TestServerNoteIsCapped(t *testing.T) {
 	}
 	if got := serverNote("short"); got != "short" {
 		t.Errorf("serverNote(short) = %q", got)
+	}
+}
+
+// threeModes is a count for every mode of the day: 1,000 + 2,000 + 410 boards.
+func threeModes() map[int]online.DailyCount {
+	return map[int]online.DailyCount{
+		4: {Played: 1000, Distribution: make([]int, 5)},
+		5: {Played: 2000, Distribution: make([]int, 6)},
+		6: {Played: 410, Distribution: make([]int, 7)},
+	}
+}
+
+func TestMenuShowsDailiesPlayed(t *testing.T) {
+	f := &fakeOnline{daily: threeModes()}
+	m := newOnlineModel(t, f, true)
+	m.openMenu()
+	runCmd(t, m, m.menuCountCmd())
+
+	if got := f.dailies(); len(got) != 3 {
+		t.Fatalf("dailies = %v, want one ask per mode", got)
+	}
+	if frame := draw(t, m); !strings.Contains(frame, "3,410 dailies today") {
+		t.Errorf("menu does not carry the day's count:\n%s", frame)
+	}
+}
+
+func TestMenuCountSaysOneDaily(t *testing.T) {
+	m := newModel(t)
+	m.menu.played = 1
+	if got := m.menu.status(); got != "1 daily today" {
+		t.Errorf("status = %q", got)
+	}
+}
+
+func TestMenuCountJoinsTheStatusLine(t *testing.T) {
+	m := newModel(t)
+	m.menu.modesDone, m.menu.modesOf, m.menu.streak, m.menu.played = 1, 3, 4, 3410
+	want := "daily 1/3 · streak 4 · 3,410 dailies today"
+	if got := m.menu.status(); got != want {
+		t.Errorf("status = %q, want %q", got, want)
+	}
+}
+
+func TestMenuCountNeedsConsent(t *testing.T) {
+	f := &fakeOnline{daily: threeModes()}
+	m := newOnlineModel(t, f, false)
+	m.openMenu()
+	if cmd := m.menuCountCmd(); cmd != nil {
+		t.Error("the menu asked for a count without consent")
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %v, want none", f.calls)
+	}
+}
+
+func TestMenuCountOnlyOnTheMenu(t *testing.T) {
+	f := &fakeOnline{daily: threeModes()}
+	m := newOnlineModel(t, f, true)
+	m.openMenu()
+	press(t, m, "enter") // a board
+	if m.screen == screenMenu {
+		t.Fatal("still on the menu")
+	}
+	if cmd := m.menuCountCmd(); cmd != nil {
+		t.Error("asked for the menu's count away from the menu")
+	}
+}
+
+func TestMenuCountIsNotAskedEveryTick(t *testing.T) {
+	f := &fakeOnline{daily: threeModes()}
+	m := newOnlineModel(t, f, true)
+	m.openMenu()
+
+	// The clock arms it: one tick on the menu sends the ask out.
+	m.Update(tickMsg(timeNow()))
+	if !m.menuCountBusy {
+		t.Fatal("a tick on the menu did not ask for the count")
+	}
+	// While it is out, and after it lands, the next ticks ask nothing more
+	// until menuCountEvery has passed.
+	if cmd := m.menuCountCmd(); cmd != nil {
+		t.Error("asked again while the first ask was out")
+	}
+	m.Update(menuCountMsg{day: m.day.String(), played: 5})
+	if cmd := m.menuCountCmd(); cmd != nil {
+		t.Error("asked again before the count went stale")
+	}
+	m.menuCountAt = timeNow().Add(-menuCountEvery - time.Second)
+	if cmd := m.menuCountCmd(); cmd == nil {
+		t.Error("did not ask again once the count was stale")
+	}
+}
+
+func TestMenuCountGoesWithTheNetwork(t *testing.T) {
+	f := &fakeOnline{daily: threeModes()}
+	m := newOnlineModel(t, f, true)
+	m.openMenu()
+	runCmd(t, m, m.menuCountCmd())
+	if m.menu.played == 0 {
+		t.Fatal("no count to begin with")
+	}
+	s := m.settingsOf()
+	s.Network = false
+	m.saveSettings(s)
+	m.openMenu()
+	if strings.Contains(draw(t, m), "dailies today") {
+		t.Error("the count outlived turning the network off")
+	}
+}
+
+func TestMenuCountIgnoresAFailedMode(t *testing.T) {
+	f := &fakeOnline{daily: threeModes(), dailyErr: &online.StatusError{Code: 500}}
+	m := newOnlineModel(t, f, true)
+	m.openMenu()
+	runCmd(t, m, m.menuCountCmd())
+	if m.menu.played != 0 {
+		t.Errorf("played = %d, want nothing shown after a failure", m.menu.played)
+	}
+	if m.menuCountBusy {
+		t.Error("a failed ask stayed out")
 	}
 }

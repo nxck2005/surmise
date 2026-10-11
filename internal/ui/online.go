@@ -7,11 +7,13 @@ package ui
 import (
 	"context"
 	"errors"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/online"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // netTimeout bounds one network call made from the UI.
@@ -117,5 +119,51 @@ func (m *Model) dailyCountCmd(day string, length int) tea.Cmd {
 		defer cancel()
 		count, err := client.Daily(ctx, day, length)
 		return dailyCountMsg{day: day, length: length, count: count, err: err}
+	}
+}
+
+// menuCountEvery is how long the menu's daily count stays fresh. The menu asks
+// again only while it is showing and only once this has passed, so a player
+// sitting on it costs three small reads every five minutes and no more.
+const menuCountEvery = 5 * time.Minute
+
+// menuCountMsg carries the day's total of finished daily boards, all modes
+// summed. It counts boards, not people — the count is anonymous, so a player
+// who finishes all three modes is three — which is why the menu says
+// "dailies" rather than "players".
+type menuCountMsg struct {
+	day    string
+	played int
+	err    error
+}
+
+// menuCountCmd asks for the day's total when the menu is showing, the daily
+// count is on, nothing is already asking, and the last answer is stale. It is
+// armed from the one-second clock, so opening the menu needs no call of its
+// own and every way of reaching the menu is covered.
+func (m *Model) menuCountCmd() tea.Cmd {
+	if m.screen != screenMenu || m.menuCountBusy || !m.dailyOnline() {
+		return nil
+	}
+	if !m.menuCountAt.IsZero() && timeNow().Sub(m.menuCountAt) < menuCountEvery {
+		return nil
+	}
+	m.menuCountBusy = true
+	m.menuCountAt = timeNow()
+	day, client := m.day.String(), m.online
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), netTimeout)
+		defer cancel()
+		total := 0
+		for _, n := range words.Lengths {
+			c, err := client.Daily(ctx, day, n)
+			if err != nil {
+				// A partial sum would be a wrong number, so any failure shows
+				// nothing.
+				return menuCountMsg{day: day, err: err}
+			}
+			total += c.Played
+		}
+		return menuCountMsg{day: day, played: total}
 	}
 }
