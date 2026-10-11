@@ -30,6 +30,13 @@ const (
 	// way to read that at runtime — debug.ReadBuildInfo reports it only for a
 	// binary built as a module, not for `go run`.
 	Repo = "github.com/nxck2005/" + Name
+
+	// API is the server the online features talk to: the same host as the
+	// browser build, under /api/v1. A released binary keeps calling this
+	// address for as long as it runs, so the domain is permanent.
+	// $SURMISE_API replaces it for one run (see main_native.go); the browser
+	// build always uses its own origin instead.
+	API = "https://" + Name + ".nxck.dev/api/v1"
 )
 
 // Env names one of the product's environment variables: Env("THEME") is

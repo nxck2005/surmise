@@ -17,6 +17,7 @@ import (
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/build"
 	"github.com/nxck2005/surmise/internal/daily"
+	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 	"github.com/nxck2005/surmise/internal/ui"
@@ -84,7 +85,10 @@ func main() {
 //
 // transfer is how a backup file leaves and re-enters this build; nil means the
 // platform cannot move files, and the UI then offers no backup row.
-func uiOptions(cfg config, dataDir string, transfer ui.Transfer) ui.Options {
+//
+// api is the server client, or nil when this platform has no server to reach;
+// the UI still asks for consent before every call.
+func uiOptions(cfg config, dataDir string, transfer ui.Transfer, api online.Client) ui.Options {
 	// The daily's seeds come from here, which is the one place a future remote
 	// source would be chosen; ui.Options carries it in so nothing below has to
 	// know which one it got.
@@ -98,6 +102,7 @@ func uiOptions(cfg config, dataDir string, transfer ui.Transfer) ui.Options {
 		DailySeeds: daily.Local(),
 		DataDir:    dataDir,
 		Transfer:   transfer,
+		Online:     api,
 	}
 }
 

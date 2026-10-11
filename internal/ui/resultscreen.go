@@ -194,8 +194,7 @@ func (m *Model) nextResult() tea.Cmd {
 			m.openSocialScreen()
 			return nil
 		}
-		m.openDailyScreen()
-		return nil
+		return m.openDailyScreen()
 	}
 
 	m.screen = screenGame

@@ -6,12 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/build"
+	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/stats"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
@@ -130,10 +133,19 @@ func run(cfg config) error {
 		return printPlaytime(s)
 	}
 
+	// The server the online features use. $SURMISE_API points one run at
+	// staging or a local Worker; nothing is called unless the player has
+	// turned network on in settings.
+	base := os.Getenv(brand.Env("API"))
+	if base == "" {
+		base = brand.API
+	}
+	api := online.New(base, online.ClientName(brand.Name, build.Get().Version, runtime.GOOS, runtime.GOARCH))
+
 	// The backup screen writes into the data directory, so it follows -data like
 	// everything else: a scratch install backs itself up to its own scratch
 	// directory.
-	return start(s, lib, uiOptions(cfg, dataDir, fileTransfer{dir: dataDir}))
+	return start(s, lib, uiOptions(cfg, dataDir, fileTransfer{dir: dataDir}, api))
 }
 
 // printPlaytime reports the lifetime counter. It only reads: the seeded value an

@@ -75,6 +75,48 @@ func animModel(t *testing.T) *Model {
 	return newModelWithMotion(t, motionPronouncedName)
 }
 
+// runCmd drains a command the way the framework would: its messages go back
+// through Update, and a tea.BatchMsg is expanded and drained in order, each
+// sub-command's message fed back in turn.
+//
+// A command that waits — a tick, the theme watch — is dropped rather than
+// pumped: tea.Tick really sleeps, and the test runner would pay a second of
+// wall clock for it on every drain. pump drops ticks, but only after paying
+// for the sleep; a batch needs the speed, so the budget below answers "is
+// anything coming back soon enough to be one of this test's commands" and
+// drops the rest. The real commands here answer in microseconds; only ticks
+// ever meet the budget.
+const runCmdBudget = 500 * time.Millisecond
+
+func runCmd(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	if cmd == nil {
+		return
+	}
+	msg := make(chan tea.Msg, 1)
+	go func() {
+		msg <- cmd()
+	}()
+	var got tea.Msg
+	select {
+	case got = <-msg:
+	case <-time.After(runCmdBudget):
+		return // a waiting command — the clock's tick or the theme watch
+	}
+	switch got := got.(type) {
+	case nil:
+		return
+	case tea.BatchMsg:
+		for _, c := range got {
+			runCmd(t, m, c)
+		}
+		return
+	default:
+		_, next := m.Update(got)
+		runCmd(t, m, next)
+	}
+}
+
 // reloadProfile shows the profile the way opening it does, from one read of the
 // store, so tests do not have to know the snapshot shape.
 func reloadProfile(t *testing.T, m *Model, displayName string, playtime time.Duration) {

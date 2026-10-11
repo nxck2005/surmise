@@ -13,6 +13,7 @@ import (
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/words"
 )
@@ -33,6 +34,11 @@ type dailyScreen struct {
 	// copyRequested acknowledges a copy of the trio result. Like the debrief's,
 	// it says requested rather than copied, because OSC 52 is never answered.
 	copyRequested bool
+
+	// counts is how everyone did, per length, for the modes this player has
+	// finished. It is filled in as answers arrive and emptied on reload; a
+	// mode with no entry shows nothing.
+	counts map[int]online.DailyCount
 }
 
 type dailyRow struct {
@@ -71,6 +77,7 @@ func (m *dailyScreen) reload(s store.Store, d daily.Day) {
 	m.day = d
 	m.err = nil
 	m.copyRequested = false
+	m.counts = nil
 	m.rows = make([]dailyRow, 0, len(words.Lengths))
 
 	ids, err := s.IDs()
@@ -101,6 +108,44 @@ func (m *dailyScreen) reload(s store.Store, d daily.Day) {
 		m.rows = append(m.rows, row)
 	}
 	m.cursor = min(max(m.cursor, 0), len(m.rows)-1)
+}
+
+// setCount records one mode's count.
+func (m *dailyScreen) setCount(length int, c online.DailyCount) {
+	if m.counts == nil {
+		m.counts = map[int]online.DailyCount{}
+	}
+	m.counts[length] = c
+}
+
+// renderCounts is one line per finished mode the server has answered for,
+// in mode order. Empty when there is nothing to show.
+func (m *dailyScreen) renderCounts() string {
+	var lines []string
+	for _, row := range m.rows {
+		if !row.done() {
+			continue
+		}
+		c, ok := m.counts[row.length]
+		if !ok || c.Played <= 0 {
+			continue
+		}
+		if c.Solved > 0 {
+			lines = append(lines, fmt.Sprintf("%d letters · %s played · %d%% solved · most in %d",
+				row.length, formatCount(c.Played), c.Solved*100/c.Played, mostIn(c)))
+		} else {
+			lines = append(lines, fmt.Sprintf("%d letters · %s played · nobody solved it yet",
+				row.length, formatCount(c.Played)))
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	muted := make([]string, len(lines))
+	for i, line := range lines {
+		muted[i] = st.muted.Render(line)
+	}
+	return block(strings.Join(muted, "\n"))
 }
 
 // selected returns the highlighted mode's row.
@@ -175,6 +220,9 @@ func (m *dailyScreen) view(h *hitMap) string {
 	sections := []string{heading, "", block(strings.Join(rows, "\n"))}
 	if card := m.renderTrio(); card != "" {
 		sections = append(sections, "", card)
+	}
+	if counts := m.renderCounts(); counts != "" {
+		sections = append(sections, "", counts)
 	}
 	if m.copyRequested {
 		sections = append(sections, "", st.muted.Render("copy requested"))
