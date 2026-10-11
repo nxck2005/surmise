@@ -44,6 +44,9 @@ type Summary struct {
 	// Challenge reports a reproducible social challenge. The list needs only
 	// the origin label; the full canonical code stays on the Game.
 	Challenge bool
+	// Room reports a finished room round. The list labels it, like the
+	// other origins.
+	Room bool
 }
 
 // Store reads and writes puzzles.
@@ -95,5 +98,6 @@ func summarize(g *game.Game) Summary {
 		Daily:     g.Daily,
 		Custom:    g.Custom,
 		Challenge: g.Challenge != nil,
+		Room:      g.Room != nil,
 	}
 }

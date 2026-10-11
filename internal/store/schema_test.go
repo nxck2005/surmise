@@ -179,3 +179,65 @@ func TestRecordsAreWrittenCompact(t *testing.T) {
 		}
 	}
 }
+
+// fixtureRoomRoundRecord is the room-round fixture's record as the code that
+// wrote it sees it: a valid finished round written by this build.
+func TestRoomRoundFixtureIsACurrentRecord(t *testing.T) {
+	b, err := os.ReadFile("testdata/room-round.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := decodeRecord("puzzle from testdata/room-round.json", b)
+	if err != nil {
+		t.Fatalf("the room-round fixture does not decode: %v", err)
+	}
+	if g.Room == nil || g.Room.Code != "K7M2QX" || g.Room.Seat != 2 || !g.Status.Done() {
+		t.Errorf("fixture round = %+v, want a finished room round", g)
+	}
+	if g.ID != "73144140-eaf5-8a2d-bb31-8f8cc2421824" {
+		t.Errorf("fixture id = %s, want the pinned RoomRoundID", g.ID)
+	}
+}
+
+// TestARoomRoundReadsAsAPuzzleWithoutTheKey is what an OLDER version sees when
+// it opens today's file: it declares the record shape of Game before the Room
+// field existed — every other field, and no room key — and finds a finished
+// puzzle with its guesses, because the Room section is simply unknown JSON to
+// such a reader.
+type gameWithoutRoom struct {
+	ID          string              `json:"id"`
+	Length      int                 `json:"length"`
+	Answer      string              `json:"answer"`
+	Guesses     []string            `json:"guesses"`
+	Marks       [][]game.Mark       `json:"marks"`
+	MaxAttempts int                 `json:"maxAttempts"`
+	Status      game.Status         `json:"status"`
+	StartedAt   time.Time           `json:"startedAt"`
+	UpdatedAt   time.Time           `json:"updatedAt"`
+	ElapsedMS   int64               `json:"elapsedMs"`
+	Daily       string              `json:"daily,omitempty"`
+	Deleted     bool                `json:"deleted,omitempty"`
+	Custom      bool                `json:"custom,omitempty"`
+	Challenge   *game.ChallengeInfo `json:"challenge,omitempty"`
+	Schema      int                 `json:"schema"`
+}
+
+func TestARoomRoundReadsAsAPuzzleWithoutTheKey(t *testing.T) {
+	b, err := os.ReadFile("testdata/room-round.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var old gameWithoutRoom
+	if err := json.Unmarshal(b, &old); err != nil {
+		t.Fatal(err)
+	}
+	if old.Schema != 1 {
+		t.Errorf("schema = %d, want 1", old.Schema)
+	}
+	if old.Status != game.Won || len(old.Guesses) != 2 || old.Guesses[1] != "crane" {
+		t.Errorf("older reader saw %d guesses, status %v", len(old.Guesses), old.Status)
+	}
+	if old.Challenge != nil || old.Daily != "" || old.Custom {
+		t.Errorf("older reader saw an origin that is not on the record: %+v", old)
+	}
+}

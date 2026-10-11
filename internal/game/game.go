@@ -89,6 +89,12 @@ type Game struct {
 	// the code, since the code can be used to recover the deleted answer.
 	Challenge *ChallengeInfo `json:"challenge,omitempty"`
 
+	// Room marks a finished round played in an online room (see RoomInfo).
+	// Like Challenge it is omitempty, so every other puzzle's file is
+	// unchanged, and an older version simply ignores the key — it reads a
+	// room round as an ordinary finished puzzle.
+	Room *RoomInfo `json:"room,omitempty"`
+
 	// Schema is the version of the save format this record was written with.
 	// The store stamps it on every write and refuses to read a number it does
 	// not know, so a breaking change to the format can never silently misread
@@ -111,9 +117,13 @@ type ChallengeInfo struct {
 // it as much as the person who played it. It is kept and listed like any other
 // puzzle; it simply does not move the numbers.
 //
+// A room round is left out too: its word was drawn by a server and its time
+// ran on a shared clock, and a race among friends is not a solo puzzle. Like
+// a custom puzzle it is listed and reviewable and moves no figure.
+//
 // This is the only place that judgement is made: including custom puzzles again
 // is deleting the one condition below.
-func (g *Game) CountsForStats() bool { return !g.Custom }
+func (g *Game) CountsForStats() bool { return !g.Custom && g.Room == nil }
 
 // Tombstone returns what is left of a puzzle once it is deleted: enough to
 // place it in the sequence of play, and nothing about how it was played. The
@@ -145,6 +155,7 @@ func (g *Game) Tombstone() *Game {
 		Daily:     g.Daily,
 		Custom:    g.Custom,
 		Challenge: challengeTombstone(g.Challenge),
+		Room:      roomTombstone(g.Room),
 		Deleted:   true,
 	}
 }
@@ -154,6 +165,13 @@ func challengeTombstone(info *ChallengeInfo) *ChallengeInfo {
 		return nil
 	}
 	return &ChallengeInfo{}
+}
+
+func roomTombstone(info *RoomInfo) *RoomInfo {
+	if info == nil {
+		return nil
+	}
+	return &RoomInfo{}
 }
 
 // attemptsFor returns how many guesses a word of length n allows. The genre
@@ -484,6 +502,11 @@ func (g *Game) Validate() error {
 	}
 	if g.Challenge != nil && (g.Custom || g.Daily != "") {
 		return errors.New("game: challenge has another puzzle origin")
+	}
+	if g.Room != nil {
+		if err := validRoom(g); err != nil {
+			return err
+		}
 	}
 
 	switch {

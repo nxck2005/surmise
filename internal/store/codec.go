@@ -179,7 +179,11 @@ type tombstoneRecord struct {
 	// Challenge keeps only the origin marker. Its empty object matches Game's
 	// field shape while omitting the reproducible code and therefore the answer.
 	Challenge *game.ChallengeInfo `json:"challenge,omitempty"`
-	Deleted   bool                `json:"deleted"`
+	// Room keeps only the origin marker, for the reason Custom does: a room
+	// round counts for nothing, and a tombstone that forgot that would read
+	// as an ordinary loss.
+	Room    *game.RoomInfo `json:"room,omitempty"`
+	Deleted bool           `json:"deleted"`
 }
 
 // encodeTombstone renders the marker a deleted finished puzzle leaves behind.
@@ -197,6 +201,12 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 	if g.Challenge != nil {
 		challenge = &game.ChallengeInfo{}
 	}
+	// The room marker is the same shape, and for the same reason: a round's
+	// origin is remembered, nothing about it can be recovered.
+	var room *game.RoomInfo
+	if g.Room != nil {
+		room = &game.RoomInfo{}
+	}
 	b, err := json.Marshal(tombstoneRecord{
 		Schema:    schemaVersion,
 		ID:        g.ID,
@@ -206,6 +216,7 @@ func encodeTombstone(g *game.Game) ([]byte, error) {
 		Daily:     g.Daily,
 		Custom:    g.Custom,
 		Challenge: challenge,
+		Room:      room,
 		Deleted:   g.Deleted,
 	})
 	if err != nil {
