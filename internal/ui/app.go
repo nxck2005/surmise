@@ -1064,7 +1064,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.status = &msg.status
 		if msg.status.Message != "" {
-			m.note = msg.status.Message
+			m.note = serverNote(msg.status.Message)
 		}
 		return m, nil
 

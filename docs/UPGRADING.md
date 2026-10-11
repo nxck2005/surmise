@@ -68,10 +68,11 @@ does that with one message that every version since v0.9.0 understands.
 
 - **A new online feature, off unless you turn it on.** With **network** on in
   settings, finishing a daily sends whether you solved it and in how many
-  guesses. Nothing else is sent: no name, no id. The daily screen then shows,
-  for each mode you've finished, how many people played, how many solved it,
-  and the most common number of guesses. A mode you haven't finished shows
-  nothing, so it can't give anything away.
+  guesses. No name and no id are sent; like every request, it also names the
+  app's version and your OS, so an old version can be told to update. The
+  daily screen then shows, for each mode you've finished, how many people
+  played, how many solved it, and the most common number of guesses. A mode
+  you haven't finished shows nothing, so it can't give anything away.
 - **If the server can't be reached, nothing changes.** The game leaves the
   line out.
 

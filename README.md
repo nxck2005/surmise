@@ -229,8 +229,12 @@ off by default. turn **network** on in settings and the game may talk to its
 server at surmise.nxck.dev:
 
 - when you finish a daily, it sends whether you solved it and in how many
-  guesses — no name, no id, nothing else. the daily screen then shows how
-  everyone did on the modes you've finished.
+  guesses — no name, no id. the daily screen then shows how everyone did on
+  the modes you've finished.
+
+every request also says which version of surmise you're on and your os, so an
+old version can be told to update. your ip address reaches cloudflare like it
+would for any website — the rate limit uses it, and it isn't kept.
 
 that's all for now. the server keeps those counts for 90 days. if it can't be
 reached, nothing changes — the game just leaves the online bits out. an old

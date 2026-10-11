@@ -74,6 +74,11 @@ features invite.
   in each number of guesses, and how many did not. No name, no id, no IP
   address. Kept 90 days, then deleted by a daily job.
 
+Every request also carries the app's version, OS and architecture in
+`X-Surmise-Client`, so the server can turn an old version away; it is not
+stored. The caller's IP address is used by Cloudflare's rate limiter, whose
+counters last a minute, and the Worker does not store it.
+
 The Worker writes no logs of its own. Cloudflare's request logs are outside
 this repository.
 

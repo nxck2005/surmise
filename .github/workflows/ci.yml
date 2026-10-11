@@ -95,6 +95,8 @@ jobs:
       # and its fit addon, both pinned exactly. worker/ is deliberately out of
       # scope: it installs build and test tools only (wrangler, typescript),
       # and the Worker bundle imports no npm package, so nothing from it ships.
+      # Its package.json overrides every transitive package that has a fixed
+      # release, so the Dependabot alerts on its lockfile stay closed.
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
