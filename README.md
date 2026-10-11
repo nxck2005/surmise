@@ -89,7 +89,8 @@ nord and a lot more. write your own themes as well.
 
 **built to be mouse first.** all of it.
 
-**no network required.** plays offline forever.
+**offline by default.** plays offline forever. turn network on in settings
+and the daily screen also shows how everyone else did.
 
 ## playing
 
@@ -193,11 +194,12 @@ edits apply live — save the file and the colours change under you, no restart.
 
 the settings screen holds an optional local profile name, the mode new puzzles
 start in, whether playing a different mode makes *that* the new default, and
-the network setting. its **appearance** row opens a second page: tile outlines,
-how much the board animates, and the splash — whether you get one, which ascii
-art it draws, how it goes away, and how long it stays up when it's timed. a
-fresh install waits for any key on the splash. cycling choices save
-immediately; the name editor saves on enter.
+the network setting (off until you turn it on — see [online](#online)). its
+**appearance** row opens a second page: tile outlines, how much the board
+animates, and the splash — whether you get one, which ascii art it draws, how
+it goes away, and how long it stays up when it's timed. a fresh install waits
+for any key on the splash. cycling choices save immediately; the name editor
+saves on enter.
 
 **tile outlines** are off by default. turned on, a board tall enough for
 three-row tiles draws the tiles you haven't played yet as boxes.
@@ -220,6 +222,19 @@ surmise -data ./scratch  # keep saves and settings somewhere else
 
 saves and settings otherwise live in your user config directory
 (`~/.config/surmise` on linux).
+
+## online
+
+off by default. turn **network** on in settings and the game may talk to its
+server at surmise.nxck.dev:
+
+- when you finish a daily, it sends whether you solved it and in how many
+  guesses — no name, no id, nothing else. the daily screen then shows how
+  everyone did on the modes you've finished.
+
+that's all for now. the server keeps those counts for 90 days. if it can't be
+reached, nothing changes — the game just leaves the online bits out. an old
+version the server no longer supports says so once and carries on offline.
 
 ## backing it up
 
@@ -267,10 +282,11 @@ on windows. inside it:
 - `themes/` — themes you wrote
 - `backups/` — backups written from the menu
 
-nothing leaves the machine: no account, no telemetry, no network at all. the
-browser build keeps the same things in the site's storage instead — see
-[in a browser](#in-a-browser). either way, every save file now carries a schema
-number, so an upgrade can never quietly misread your history.
+nothing leaves the machine unless you turn network on: no account, no
+telemetry, and with network off, no network at all. the browser build keeps the
+same things in the site's storage instead — see [in a browser](#in-a-browser).
+either way, every save file now carries a schema number, so an upgrade can
+never quietly misread your history.
 
 to uninstall completely, delete the binary and that folder — nothing is
 installed anywhere else. in a browser, clearing the site's data is the whole

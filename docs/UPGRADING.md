@@ -55,6 +55,29 @@ back.
 The browser build is unaffected either way: a browser decides for itself when
 its storage reaches the disk.
 
+## The online promise
+
+The network setting is off until you turn it on, and the game never needs the
+network to play.
+
+When it is on, an old version either works online, or it hides its online
+features and tells you to update. It never stops working offline. The server
+does that with one message that every version since v0.9.0 understands.
+
+## v0.8.1 → v0.9.0: how everyone did on the daily
+
+- **A new online feature, off unless you turn it on.** With **network** on in
+  settings, finishing a daily sends whether you solved it and in how many
+  guesses. Nothing else is sent: no name, no id. The daily screen then shows,
+  for each mode you've finished, how many people played, how many solved it,
+  and the most common number of guesses. A mode you haven't finished shows
+  nothing, so it can't give anything away.
+- **If the server can't be reached, nothing changes.** The game leaves the
+  line out.
+
+Nothing else changed: `schema` does not move, no daily answer moves, and no
+theme or word list changed.
+
 ## v0.8.0 → v0.8.1: a steadier theme picker
 
 - **The theme picker stays still.** Some themes show who made them under the
