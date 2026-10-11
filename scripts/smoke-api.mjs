@@ -313,6 +313,7 @@ expect(cDone !== null, "C hears its own done", "done", JSON.stringify(cDone));
 const cResults = await c.next("results");
 expect(cResults !== null && Array.isArray(cResults.ranking) && cResults.ranking.length === 1,
   "C's result ranks one player", "ranking.length 1", JSON.stringify(cResults));
+c.close();
 ok("an any-time room plays on the player's own clock");
 
 // 9. The results endpoint answers the finished seat.
