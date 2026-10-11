@@ -46,6 +46,8 @@ var _ interface {
 	Store
 	Settings() Settings
 	SaveSettings(Settings) error
+	Rooms() []RoomEntry
+	SaveRooms([]RoomEntry) error
 } = (*KVStore)(nil)
 
 // NewKV wraps a KV as a Store.
