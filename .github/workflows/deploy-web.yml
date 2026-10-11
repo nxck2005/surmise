@@ -108,6 +108,18 @@ jobs:
           cp worker/package.json worker/package-lock.json "$RUNNER_TEMP/"
           npm ci --ignore-scripts --prefix "$RUNNER_TEMP"
 
+      # Migrations run before the code that needs them. They are additive by
+      # rule (see AGENTS.md), so the Worker still running until the deploy
+      # below finishes is never broken by them.
+      - name: apply database migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          db=surmise-staging
+          env=--env=staging
+          if [ "$IS_PRODUCTION" = "true" ]; then db=surmise-production; env=--env=; fi
+          "$RUNNER_TEMP/node_modules/.bin/wrangler" d1 migrations apply "$db" --remote --config worker/wrangler.jsonc "$env"
+
       - name: deploy
         id: deploy
         env:
@@ -248,3 +260,18 @@ jobs:
 
           verify "$SITE"
           if [ "$IS_PRODUCTION" = "true" ]; then verify "$CUSTOM_DOMAIN"; fi
+
+      # The API is part of the same deployment, so by the time the site serves
+      # this build, so does the script. Staging gets the full smoke test,
+      # which writes one daily count. Production is checked read-only, so a
+      # release never adds a fake player to a real day.
+      - name: check the API
+        env:
+          SITE: ${{ steps.deploy.outputs.url }}
+        run: |
+          if [ "$IS_PRODUCTION" = "true" ]; then
+            node scripts/smoke-api.mjs "$SITE" --read-only
+            node scripts/smoke-api.mjs https://surmise.nxck.dev --read-only
+          else
+            node scripts/smoke-api.mjs "$SITE"
+          fi
