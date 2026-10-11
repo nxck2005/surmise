@@ -15,6 +15,7 @@ import (
 
 //go:embed data/answers4.txt data/answers5.txt data/answers6.txt
 //go:embed data/guesses4.txt data/guesses5.txt data/guesses6.txt
+//go:embed data/blocked.txt data/profanity.txt
 var data embed.FS
 
 // Lengths are the supported word lengths, in menu order. These are the game's
