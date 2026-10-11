@@ -93,9 +93,8 @@ jobs:
       # transitive package nobody calls does not fail the build. The npm audit
       # covers the browser shell, whose only shipped dependencies are xterm.js
       # and its fit addon, both pinned exactly. worker/ is deliberately out of
-      # scope: it pins the deploy CLI, which is CI-only, and nothing from it
-      # ships. Its package.json overrides every transitive package that has a
-      # fixed release, so the Dependabot alerts on its lockfile stay closed.
+      # scope: it installs build and test tools only (wrangler, typescript),
+      # and the Worker bundle imports no npm package, so nothing from it ships.
       - name: govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
@@ -138,3 +137,35 @@ jobs:
       # See third_party/bubbletea/PATCHES.md.
       - name: bubbletea copy is unmodified
         run: bash scripts/check-bubbletea.sh
+
+  # The Worker behind /api: type-checked and unit-tested in plain Node, then
+  # run locally under wrangler and driven end to end by the API smoke test.
+  # This job holds no secrets, so the install may run lifecycle scripts
+  # (wrangler's local runtime needs its platform binary).
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix worker
+      - run: npm run --prefix worker check
+      - name: API smoke test against a local Worker
+        run: |
+          # wrangler dev needs the assets directory to exist; the API does not
+          # read it.
+          mkdir -p web/dist
+          printf 'placeholder\n' > web/dist/index.html
+          cd worker
+          npx wrangler d1 migrations apply surmise-staging --local --env staging
+          npx wrangler dev --env staging --ip 127.0.0.1 --port 8787 >"$RUNNER_TEMP/wrangler-dev.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/wrangler-dev.pid"
+          cd ..
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null -H 'X-Surmise-Client: surmise/0.0.0-smoke (linux/amd64)' http://127.0.0.1:8787/api/v1/status; then break; fi
+            if [ "$i" = 60 ]; then cat "$RUNNER_TEMP/wrangler-dev.log"; exit 1; fi
+            sleep 1
+          done
+          node scripts/smoke-api.mjs http://127.0.0.1:8787 --rooms || { cat "$RUNNER_TEMP/wrangler-dev.log"; exit 1; }
+          kill "$(cat "$RUNNER_TEMP/wrangler-dev.pid")"

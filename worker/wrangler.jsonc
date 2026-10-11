@@ -1,7 +1,8 @@
-// The Worker that serves surmise.nxck.dev. For now it is static assets only:
-// there is no script, so every request is answered from web/dist and nothing
-// of ours runs. The API under /api/* arrives with the network features
-// (notes/plans/network-features.md), and only then does this gain a `main`.
+// The Worker that serves surmise.nxck.dev. Static files come from web/dist and
+// run none of our code. Only /api/* runs the script in src/index.ts (see
+// run_worker_first). Its bindings are declared twice, once at the top level
+// (production) and once under env.staging, because bindings are not inherited by
+// an environment.
 //
 // The top level is production and env.staging is a second, separate Worker.
 // Staging is its own Worker rather than a preview version of this one so that
@@ -14,19 +15,63 @@
 // token is deliberately scoped without it.
 {
   "name": "surmise",
+  "main": "src/index.ts",
   "compatibility_date": "2026-09-23",
   "assets": {
     // Relative to this file. scripts/build-web.sh fills it, and its _headers
     // file sets the security headers and the wasm's cache rule.
-    "directory": "../web/dist"
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
   },
-  // workers.dev stays on: it is how the deploy job checks a build before, and
+  // workers_dev stays on: it is how the deploy job checks a build before, and
   // without, the custom domain. Preview URLs are off because nothing uses them.
   "workers_dev": true,
   "preview_urls": false,
+  "triggers": { "crons": ["17 3 * * *"] },
+  "vars": {
+    "FEATURE_DAILY": "true",
+    "FEATURE_ROOMS": "false",
+    "STATUS_MESSAGE": "",
+    "MIN_CLIENT": "",
+    "GONE_MESSAGE": "this version can't use online features any more — update surmise to get them back"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "surmise-production",
+      "database_id": "0f556260-0ff1-488e-9af0-7f5b05cac81e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ratelimits": [
+    { "name": "RL_WRITE", "namespace_id": "1101", "simple": { "limit": 30, "period": 60 } },
+    { "name": "RL_READ", "namespace_id": "1102", "simple": { "limit": 120, "period": 60 } },
+    { "name": "RL_JOIN", "namespace_id": "1103", "simple": { "limit": 10, "period": 60 } }
+  ],
   "env": {
     "staging": {
-      "name": "surmise-staging"
+      "name": "surmise-staging",
+      "vars": {
+        "FEATURE_DAILY": "true",
+        "FEATURE_ROOMS": "false",
+        "STATUS_MESSAGE": "",
+        "MIN_CLIENT": "",
+        "GONE_MESSAGE": "this version can't use online features any more — update surmise to get them back"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "surmise-staging",
+          "database_id": "9915e14a-209a-4c51-84e2-b8afd6e60ac4",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "ratelimits": [
+        { "name": "RL_WRITE", "namespace_id": "1201", "simple": { "limit": 30, "period": 60 } },
+        { "name": "RL_READ", "namespace_id": "1202", "simple": { "limit": 120, "period": 60 } },
+        { "name": "RL_JOIN", "namespace_id": "1203", "simple": { "limit": 10, "period": 60 } }
+      ]
     }
   }
 }

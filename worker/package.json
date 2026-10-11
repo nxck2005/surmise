@@ -1,8 +1,16 @@
 {
   "name": "surmise-worker",
   "private": true,
-  "description": "Pins the wrangler CLI the deploy workflow runs, with a lockfile and integrity hashes. Not part of the app; nothing here ships.",
+  "type": "module",
+  "description": "The Worker behind surmise.nxck.dev: its /api script, the tests for it, and the pinned wrangler CLI. The Worker bundle imports no npm package; everything here is a build or test tool.",
+  "scripts": {
+    "types": "wrangler types --strict-vars=false",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test test/*.test.ts",
+    "check": "npm run types && npm run typecheck && npm run test"
+  },
   "dependencies": {
+    "typescript": "5.9.3",
     "wrangler": "4.137.0"
   },
   "overrides": {
