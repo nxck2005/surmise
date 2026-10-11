@@ -64,6 +64,18 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.9.0 → v0.9.1: the day's count on the menu
+
+- **With network on, the menu's status line says how many dailies everyone has
+  played today**, for example `daily 1/3 · streak 4 · 3,410 dailies today`. It
+  counts finished boards in every mode, not people: the count is anonymous, so
+  someone who plays all three modes counts three times. It shows nothing with
+  network off, and nothing that could hint at an answer.
+- The menu asks for it only while it is showing, at most every five minutes.
+
+Nothing else changed: `schema` does not move, no daily answer moves, and no
+theme or word list changed.
+
 ## v0.8.1 → v0.9.0: how everyone did on the daily
 
 - **A new online feature, off unless you turn it on.** With **network** on in
