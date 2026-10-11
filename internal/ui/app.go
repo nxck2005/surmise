@@ -23,6 +23,7 @@ import (
 	"github.com/nxck2005/surmise/internal/challenge"
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/stats"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
@@ -215,6 +216,22 @@ type Model struct {
 	// which is what the headless tests see.
 	transfer Transfer
 
+	// online is Options.Online, resolved: never nil.
+	online online.Client
+	// gone is set when the server turned this client away (410). Nothing
+	// online is tried again this run.
+	gone bool
+	// status is the server's GET /status answer, or nil before it arrives
+	// (or when it never does). A nil status means "assume every feature is
+	// on": the status only ever turns things off.
+	status *online.Status
+	// statusAsked stops a second status request in one run.
+	statusAsked bool
+	// note is a one-line message that is not an error: the server's status
+	// message, or why online features stopped. It is shown under the body
+	// like err, and dismissed the same way.
+	note string
+
 	// hits is where the last frame drew its clickable regions; hover is what the
 	// pointer was last over, which the next frame highlights. Both are written
 	// by View, which the framework calls on the same goroutine as Update
@@ -304,6 +321,11 @@ type Options struct {
 	// through the store — so empty simply means "not known", which is what the
 	// headless tests pass.
 	DataDir string
+	// Online is the server client. Nil means there is no server to reach —
+	// the headless tests and the Node smoke test — and is treated as
+	// online.Off. Consent is still checked before every call: a non-nil
+	// client is never used while Settings.Network is off.
+	Online online.Client
 }
 
 // settingsStore is the part of a store that remembers preferences. It is a
@@ -339,6 +361,10 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	}
 	if m.clipboard == nil {
 		m.clipboard = tea.SetClipboard
+	}
+	m.online = opts.Online
+	if m.online == nil {
+		m.online = online.Off
 	}
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
@@ -441,6 +467,9 @@ func (m *Model) submitGame() tea.Cmd {
 
 	cmd := m.game.submit()
 	if m.game.g.Status.Done() {
+		// The finishing guess of a daily is the one moment its result is
+		// sent: once, and never again on review or resume.
+		cmd = tea.Batch(cmd, m.postDailyCmd(m.game.g))
 		// The puzzle is already banked and saved by now — submit does both
 		// before returning, and no animation is ever allowed to sit between an
 		// event and its durable copy. Only which screen is showing waits, and
@@ -826,6 +855,7 @@ func (m *Model) dismissErr() {
 		return
 	}
 	m.err = nil
+	m.note = ""
 }
 
 // copyText is the one way the app asks for a clipboard write. The three copy
@@ -906,7 +936,7 @@ func (m *Model) Init() tea.Cmd {
 	// splash sweep normally starts when the first size arrives, after the first
 	// frame can be composed at the right phase; animCmd also covers a splash
 	// raised by a caller that already has a measured size.
-	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd(), m.animCmd())
+	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd(), m.animCmd(), m.statusCmd())
 }
 
 // splashCmd is the timer a timed splash runs on, or nil when there is nothing
@@ -1025,6 +1055,31 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Transient until the first guess, like every other new puzzle: opening
 		// the daily and walking away saves nothing.
 		m.openGame(msg.g, false)
+		return m, nil
+
+	case statusMsg:
+		if msg.err != nil {
+			m.markGone(msg.err) // any other failure: stay quiet, try nothing more
+			return m, nil
+		}
+		m.status = &msg.status
+		if msg.status.Message != "" {
+			m.note = msg.status.Message
+		}
+		return m, nil
+
+	case dailyPostedMsg:
+		m.markGone(msg.err)
+		return m, nil
+
+	case dailyCountMsg:
+		if msg.err != nil {
+			m.markGone(msg.err)
+			return m, nil
+		}
+		if msg.day == m.daily.day.String() {
+			m.daily.setCount(msg.length, msg.count)
+		}
 		return m, nil
 
 	case backupFileMsg:
@@ -1224,6 +1279,7 @@ func (m *Model) pointField(row int) bool {
 func (m *Model) fieldCommitted(row int) {
 	switch m.screen {
 	case screenSettings:
+		// Only the name field commits here; a commit can ask for nothing back.
 		m.commitSettings(row)
 	}
 }
@@ -1486,8 +1542,7 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		} else {
 			m.settings.cycle(-1)
 		}
-		m.commitSettings(a.index)
-		return nil
+		return m.commitSettings(a.index)
 	case actResultReview:
 		return m.reviewResult()
 
@@ -1775,7 +1830,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.openGame(g, false)
 
 	case choiceDaily:
-		m.openDailyScreen()
+		return m.openDailyScreen()
 
 	case choiceSocial:
 		m.openSocialScreen()
@@ -2006,9 +2061,18 @@ func (m *Model) updateDaily(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // them. The date is resolved once at startup, so a session left open across UTC
 // midnight keeps offering the day it started on until it is restarted — the
 // alternative is the board changing under a player mid-puzzle.
-func (m *Model) openDailyScreen() {
+func (m *Model) openDailyScreen() tea.Cmd {
 	m.daily.reload(m.store, m.day)
 	m.screen = screenDaily
+	// How everyone did, for each mode this player has finished. An unfinished
+	// mode asks nothing, so the screen cannot give a hint.
+	var cmds []tea.Cmd
+	for _, row := range m.daily.rows {
+		if row.done() {
+			cmds = append(cmds, m.dailyCountCmd(m.day.String(), row.length))
+		}
+	}
+	return tea.Batch(cmds...)
 }
 
 // copyTrio puts the day's three boards on the clipboard, once all three are
@@ -2126,7 +2190,7 @@ func (m *Model) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.back()
 	}
 	if changed {
-		m.commitSettings(m.settings.cursor)
+		return m, m.commitSettings(m.settings.cursor)
 	}
 	return m, nil
 }
@@ -2281,7 +2345,7 @@ func (m *Model) startCustom() tea.Cmd {
 // row is what was just changed: only a change to the mode moves the length this
 // run is playing, so toggling the other setting cannot quietly discard a
 // -length override.
-func (m *Model) commitSettings(row int) {
+func (m *Model) commitSettings(row int) tea.Cmd {
 	s := m.settingsOf()
 	s.Length, s.RememberLast = m.settings.length, m.settings.rememberLast
 	s.DisplayName = m.settings.name.value
@@ -2318,6 +2382,12 @@ func (m *Model) commitSettings(row int) {
 			m.anim.clear()
 		}
 	}
+
+	// Turning network on is the moment to learn what the server offers.
+	if row == rowNetwork {
+		return m.statusCmd()
+	}
+	return nil
 }
 
 // openSelected resumes — or reviews — the highlighted puzzle.
@@ -2457,6 +2527,12 @@ func (m *Model) frame(h *hitMap) string {
 		// than the screen it is reporting on dragged that screen to the left.
 		body = lipgloss.JoinVertical(lipgloss.Center,
 			block(body), "", st.err.Render(safeText(fmt.Sprintf("error: %v", m.err))))
+	} else if m.note != "" {
+		// A note is the softer line — the server's status message, or why an
+		// online part stopped — and is dismissed like an error. An error wins
+		// over a note.
+		body = lipgloss.JoinVertical(lipgloss.Center,
+			block(body), "", st.muted.Render(safeText(m.note)))
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center, body, help)

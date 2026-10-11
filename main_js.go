@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"runtime"
 	"strconv"
 
 	"syscall/js"
@@ -12,6 +13,8 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/build"
+	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 	"github.com/nxck2005/surmise/internal/ui"
@@ -104,7 +107,18 @@ func run(cfg config) error {
 		transfer = t
 	}
 
-	opts := uiOptions(cfg, browserDataDir, transfer)
+	// The browser build talks to its own origin, so the page's CSP keeps
+	// connect-src 'self'. A host with no location (the Node smoke test) has
+	// no server, and the UI then offers nothing online.
+	var api online.Client
+	if loc := js.Global().Get("location"); loc.Truthy() {
+		if origin := loc.Get("origin"); origin.Truthy() {
+			api = online.New(origin.String()+"/api/v1",
+				online.ClientName(brand.Name, build.Get().Version, runtime.GOOS, runtime.GOARCH))
+		}
+	}
+
+	opts := uiOptions(cfg, browserDataDir, transfer, api)
 	// The page grants each clipboard write on its own, so copying goes through
 	// the terminal, which arms that grant. See web.Terminal.Copy.
 	opts.Clipboard = term.Copy
