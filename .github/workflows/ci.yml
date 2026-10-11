@@ -135,6 +135,14 @@ jobs:
           go run ./tools/gennotices
           git diff --exit-code THIRD_PARTY_NOTICES.md
 
+      # The Worker scores guesses and picks words from generated copies of the
+      # embedded lists. A change to internal/words/data that did not regenerate
+      # them would let the server and the game disagree about what a word is.
+      - name: worker word lists are current
+        run: |
+          go run ./tools/genworker
+          git diff --exit-code worker/src/gen worker/test/score-vectors.json
+
       # Proves the vendored copy is upstream plus exactly the two patch files.
       # See third_party/bubbletea/PATCHES.md.
       - name: bubbletea copy is unmodified
