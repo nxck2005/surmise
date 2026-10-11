@@ -58,7 +58,19 @@ function expect(condition, desc, want, got) {
 }
 
 // 1. The server offers the daily feature and a string message.
-let res = await call("GET", "/api/v1/status");
+//
+// A deploy's static files and its script reach the edge separately, so the
+// site can already serve the new boot.js while some edges still answer /api
+// from the version before — the first production deploy of the script hit
+// exactly that gap. Wait up to two minutes for the status, as the site check
+// waits for boot.js, before anything else is asserted.
+let res;
+for (let attempt = 1; ; attempt++) {
+  res = await call("GET", "/api/v1/status");
+  if (res.status === 200 || attempt === 12) break;
+  res.body?.cancel?.();
+  await new Promise((resolve) => setTimeout(resolve, 10_000));
+}
 isStatus(res, "GET status answers 200", 200);
 const status = JSON.parse(await res.text());
 expect(status.features?.daily === true, "GET status offers the daily feature",
