@@ -1,11 +1,15 @@
 // The entry point. Workers-only: every binding reaches this file through env,
-// so the Node tests can load everything under src/ except this file.
+// so the Node tests can load everything under src/ except this file and the
+// room's socket layer.
 import { CLIENT_HEADER, isTooOld, parseClient } from "./client.ts";
-import { LENGTHS, bucket, checkGetDay, checkPostDay, cutoffDay, parseLength, parsePost, summarize } from "./daily.ts";
+import { cutoffDay, bucket, checkGetDay, checkPostDay, parseLength, parsePost, summarize } from "./daily.ts";
 import { flag } from "./flags.ts";
 import { error, gone, json, noContent, readJSON } from "./http.ts";
 import { allowed } from "./limits.ts";
 import { match } from "./routes.ts";
+import { createRoomRoute, resultsRoute, socketRoute } from "./rooms.ts";
+import { LENGTHS } from "./daily.ts";
+export { Room } from "./room/room.ts";
 
 // 405 with the Allow header the rule asks for. Built from the response the
 // helpers make, so the headers stay consistent.
@@ -25,6 +29,20 @@ export default {
       return env.ASSETS.fetch(request);
     }
     try {
+      // The socket route is checked first, before the client header: a
+      // browser cannot send a header on a WebSocket, and the hello carries
+      // the client's version instead.
+      const m = match(url.pathname);
+      if (m.route.name === "not_found") {
+        return error(404, "not_found");
+      }
+      if (!m.methods.includes(request.method)) {
+        return notAllowed(m.methods);
+      }
+      if (m.route.name === "room_socket") {
+        return socketRoute(request, env, m.route.code);
+      }
+
       const client = parseClient(request.headers.get(CLIENT_HEADER));
       if (client === null) {
         return error(400, "bad_request", "missing or malformed X-Surmise-Client header");
@@ -33,12 +51,16 @@ export default {
         return gone(env.GONE_MESSAGE);
       }
 
-      const m = match(url.pathname);
-      if (m.route.name === "not_found") {
-        return error(404, "not_found");
-      }
-      if (!m.methods.includes(request.method)) {
-        return notAllowed(m.methods);
+      if (m.route.name === "rooms" || m.route.name === "room_results") {
+        if (!flag(env.FEATURE_ROOMS)) {
+          // A switched-off feature is not 410: 410 tells the client to stop
+          // using the network altogether.
+          return error(503, "unavailable");
+        }
+        if (m.route.name === "rooms") {
+          return createRoomRoute(request, env);
+        }
+        return resultsRoute(request, env, m.route.code);
       }
 
       if (m.route.name === "status") {
@@ -53,8 +75,6 @@ export default {
 
       // m.route.name === "daily" from here on.
       if (!flag(env.FEATURE_DAILY)) {
-        // A switched-off feature is not 410: 410 tells the client to stop
-        // using the network altogether.
         return error(503, "unavailable");
       }
       const length = parseLength(m.route.length);
@@ -104,6 +124,15 @@ export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     await env.DB.prepare("DELETE FROM daily_counts WHERE day < ?1")
       .bind(cutoffDay(Date.now()))
+      .run();
+    // Expired rooms and their results go together, results first.
+    await env.DB.prepare(
+      "DELETE FROM async_results WHERE code IN (SELECT code FROM async_rooms WHERE expires_at <= ?1)",
+    )
+      .bind(Date.now())
+      .run();
+    await env.DB.prepare("DELETE FROM async_rooms WHERE expires_at <= ?1")
+      .bind(Date.now())
       .run();
   },
 } satisfies ExportedHandler<Env>;

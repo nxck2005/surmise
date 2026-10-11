@@ -274,5 +274,5 @@ jobs:
             node scripts/smoke-api.mjs "$SITE" --read-only
             node scripts/smoke-api.mjs https://surmise.nxck.dev --read-only
           else
-            node scripts/smoke-api.mjs "$SITE"
+            node scripts/smoke-api.mjs "$SITE" --rooms
           fi

@@ -31,7 +31,7 @@
   "triggers": { "crons": ["17 3 * * *"] },
   "vars": {
     "FEATURE_DAILY": "true",
-    "FEATURE_ROOMS": "false",
+    "FEATURE_ROOMS": "true",
     "STATUS_MESSAGE": "",
     "MIN_CLIENT": "",
     "GONE_MESSAGE": "this version can't use online features any more — update surmise to get them back"
@@ -49,12 +49,18 @@
     { "name": "RL_READ", "namespace_id": "1102", "simple": { "limit": 120, "period": 60 } },
     { "name": "RL_JOIN", "namespace_id": "1103", "simple": { "limit": 10, "period": 60 } }
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+  },
+  // Durable Object classes are declared once, here; the list is append-only.
+  // A class is never removed or renamed without a migration that says so.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
   "env": {
     "staging": {
       "name": "surmise-staging",
       "vars": {
         "FEATURE_DAILY": "true",
-        "FEATURE_ROOMS": "false",
+        "FEATURE_ROOMS": "true",
         "STATUS_MESSAGE": "",
         "MIN_CLIENT": "",
         "GONE_MESSAGE": "this version can't use online features any more — update surmise to get them back"
@@ -71,7 +77,10 @@
         { "name": "RL_WRITE", "namespace_id": "1201", "simple": { "limit": 30, "period": 60 } },
         { "name": "RL_READ", "namespace_id": "1202", "simple": { "limit": 120, "period": 60 } },
         { "name": "RL_JOIN", "namespace_id": "1203", "simple": { "limit": 10, "period": 60 } }
-      ]
+      ],
+      "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
+      }
     }
   }
 }
