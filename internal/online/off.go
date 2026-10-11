@@ -18,3 +18,15 @@ func (off) PostDaily(context.Context, string, int, bool, int) error {
 func (off) Daily(context.Context, string, int) (DailyCount, error) {
 	return DailyCount{}, ErrOff
 }
+
+func (off) CreateRoom(context.Context, RoomOptions) (Created, error) {
+	return Created{}, ErrOff
+}
+
+func (off) Results(context.Context, string, string) (Results, error) {
+	return Results{}, ErrOff
+}
+
+func (off) Dial(context.Context, string) (Conn, error) {
+	return nil, ErrOff
+}

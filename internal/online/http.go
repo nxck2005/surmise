@@ -8,6 +8,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/coder/websocket"
+
+	"github.com/nxck2005/surmise/internal/game"
 )
 
 // goneDefault is what a 410 with no message tells the player.
@@ -31,8 +35,9 @@ func New(base, client string) *HTTP {
 }
 
 // do makes one call. body is nil for GET; out is nil when nothing comes back
-// to decode (or a 204 answers).
-func (h *HTTP) do(ctx context.Context, method, path string, body, out any) error {
+// to decode (or a 204 answers). headers carries any extra ones a call needs;
+// the client header is set for every call regardless.
+func (h *HTTP) do(ctx context.Context, method, path string, body, out any, headers ...string) error {
 	var reader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -46,6 +51,9 @@ func (h *HTTP) do(ctx context.Context, method, path string, body, out any) error
 		return err
 	}
 	req.Header.Set("X-Surmise-Client", h.client)
+	for i := 0; i+1 < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -117,9 +125,93 @@ func (h *HTTP) Daily(ctx context.Context, day string, length int) (DailyCount, e
 	return count, nil
 }
 
+// CreateRoom makes one. The answer is held to what the game can use before
+// the room screens ever see it.
+func (h *HTTP) CreateRoom(ctx context.Context, opts RoomOptions) (Created, error) {
+	var created Created
+	err := h.do(ctx, http.MethodPost, "/rooms", opts, &created)
+	if err != nil {
+		return Created{}, err
+	}
+	if !game.ValidRoomCode(created.Code) || !validHex32(created.Key) || created.Seat != 1 {
+		return Created{}, ErrBadResponse
+	}
+	return created, nil
+}
+
+// Results reads an any-time room's ranking so far. Only a finished seat of
+// that room may read it; the key proves the seat.
+func (h *HTTP) Results(ctx context.Context, code, key string) (Results, error) {
+	var results Results
+	err := h.do(ctx, http.MethodGet, "/rooms/"+url.PathEscape(code)+"/results", nil, &results,
+		"Authorization", "Bearer "+key)
+	if err != nil {
+		return Results{}, err
+	}
+	if !ValidWord(results.Word, len(results.Word)) || len(results.Word) < 4 || len(results.Word) > 6 {
+		return Results{}, ErrBadResponse
+	}
+	length := len(results.Word)
+	if len(results.Ranking) == 0 || len(results.Ranking) > game.MaxRoomRanking {
+		return Results{}, ErrBadResponse
+	}
+	for i, e := range results.Ranking {
+		if e.Seat < 1 || e.Guesses < 0 || e.Guesses > length+1 || e.ElapsedMS < 0 ||
+			e.ElapsedMS > game.RoomRoundMS || len(e.Rows) != e.Guesses {
+			return Results{}, ErrBadResponse
+		}
+		for _, row := range e.Rows {
+			if !ValidMarks(row, length) {
+				return Results{}, ErrBadResponse
+			}
+		}
+		// A name the room's own rules would not have produced is blanked
+		// rather than believed: the result screen draws these as text.
+		if !game.ValidRoomName(e.Name) {
+			results.Ranking[i].Name = ""
+		}
+	}
+	return results, nil
+}
+
+// Dial opens the room's socket. The WebSocket is kept time-limited only while
+// it opens; the connection itself lives past this call and reads with the
+// caller's contexts.
+func (h *HTTP) Dial(ctx context.Context, code string) (Conn, error) {
+	base := h.base
+	switch {
+	case strings.HasPrefix(base, "https://"):
+		base = "wss://" + strings.TrimPrefix(base, "https://")
+	case strings.HasPrefix(base, "http://"):
+		base = "ws://" + strings.TrimPrefix(base, "http://")
+	}
+	url := base + "/rooms/" + url.PathEscape(code) + "/socket"
+	conn, _, err := websocket.Dial(ctx, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	conn.SetReadLimit(64 << 10)
+	return newWSConn(conn), nil
+}
+
 // compile-time checks.
 var (
 	_ Client = (*HTTP)(nil)
 	_ error  = (*GoneError)(nil)
 	_ error  = (*StatusError)(nil)
 )
+
+// validHex32 reports whether s is 32 lowercase hex characters, the shape a
+// seat key arrives in.
+func validHex32(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
