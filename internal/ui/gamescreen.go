@@ -63,6 +63,16 @@ type gameScreen struct {
 	// its boards itself.
 	sprint *sprintSession
 
+	// room is the online room this board belongs to, or nil. The root owns
+	// the session; the board reads it for its header, clock, status line and
+	// standings, and stands down everything that would save or restart.
+	room *roomSession
+
+	// standings is how wide a standings column this frame draws beside the
+	// board. Decided once by view, read by the status line, which is what
+	// counts the players instead when the column is hidden.
+	standings standingsForm
+
 	// outlines is the player's tile-outline setting, handed down by the root
 	// and kept up to date when it changes; see slotCell.
 	outlines bool
@@ -152,6 +162,13 @@ func (m *gameScreen) countPlaytime(d time.Duration) {
 // would also reorder the completion sequence the streaks are read from. This
 // mirrors elapsed(), which stops the clock on the same condition.
 func (m *gameScreen) leave() error {
+	// A room board never banks or saves on the way out: the display game has
+	// no answer, the round's time is counted once at save, and the session is
+	// the room's, not this screen's.
+	if m.room != nil {
+		m.sessionStart = time.Time{}
+		return nil
+	}
 	if !m.sessionStart.IsZero() && !m.g.Status.Done() {
 		d := time.Since(m.sessionStart)
 		if m.persisted {
@@ -217,7 +234,7 @@ func (m *gameScreen) update(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		// During a run, restarting is not on offer: the run deals its own
 		// boards, and a confirm prompt for one it is about to deal anyway
 		// would be noise. The help bar drops the hint to match.
-		if m.sprint == nil && m.g.Challenge == nil {
+		if m.sprint == nil && m.g.Challenge == nil && m.room == nil && m.g.Room == nil {
 			m.confirmNew = true
 		}
 		return nil, false
@@ -242,6 +259,12 @@ func (m *gameScreen) typeLetter(c byte) {
 	if c < 'a' || c > 'z' || m.refusing() {
 		return
 	}
+	if m.room != nil && m.room.pending != 0 {
+		// A guess is out: the row must not change under it, both so the row
+		// still reads as the sent word and so the next marks answer a row the
+		// player recognises.
+		return
+	}
 	if !m.g.Status.Done() && len(m.typing) < m.g.Length {
 		// The clock starts here, and only here, so both a keystroke and a click
 		// on the on-screen keyboard start it — a letter is the first thing
@@ -259,7 +282,7 @@ func (m *gameScreen) typeLetter(c byte) {
 func (m *gameScreen) refusing() bool { return m.layout().refuse }
 
 func (m *gameScreen) deleteLetter() {
-	if m.refusing() {
+	if m.refusing() || m.room != nil && m.room.pending != 0 {
 		return
 	}
 	if len(m.typing) > 0 {
@@ -278,6 +301,9 @@ func (m *gameScreen) reject() {
 // trimTo erases the row being typed back to slot i, so clicking the third tile
 // leaves the first two letters standing.
 func (m *gameScreen) trimTo(i int) {
+	if m.room != nil && m.room.pending != 0 {
+		return
+	}
 	if i >= 0 && i < len(m.typing) {
 		m.typing = m.typing[:i]
 	}
@@ -357,6 +383,12 @@ func (m *gameScreen) submit() tea.Cmd {
 // that word and handed the terminal over, and tab is close enough to the keys
 // being typed that discarding their puzzle must not be one keystroke away.
 func (m *gameScreen) startNew() tea.Cmd {
+	if m.g.Room != nil {
+		// A room round is the server's deal; tab is not the way another one
+		// comes. PR 9's board refuses before the leave() that would bank it.
+		m.notify("the server deals room boards — leave from the room screen")
+		return nil
+	}
 	if m.g.Daily != "" {
 		m.notify("the daily is one puzzle a day — pick a mode from the menu for another")
 		return nil
@@ -478,16 +510,32 @@ func (m *gameScreen) view(h *hitMap) string {
 	// status line, and two clocks, one counting up and one down, made the
 	// player work out which one mattered.
 	if l.header {
-		header := st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID)))
-		if m.sprint == nil {
-			header = lipgloss.JoinHorizontal(lipgloss.Top,
-				header, st.muted.Render("   "+formatDuration(m.elapsed())))
+		var header string
+		if m.room != nil {
+			// A room board's name is the room, not a puzzle: nothing here has
+			// a code, and the clock leads the status line instead.
+			header = st.title.Render("room " + m.room.code)
+		} else {
+			header = st.title.Render(fmt.Sprintf("%s #%s", brand.Name, game.Code(g.ID)))
+			if m.sprint == nil {
+				header = lipgloss.JoinHorizontal(lipgloss.Top,
+					header, st.muted.Render("   "+formatDuration(m.elapsed())))
+			}
 		}
 		sections = append(sections, header, "")
 	}
 
+	// The standings sit beside the board of a live round, taking none of the
+	// shed ladder's height. One decision: the form chosen here is the one the
+	// status line reads.
+	board := renderBoard(g, m.typing, h, m.anim, now, l.tiles, l.boardGap, m.outlines)
+	m.standings = standingsFormFor(lipgloss.Width(board), m.width, g.Length)
+	if m.room != nil && m.room.view.Mode == "live" && m.standings != standingsHidden {
+		board = lipgloss.JoinHorizontal(lipgloss.Top,
+			board, "   ", block(renderStandings(m.room, m.standings, lipgloss.Height(board))))
+	}
 	sections = append(sections,
-		renderBoard(g, m.typing, h, m.anim, now, l.tiles, l.boardGap, m.outlines),
+		board,
 		"",
 		renderKeyboard(m.lettersOf(), h, m.anim, now, l.kbdGap),
 		"",
@@ -640,6 +688,14 @@ func (m *gameScreen) tileRows() int { return m.layout().tiles }
 // statusLine carries whichever of the transient message, the end-of-game
 // result, or the restart prompt is most important right now.
 func (m *gameScreen) statusLine(h *hitMap) string {
+	if m.room != nil {
+		// The transient message still wins over the room's own line: it is
+		// the feedback for the key just pressed, and it is short.
+		if m.message != "" && time.Now().Before(m.msgUntil) {
+			return st.err.Render(safeText(m.message))
+		}
+		return m.roomStatus(m.standings)
+	}
 	if m.confirmNew {
 		// Both halves of the prompt are clickable, so a player who armed the
 		// prompt with tab is not stranded without a keyboard.
@@ -680,6 +736,35 @@ func (m *gameScreen) help(h *hitMap) string {
 	if m.layout().refuse {
 		return renderHelp(h, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
 	}
+	if m.room != nil {
+		// A room board in play: the reveal answer is the server's; esc keeps
+		// the session (esc never leaves a room) and lands on the menu.
+		if m.g.Status.Done() {
+			items := []helpItem{{keys: "esc", label: "menu", act: action{kind: actBack}}}
+			if m.room.view.Results != nil {
+				items = append([]helpItem{{keys: "enter", label: "result", act: action{kind: actSubmit}}}, items...)
+			}
+			return renderHelp(h, items...)
+		}
+		if m.g.Room != nil {
+			// A saved round under review.
+			return renderHelp(h,
+				helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
+				helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+			)
+		}
+		if m.room.view.Results == nil && !m.g.Status.Done() {
+			return renderHelp(h,
+				helpItem{label: "type a word"},
+				helpItem{keys: "enter", label: "submit", act: action{kind: actSubmit}},
+				helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+			)
+		}
+		return renderHelp(h,
+			helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
+			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+		)
+	}
 	if m.sprint != nil {
 		// A timed run owns its board supply, so there is no restart to offer;
 		// and esc ends the run rather than leaving for the menu.
@@ -718,4 +803,58 @@ func (m *gameScreen) help(h *hitMap) string {
 		helpItem{keys: "tab+enter", label: "new puzzle", act: action{kind: actNewPuzzle}},
 		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
 	)
+}
+
+// roomStatus is the status line of a room board: the round's clock first
+// (the run's countdown owns this position in a sprint), then the one fact
+// worth reading while the round runs.
+func (m *gameScreen) roomStatus(form standingsForm) string {
+	r := m.room
+	v := &r.view
+	var clock string
+	if v.EndsAt > 0 {
+		clock = st.accent.Render(sprintClock(r.local(v.EndsAt).Sub(timeNow())))
+	}
+	others := 0
+	for _, p := range v.Players {
+		if p.Seat != r.seat && p.InRound && !p.Done {
+			others++
+		}
+	}
+	// The hidden form is the width's answer: the players the column dropped
+	// are still worth counting, on the line that cannot be dropped.
+	stillPlaying := v.Mode == "live" && form == standingsHidden && others > 0
+	switch {
+	case r.conn == nil:
+		return clock + st.muted.Render(" · reconnecting…")
+	case r.pending != 0:
+		return clock + st.muted.Render(" · checking…")
+	case !v.You.Done:
+		line := clock + st.muted.Render(fmt.Sprintf(" · %d guesses left", m.g.Remaining()))
+		if stillPlaying {
+			line += st.muted.Render(fmt.Sprintf(" · %d still playing", others))
+		}
+		return line
+	case v.You.Solved:
+		line := st.accent.Render(fmt.Sprintf("solved in %d", m.g.Attempts()))
+		if v.Mode == "live" && others > 0 {
+			line += st.muted.Render(fmt.Sprintf(" · waiting for %d still playing", others))
+		}
+		return line
+	default:
+		if len(m.g.Guesses) >= m.g.MaxAttempts {
+			line := st.err.Render("out of guesses")
+			if v.Mode == "live" && others > 0 {
+				line += st.muted.Render(fmt.Sprintf(" · waiting for %d still playing", others))
+			}
+			return line
+		}
+		// Done but not solved with a board to spare can only be time: leave
+		// mid-round, or the server's alarm.
+		line := st.err.Render("out of time")
+		if v.Mode == "live" && others > 0 {
+			line += st.muted.Render(fmt.Sprintf(" · waiting for %d still playing", others))
+		}
+		return line
+	}
 }

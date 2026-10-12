@@ -261,6 +261,8 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 		what = "custom"
 	case s.Challenge:
 		what = "challenge"
+	case s.Room:
+		what = "room"
 	}
 	left := fmt.Sprintf("#%s %-16s ", game.Code(s.ID), what)
 	status := fmt.Sprintf("%-14s", statusText)

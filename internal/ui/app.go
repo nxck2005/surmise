@@ -471,6 +471,12 @@ func (m *Model) openGame(g *game.Game, saved bool) {
 // with it: completion still has a useful result, but must not hide that the
 // durable copy failed.
 func (m *Model) openResult() {
+	if m.game != nil && m.game.g.Room != nil {
+		// A saved room round's result is the room result screen: the ranking
+		// it carries is the round's own, on the round's own screen.
+		m.openRoomResultFor(m.game.g)
+		return
+	}
 	if m.game == nil || !m.game.g.Status.Done() {
 		return
 	}
@@ -494,6 +500,11 @@ func (m *Model) openResult() {
 func (m *Model) submitGame() tea.Cmd {
 	if m.screen != screenGame || m.game == nil {
 		return nil
+	}
+	// A room board answers enter at the root too, and it is one path: the
+	// guess may end the round, and what that lands on is this file's business.
+	if m.game.room != nil {
+		return m.submitRoomGuess()
 	}
 	if m.game.g.Status.Done() {
 		// A finished board during a run has already been counted; enter here
@@ -555,6 +566,18 @@ func (m *Model) settlePendingDeal() {
 		return
 	}
 	m.dealNext()
+}
+
+// settlePendingRoomResult is that path's room counterpart: the finishing
+// guess has revealed, and what settles is the room's result screen.
+func (m *Model) settlePendingRoomResult() {
+	if !m.pendingRoomResult || m.anim.busy(timeNow()) {
+		return
+	}
+	m.pendingRoomResult = false
+	if m.room != nil {
+		m.showRoom()
+	}
 }
 
 // --- sprint ---
@@ -998,6 +1021,7 @@ func (m *Model) pushSize() {
 	if m.game != nil {
 		m.game.resize(m.width, m.height)
 	}
+	m.roomResult.resize(m.width, m.height)
 	m.profile.resize(m.width, m.height)
 	m.howTo.resize(m.width, m.height)
 	m.about.resize(m.width, m.height)
@@ -1071,6 +1095,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.anim.live = false
 		m.settlePendingResult()
 		m.settlePendingDeal()
+		m.settlePendingRoomResult()
 		return m, nil
 
 	case themesMsg:
@@ -1771,6 +1796,11 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		// A click is already deliberate, so it needs no tab-then-enter confirm.
 		// During a timed run there is nothing to restart into: the run deals
 		// its own boards.
+		if m.game.room != nil || m.game.g.Room != nil {
+			// A room board is the server's deal; the recall is where the room
+			// screen already carries it.
+			return nil
+		}
 		if !m.sprinting() {
 			m.game.confirmNew = false
 			return m.game.startNew()
@@ -2901,6 +2931,11 @@ func (m *Model) boardTitle() string {
 		return brand.Name
 	}
 	g := m.game.g
+	if m.game.room != nil || g.Room != nil {
+		// The board is a room's: the kind is the room, in its title and in
+		// this one place the panel's rule says it.
+		return "room"
+	}
 	switch {
 	case m.sprint != nil:
 		return "sprint"
