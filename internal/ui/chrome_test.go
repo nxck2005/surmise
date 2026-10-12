@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/online"
 )
 
 // withColorProfile pretends the terminal has a given depth, and puts the real
@@ -345,10 +346,43 @@ func TestPanelsComeInAFewWidths(t *testing.T) {
 		}
 		return m
 	}
+	// The room screens join the groups through the social rows, which need
+	// rooms online; each opens its screen and leaves the model there.
+	roomScreen := func(row socialKind) *Model {
+		m := newOnlineModel(t, &fakeOnline{}, true)
+		m.screen = screenMenu
+		m.menu.cursor = menuIndex(t, m, choiceSocial, 0)
+		send(t, m, "enter")
+		m.social.cursor = socialRowIndex(t, m, row)
+		send(t, m, "enter")
+		return m
+	}
+	// The room screen's lobby form: a welcome like a real one, drawn from the
+	// session the root holds.
+	roomLobby := func() *Model {
+		m := newOnlineModel(t, &fakeOnline{}, true)
+		m.screen = screenMenu
+		m.room = &roomSession{code: "K7M2QX", mode: "live", seat: 1, gen: 1, welcomed: true,
+			view: online.RoomView{Code: "K7M2QX", Mode: "live", Length: 5,
+				AutoStart: true, Host: 1, Phase: "lobby", Round: 1,
+				Players: []online.PlayerView{{
+					Seat: 1, Name: "nick", Connected: true, Ready: false,
+					Rows: [][]game.Mark{},
+				}}}}
+		m.screen = screenRoom
+		return m
+	}
 	groups := map[string][]*Model{
 		"narrow": {open(choiceQuit, 0), open(choiceDaily, 0), open(choiceSocial, 0),
-			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0), open(choiceAbout, 0)},
-		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0)},
+			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0),
+			open(choiceAbout, 0),
+			// join room is narrow; the make screen is not (below at wide):
+			// its Appendix-C help bar asks one cell past the narrow step, and
+			// the stop-and-ask on 2026-10-12 concluded make joins the wide
+			// group rather than shortening any string.
+			roomScreen(socialJoinRoom)},
+		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0),
+			roomScreen(socialMakeRoom), roomLobby()},
 	}
 	widths := map[string]int{}
 	for name, ms := range groups {

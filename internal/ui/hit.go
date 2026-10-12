@@ -96,6 +96,20 @@ const (
 	actBackupSave   // write the whole install to a backup file
 	actBackupLoad   // ask for a backup file and merge it in
 	actSplashDismiss
+	actSocialLeave        // index: social row; arms the leave prompt
+	actSocialLeaveConfirm // x: leave the room the prompt names
+	actSocialLeaveCancel  // esc: keep it
+	actRoomMakeNext       // index: make-room row, next value
+	actRoomMakePrev       // index: make-room row, previous value
+	actRoomMakeStart      // enter: make the room
+	actRoomReady          // enter: toggle ready in the lobby
+	actRoomStart          // s: the host starts the round
+	actRoomPlay           // enter: start your async round
+	actRoomCopy           // c: copy the room code
+	actRoomLeave          // l: leave the room
+	actRoomReview         // enter: review your board from the result
+	actRoomRematch        // n: rematch
+	actRoomRefresh        // f: refresh an async result (PR 10)
 )
 
 // action identifies one clickable thing. It is comparable so it doubles as the

@@ -222,7 +222,7 @@ func TestCustomByClickingOnly(t *testing.T) {
 	m.screen = screenMenu
 	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceSocial, 0)})
 	draw(t, m)
-	click(t, m, action{kind: actSocialChoice, index: socialCustom})
+	click(t, m, action{kind: actSocialChoice, index: socialRowIndex(t, m, socialCustom)})
 	if m.screen != screenCustom {
 		t.Fatalf("clicking the menu entry did not open the screen: %v", m.screen)
 	}

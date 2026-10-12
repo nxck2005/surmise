@@ -140,12 +140,13 @@ func run(cfg config) error {
 	if base == "" {
 		base = brand.API
 	}
-	api := online.New(base, online.ClientName(brand.Name, build.Get().Version, runtime.GOOS, runtime.GOARCH))
+	clientName := online.ClientName(brand.Name, build.Get().Version, runtime.GOOS, runtime.GOARCH)
+	api := online.New(base, clientName)
 
 	// The backup screen writes into the data directory, so it follows -data like
 	// everything else: a scratch install backs itself up to its own scratch
 	// directory.
-	return start(s, lib, uiOptions(cfg, dataDir, fileTransfer{dir: dataDir}, api))
+	return start(s, lib, uiOptions(cfg, dataDir, fileTransfer{dir: dataDir}, api, clientName))
 }
 
 // printPlaytime reports the lifetime counter. It only reads: the seeded value an

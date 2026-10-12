@@ -2,10 +2,13 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/store"
@@ -20,6 +23,14 @@ type fakeOnline struct {
 	dailyErr  error
 	postErr   error
 	calls     []string // "status", "post 2026-08-06 5 true 3", "daily 2026-08-06 5"
+
+	// The room half (PR 8): what making a room and dialing return.
+	created    online.Created
+	createErr  error
+	conn       *fakeConn // what Dial returns
+	dialErr    error
+	results    online.Results
+	resultsErr error
 }
 
 func (f *fakeOnline) Status(context.Context) (online.Status, error) {
@@ -37,18 +48,27 @@ func (f *fakeOnline) Daily(_ context.Context, day string, length int) (online.Da
 	return f.daily[length], f.dailyErr
 }
 
-// The room half of the client. PR 8 replaces these with the real fakes; the
-// zero answers keep the rest of the UI tests compiling while the client lands.
-func (f *fakeOnline) CreateRoom(context.Context, online.RoomOptions) (online.Created, error) {
-	return online.Created{}, online.ErrOff
+func (f *fakeOnline) CreateRoom(_ context.Context, opts online.RoomOptions) (online.Created, error) {
+	f.calls = append(f.calls, fmt.Sprintf("create %s %d %t", opts.Mode, opts.Length, opts.AutoStart))
+	return f.created, f.createErr
 }
 
-func (f *fakeOnline) Results(context.Context, string, string) (online.Results, error) {
-	return online.Results{}, online.ErrOff
+func (f *fakeOnline) Results(_ context.Context, code, key string) (online.Results, error) {
+	f.calls = append(f.calls, fmt.Sprintf("results %s %s", code, key))
+	return f.results, f.resultsErr
 }
 
-func (f *fakeOnline) Dial(context.Context, string) (online.Conn, error) {
-	return nil, online.ErrOff
+func (f *fakeOnline) Dial(_ context.Context, code string) (online.Conn, error) {
+	f.calls = append(f.calls, "dial "+code)
+	if f.dialErr != nil {
+		return nil, f.dialErr
+	}
+	if f.conn == nil {
+		// A dial with nothing scripted to answer it: the server being
+		// unreachable is exactly what a best-effort leave runs into.
+		return nil, errors.New("fakeOnline: no scripted connection")
+	}
+	return f.conn, nil
 }
 
 // posts reports how many result posts were recorded, and the one there was.
@@ -87,6 +107,9 @@ func newOnlineModel(t *testing.T, f *fakeOnline, network bool) *Model {
 	}
 	m := New(s, nil, Options{Online: f, Day: testDay, Motion: motionOffName})
 	m.screen = screenMenu
+	// A real Receive blocks, so a listen loop is never opened here: the stub
+	// answers nothing, and tests feed messages through deliver.
+	m.listen = func(online.Conn, int) tea.Cmd { return nil }
 	return m
 }
 

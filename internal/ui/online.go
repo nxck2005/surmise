@@ -85,6 +85,10 @@ func (m *Model) markGone(err error) bool {
 	}
 	m.gone = true
 	m.note = serverNote(gone.Message)
+	// Nothing online runs again after this, rooms included: any open room
+	// connection stops here, and the room finds out through the closing of
+	// its socket rather than through a message it no longer gets.
+	m.closeRoom()
 	return true
 }
 

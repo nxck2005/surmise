@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -45,6 +47,10 @@ const (
 	screenSocial
 	screenChallenge
 	screenSprint
+	screenRoomMake
+	screenRoomJoin
+	screenRoom
+	screenRoomResult
 	screenHowTo
 	screenAbout
 	screenBackup
@@ -231,6 +237,26 @@ type Model struct {
 	// menuCountBusy whether that ask is still out. See menuCountCmd.
 	menuCountAt   time.Time
 	menuCountBusy bool
+
+	// room is the online room this run is connected to, or nil. See rooms.go.
+	room *roomSession
+	// roomGen numbers connections, so a message from a closed one is dropped.
+	roomGen int
+	// listen waits for the room's next message: listenRoom, or a stub in
+	// tests, which is why it is a field rather than a function call.
+	listen func(online.Conn, int) tea.Cmd
+	// clientName is the X-Surmise-Client value, sent in every room hello. A
+	// browser cannot send headers on a WebSocket, so the hello carries it.
+	clientName string
+	// pendingRoomResult defers the room's result screen until the finishing
+	// guess has revealed, the way pendingResult does for a puzzle.
+	pendingRoomResult bool
+
+	roomMake   roomMakeScreen
+	roomJoin   roomJoinScreen
+	roomScreen roomScreen
+	roomResult roomResultScreen
+
 	// note is a one-line message that is not an error: the server's status
 	// message, or why online features stopped. It is shown under the body
 	// like err, and dismissed the same way.
@@ -330,6 +356,10 @@ type Options struct {
 	// online.Off. Consent is still checked before every call: a non-nil
 	// client is never used while Settings.Network is off.
 	Online online.Client
+
+	// ClientName is the X-Surmise-Client value; empty means
+	// online.ClientName(brand.Name, "dev", runtime.GOOS, runtime.GOARCH).
+	ClientName string
 }
 
 // settingsStore is the part of a store that remembers preferences. It is a
@@ -370,6 +400,13 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 	if m.online == nil {
 		m.online = online.Off
 	}
+	// Every room hello names this client, and Options supplies it; the default
+	// is what a build with no version to name calls itself, which is "dev".
+	m.clientName = opts.ClientName
+	if m.clientName == "" {
+		m.clientName = online.ClientName(brand.Name, "dev", runtime.GOOS, runtime.GOARCH)
+	}
+	m.listen = listenRoom
 	if m.dailySrc == nil {
 		m.dailySrc = daily.Local()
 	}
@@ -1099,6 +1136,63 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case roomDialedMsg:
+		if m.room == nil || msg.gen != m.room.gen {
+			// The session moved on while the dial was out.
+			if msg.conn != nil {
+				_ = msg.conn.Close()
+			}
+			return m, nil
+		}
+		if msg.err != nil {
+			if m.markGone(msg.err) {
+				return m, nil
+			}
+			m.roomSay("couldn't reach the server — try again", true)
+			m.closeRoom()
+			return m, nil
+		}
+		m.room.conn = msg.conn
+		return m, m.listen(msg.conn, msg.gen)
+
+	case roomRecvMsg:
+		if m.room == nil || msg.gen != m.room.gen {
+			// Not this connection's: dropped, with no follow-up listen.
+			return m, nil
+		}
+		if msg.err != nil {
+			return m, m.roomConnectionOver(msg.err)
+		}
+		cmd := m.applyRoomMsg(msg.msg)
+		if m.room == nil || msg.gen != m.room.gen || m.room.conn == nil {
+			return m, cmd
+		}
+		return m, tea.Batch(cmd, m.listen(m.room.conn, msg.gen))
+
+	case roomCreatedMsg:
+		m.roomMake.busy = false
+		if msg.err != nil {
+			if m.markGone(msg.err) {
+				return m, nil
+			}
+			var status *online.StatusError
+			switch {
+			case errors.As(msg.err, &status) && status.Code == http.StatusServiceUnavailable:
+				m.roomSay("rooms are switched off right now", true)
+			default:
+				m.roomSay("couldn't reach the server — try again", true)
+			}
+			return m, nil
+		}
+		m.upsertRoom(store.RoomEntry{
+			Code:     msg.created.Code,
+			Key:      msg.created.Key,
+			Mode:     msg.opts.Mode,
+			JoinedAt: timeNow().UTC(),
+		})
+		m.roomMake.note, m.roomMake.noteErr = "connecting…", false
+		return m, m.openRoom(msg.created.Code, msg.created.Key, msg.opts.Mode)
+
 	case backupFileMsg:
 		// The load that asked for this has answered, so another may be asked.
 		m.loadOut = false
@@ -1224,6 +1318,8 @@ func (m *Model) handleMotion(x, y int) (changed bool) {
 		moved = m.social.point(a.index)
 	case actSprintNext, actSprintPrev:
 		moved = m.sprints.point(a.index)
+	case actRoomMakeNext, actRoomMakePrev:
+		moved = m.roomMake.point(a.index)
 	}
 
 	if a == m.hover && !moved {
@@ -1250,6 +1346,10 @@ func (m *Model) activeField() *textField {
 		if m.challenge.entry.editing {
 			return &m.challenge.entry
 		}
+	case screenRoomJoin:
+		if m.roomJoin.entry.editing {
+			return &m.roomJoin.entry
+		}
 	}
 	return nil
 }
@@ -1271,6 +1371,10 @@ func (m *Model) fieldAt(row int) *textField {
 		if !m.challenge.creating && row == challengeRowCode {
 			return &m.challenge.entry
 		}
+	case screenRoomJoin:
+		if row == roomJoinRowCode {
+			return &m.roomJoin.entry
+		}
 	}
 	return nil
 }
@@ -1284,8 +1388,8 @@ func (m *Model) pointField(row int) bool {
 		return m.settings.point(row)
 	case screenCustom:
 		return m.custom.point(row)
-	case screenChallenge:
-		// The entry screen has only one field, so there is no cursor to move.
+	case screenChallenge, screenRoomJoin:
+		// The single-field screens have no cursor to move.
 	}
 	return false
 }
@@ -1490,7 +1594,10 @@ func (m *Model) dispatch(a action) tea.Cmd {
 			return nil
 		}
 		m.social.point(a.index)
-		return m.openSocialChoice(a.index)
+		if row, ok := m.socialRow(a.index); ok {
+			return m.openSocialRow(row)
+		}
+		return nil
 
 	case actChallengeNext, actChallengePrev:
 		if m.screen != screenChallenge || !m.challenge.creating {
@@ -1544,6 +1651,83 @@ func (m *Model) dispatch(a action) tea.Cmd {
 			return nil
 		}
 		return m.startSprint()
+
+	case actRoomMakeStart:
+		if m.screen != screenRoomMake {
+			return nil
+		}
+		return m.makeRoom()
+
+	case actRoomReady:
+		if m.screen != screenRoom || m.room == nil {
+			return nil
+		}
+		if me, ok := m.room.me(); ok && m.room.view.Phase == "lobby" && m.room.view.Mode == "live" {
+			return m.sendRoom(online.SetReady(!me.Ready))
+		}
+		return nil
+
+	case actRoomStart:
+		// The same method the s key calls: host only, lobby only.
+		if m.screen != screenRoom {
+			return nil
+		}
+		r := m.room
+		if r != nil && r.view.Mode == "live" && r.view.Phase == "lobby" &&
+			r.view.Host == r.seat && !r.view.AutoStart {
+			return m.sendRoom(online.Start())
+		}
+		return nil
+
+	case actRoomPlay:
+		if m.screen != screenRoom {
+			return nil
+		}
+		if r := m.room; r != nil && r.view.Mode == "async" {
+			return m.sendRoom(online.Start())
+		}
+		return nil
+
+	case actRoomCopy:
+		if m.room != nil {
+			m.roomScreen.note, m.roomScreen.noteErr = "copy requested", false
+			return m.copyText(m.room.view.Code)
+		}
+		return nil
+
+	case actRoomLeave:
+		if m.screen != screenRoom {
+			return nil
+		}
+		return m.leaveRoom()
+
+	case actSocialLeave:
+		if m.screen != screenSocial || m.social.confirmLeave {
+			return nil
+		}
+		// The help bar's copy of the key's action: arm exactly the same prompt,
+		// whose own targets carry it out.
+		if row, ok := m.socialRow(a.index); ok && row.kind == socialRejoin {
+			m.social.cursor = a.index
+			m.social.confirmLeave = true
+		}
+		return nil
+
+	case actSocialLeaveConfirm:
+		if m.screen != screenSocial || !m.social.confirmLeave {
+			return nil
+		}
+		if row, ok := m.socialRow(m.social.cursor); ok {
+			return m.leaveFromSocial(row)
+		}
+		return nil
+
+	case actSocialLeaveCancel:
+		if m.screen != screenSocial {
+			return nil
+		}
+		m.social.confirmLeave = false
+		return nil
 
 	case actSettingNext, actSettingPrev:
 		if m.screen != screenSettings {
@@ -1792,6 +1976,14 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.updateChallenge(msg)
 	case screenSprint:
 		return m.updateSprint(msg)
+	case screenRoom:
+		return m.updateRoom(msg)
+	case screenRoomMake:
+		return m.updateRoomMake(msg)
+	case screenRoomJoin:
+		return m.updateRoomJoin(msg)
+	case screenRoomResult:
+		return m.updateRoomResult(msg)
 	case screenHowTo:
 		if m.howTo.update(msg) {
 			m.openMenu()
@@ -2232,23 +2424,60 @@ func (m *Model) updateCustom(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) updateSocial(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	choice, selected, back := m.social.update(msg)
-	switch {
-	case back:
+	choice, act, back := m.social.update(msg)
+	switch act {
+	case socialLeave:
+		if row, ok := m.socialRow(choice); ok {
+			return m, m.leaveFromSocial(row)
+		}
+	case socialSelect:
+		if row, ok := m.socialRow(choice); ok {
+			return m, m.openSocialRow(row)
+		}
+	}
+	if back {
 		m.openMenu()
-	case selected:
-		return m, m.openSocialChoice(choice)
 	}
 	return m, nil
 }
 
-func (m *Model) openSocialScreen() {
-	m.social = socialScreen{}
-	m.screen = screenSocial
+// socialRow is the screen's row at i. An index the screen does not name — a
+// click on a frame that has since been redrawn — is absent, not some other
+// row: a stale click falls to nothing.
+func (m *Model) socialRow(i int) (socialRow, bool) {
+	if i < 0 || i >= len(m.social.rows) {
+		return socialRow{}, false
+	}
+	return m.social.rows[i], true
 }
 
-func (m *Model) openSocialChoice(choice int) tea.Cmd {
-	switch choice {
+// leaveFromSocial carries the armed prompt out. A room this run is connected
+// to goes through leaveRoom; one it is not connected to gets the best-effort
+// leave command over a fresh dial. Either way the screen is rebuilt: the
+// rows leave is what drops the room from this list.
+func (m *Model) leaveFromSocial(row socialRow) tea.Cmd {
+	code := row.entry.Code
+	if m.room != nil && m.room.code == code {
+		return m.leaveRoom()
+	}
+	m.dropRoom(code)
+	cmd := leaveRoomCmd(m.online, code, m.roomHello(row.entry.Key))
+	m.openSocialScreen()
+	return cmd
+}
+
+// openSocialRow acts on whichever row was chosen, whether with enter or a
+// click.
+func (m *Model) openSocialRow(row socialRow) tea.Cmd {
+	switch row.kind {
+	case socialRejoin:
+		return m.openRoomCode(row.entry.Code, row.entry.Key)
+	case socialMakeRoom:
+		m.roomMake = newRoomMake(m.length)
+		m.screen = screenRoomMake
+	case socialJoinRoom:
+		m.roomJoin = newRoomJoin()
+		m.screen = screenRoomJoin
 	case socialNewChallenge:
 		screen, err := newChallengeCreate(m.length)
 		if err != nil {
@@ -2406,7 +2635,13 @@ func (m *Model) commitSettings(row int) tea.Cmd {
 	}
 
 	// Turning network on is the moment to learn what the server offers.
+	// Turning it off is the moment any room this run is in stops: the rooms
+	// half is consent's tenant, and the store is right to outlive the socket.
 	if row == rowNetwork {
+		if !m.settings.network {
+			m.closeRoom()
+			return nil
+		}
 		return m.statusCmd()
 	}
 	return nil
@@ -2454,6 +2689,9 @@ func (m *Model) deleteSelected() tea.Cmd {
 // rather than a loss.
 func (m *Model) quit() tea.Cmd {
 	m.quitting = true
+	// A room connection dies with the program; the room itself keeps running
+	// for whoever is left in it, and this run shows up disconnected.
+	m.closeRoom()
 	if (m.screen == screenGame || m.screen == screenResult) && m.game != nil {
 		if err := m.game.leave(); err != nil {
 			m.err = err
@@ -2634,6 +2872,14 @@ func (m *Model) screenTitle() string {
 		return "challenge"
 	case screenSprint:
 		return "sprint"
+	case screenRoomMake:
+		return "new room"
+	case screenRoomJoin:
+		return "join room"
+	case screenRoom:
+		return "room"
+	case screenRoomResult:
+		return "result"
 	case screenHowTo:
 		return "how to play"
 	case screenAbout:
@@ -2736,6 +2982,14 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.challenge.view(h), m.challenge.help(h)
 	case screenSprint:
 		return m.sprints.view(h), m.sprints.help(h)
+	case screenRoomMake:
+		return m.roomMake.view(h), m.roomMake.help(h)
+	case screenRoomJoin:
+		return m.roomJoin.view(h), m.roomJoin.help(h)
+	case screenRoom:
+		return m.roomScreen.view(h, m.room), m.roomScreen.help(h, m.room)
+	case screenRoomResult:
+		return m.roomResult.view(h), m.roomResult.help(h)
 	case screenHowTo:
 		return m.howTo.view(h), m.howTo.help(h)
 	case screenAbout:

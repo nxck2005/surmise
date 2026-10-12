@@ -87,8 +87,10 @@ func main() {
 // platform cannot move files, and the UI then offers no backup row.
 //
 // api is the server client, or nil when this platform has no server to reach;
-// the UI still asks for consent before every call.
-func uiOptions(cfg config, dataDir string, transfer ui.Transfer, api online.Client) ui.Options {
+// the UI still asks for consent before every call. clientName is the
+// X-Surmise-Client value the same server answers: a browser cannot send
+// headers on a WebSocket, so the room hello carries it in its first message.
+func uiOptions(cfg config, dataDir string, transfer ui.Transfer, api online.Client, clientName string) ui.Options {
 	// The daily's seeds come from here, which is the one place a future remote
 	// source would be chosen; ui.Options carries it in so nothing below has to
 	// know which one it got.
@@ -103,6 +105,7 @@ func uiOptions(cfg config, dataDir string, transfer ui.Transfer, api online.Clie
 		DataDir:    dataDir,
 		Transfer:   transfer,
 		Online:     api,
+		ClientName: clientName,
 	}
 }
 
