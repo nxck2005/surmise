@@ -1621,7 +1621,9 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		return m.startCustom()
 
 	case actSocialChoice:
-		if m.screen != screenSocial {
+		// While the leave prompt is up only its own two targets answer, the
+		// same rule the keys follow: a stray click must not open a row.
+		if m.screen != screenSocial || m.social.confirmLeave {
 			return nil
 		}
 		m.social.point(a.index)
@@ -1733,7 +1735,7 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		return m.leaveRoom()
 
 	case actSocialLeave:
-		if m.screen != screenSocial || m.social.confirmLeave {
+		if m.screen != screenSocial {
 			return nil
 		}
 		// The help bar's copy of the key's action: arm exactly the same prompt,
@@ -3042,7 +3044,7 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 	case screenRoom:
 		return m.roomScreen.view(h, m.room), m.roomScreen.help(h, m.room)
 	case screenRoomResult:
-		return m.roomResult.view(h), m.roomResult.help(h)
+		return m.roomResult.view(h), m.roomResult.help(h, m.room, m.consent())
 	case screenHowTo:
 		return m.howTo.view(h), m.howTo.help(h)
 	case screenAbout:

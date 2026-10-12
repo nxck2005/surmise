@@ -1722,7 +1722,6 @@ func TestRefreshUpdatesTheRanking(t *testing.T) {
 		code: roomCode, mode: "async", round: 1, seat: 1, length: 5, word: "crane",
 		ranking: g.Room.Ranking, g: g,
 	}
-	m.roomResult.room = nil
 	m.screen = screenRoomResult
 	m.roomResult.resize(testWidth, testHeight)
 	f.results = online.Results{
@@ -1732,7 +1731,6 @@ func TestRefreshUpdatesTheRanking(t *testing.T) {
 			rankEntry(2, "sam", true, 3, 120_000, scoreRows("ghost", "ghost", "ghost")),
 		},
 	}
-	m.roomResult.room = nil
 
 	press(t, m, "f")
 	// The refresh's rounds happen synchronously in the test drain: its note

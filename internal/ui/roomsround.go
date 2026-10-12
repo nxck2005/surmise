@@ -143,7 +143,7 @@ func (m *Model) applyMarks(msg online.ServerMsg) tea.Cmd {
 		return nil
 	}
 	// The board shows this room: the same row goes onto its display game, and
-	// the row that just langed is the one it reveals.
+	// the row that just landed is the one it reveals.
 	g := m.game.g
 	g.Guesses = append(g.Guesses, word)
 	g.Marks = append(g.Marks, append([]game.Mark(nil), msg.Marks...))
@@ -268,10 +268,10 @@ func (m *Model) applyRoundDone(msg online.ServerMsg) tea.Cmd {
 
 func (m *Model) applyResults(msg online.ServerMsg) tea.Cmd {
 	r := m.room
-	if r == nil || msg.Word == "" || !online.ValidWord(msg.Word, len(msg.Word)) {
+	if r == nil || !online.ValidWord(msg.Word, r.view.Length) {
 		return nil
 	}
-	for _, e := range msg.Ranking {
+	for i, e := range msg.Ranking {
 		if len(e.Rows) != e.Guesses || e.ElapsedMS < 0 || e.ElapsedMS > game.RoomRoundMS {
 			return nil
 		}
@@ -281,7 +281,7 @@ func (m *Model) applyResults(msg online.ServerMsg) tea.Cmd {
 			}
 		}
 		if !game.ValidRoomName(e.Name) {
-			e.Name = ""
+			msg.Ranking[i].Name = ""
 		}
 	}
 	res := &online.Results{Round: msg.Round, Word: msg.Word, Ranking: msg.Ranking}
@@ -434,7 +434,6 @@ func (m *Model) settleRefresh(msg roomResultsMsg) tea.Cmd {
 		return nil
 	}
 	m.roomResult = roomResultScreen{r: buildRoomResult(&g), note: "updated"}
-	m.roomResult.room = m.room
 	m.roomResult.resize(m.width, m.height)
 	m.screen = screenRoomResult
 	return nil

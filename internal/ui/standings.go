@@ -152,30 +152,28 @@ func standingsName(p online.PlayerView) string {
 	if name == "" {
 		name = fmt.Sprintf("player %d", p.Seat)
 	}
-	if len(name) > 8 {
-		name = name[:7] + "…"
+	if r := []rune(name); len(r) > 8 {
+		name = string(r[:7]) + "…"
 	}
 	style := st.text
 	if !p.Connected {
 		style = st.muted
 	}
-	return fmt.Sprintf("%-8s", style.Render(name))
+	return style.Render(fmt.Sprintf("%-8s", name))
 }
 
 func standingsFullLine(r *roomSession, p online.PlayerView) string {
-	latest := " "
+	latest := st.muted.Render(strings.Repeat("·", r.view.Length))
 	if marks := p.Rows; len(marks) > 0 {
 		latest = strings.Join(standingsRow(marks[len(marks)-1]), "")
-	} else if r.view.Length > 0 {
-		latest = st.muted.Render(strings.Repeat(" · ", r.view.Length-1) + "·")
 	}
 	state, stateStyle := standingsState(r, p)
-	return standingsName(p) + " " + latest + " " + fmt.Sprintf("%-4s", stateStyle.Render(state))
+	return standingsName(p) + " " + latest + " " + stateStyle.Render(fmt.Sprintf("%-4s", state))
 }
 
 func standingsCompactLine(r *roomSession, p online.PlayerView) string {
 	state, stateStyle := standingsState(r, p)
-	return standingsName(p) + " " + fmt.Sprintf("%-4s", stateStyle.Render(state))
+	return standingsName(p) + " " + stateStyle.Render(fmt.Sprintf("%-4s", state))
 }
 
 // standingsRow is one row of the column in the board's own colours: each mark
@@ -191,7 +189,8 @@ func standingsRow(marks []game.Mark) []string {
 	return cells
 }
 
-// standingsState is the column's final cell, padded to 4 by the caller. The
+// standingsState is the column's final cell, padded to 4 by the caller
+// before it is styled. The
 // guess cap is the board's: length+1, as everywhere the board itself reads.
 func standingsState(r *roomSession, p online.PlayerView) (string, lipgloss.Style) {
 	switch {
