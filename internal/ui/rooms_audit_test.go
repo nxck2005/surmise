@@ -198,3 +198,17 @@ func TestAClickDuringTheLeavePromptOpensNothing(t *testing.T) {
 		t.Errorf("a row opened under the prompt: screen %v, calls %v", m.screen, f.calls)
 	}
 }
+
+func TestTheMakeRoomRowsNeverWrap(t *testing.T) {
+	newOnlineModel(t, &fakeOnline{}, true) // loads the theme the rows draw with
+	for _, async := range []bool{false, true} {
+		for _, auto := range []bool{true, false} {
+			s := newRoomMake(5)
+			s.async, s.autoStart = async, auto
+			view := s.view(&hitMap{})
+			if lines := strings.Count(view, "\n") + 1; lines != 5 {
+				t.Errorf("async %v auto %v: %d lines, want 5:\n%s", async, auto, lines, plain(view))
+			}
+		}
+	}
+}
