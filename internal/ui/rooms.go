@@ -368,6 +368,14 @@ func (m *Model) applyRoomMsg(msg online.ServerMsg) tea.Cmd {
 		if first {
 			return m.showRoom()
 		}
+		if r.view.Results != nil {
+			for _, e := range r.view.Results.Ranking {
+				if e.Seat == r.seat {
+					m.finishRoomRound()
+					return nil
+				}
+			}
+		}
 		return nil
 
 	case "refuse":
@@ -459,12 +467,21 @@ func (m *Model) applyRoomMsg(msg online.ServerMsg) tea.Cmd {
 			return nil
 		}
 		if r.view.Mode == "async" {
+			// An any-time round is the one player's own clock: EndsAt is
+			// theirs, and InRound says a row can now be typed.
 			r.view.You.InRound = true
 		}
 		r.view.EndsAt = msg.EndsAt
-		// A round under way is the board's business, not this screen's.
+		// A round under way is the board's business, not this screen's: whoever
+		// is looking at the room goes to their board now, and a watcher stays
+		// to watch.
 		if m.screen == screenRoom {
-			m.roomScreen.note = "the board arrives in the next update"
+			r.resetYou(true)
+			if r.view.You.InRound {
+				m.openRoomBoard()
+			} else {
+				m.roomScreen = roomScreen{}
+			}
 		}
 		return nil
 
@@ -484,11 +501,11 @@ func (m *Model) applyRoomMsg(msg online.ServerMsg) tea.Cmd {
 		}
 		return nil
 
-	case "marks", "reject", "progress", "done", "results":
-		// PR 9's board and result screens handle these.
-		return nil
+	default:
+		// The five round messages delegate to the round half; anything the
+		// client does not know is ignored, the same as an unknown field.
+		return m.applyRoomRoundMsg(msg)
 	}
-	return nil
 }
 
 // resetPlayers clears every player's round state: what a fresh round starts
@@ -548,27 +565,52 @@ func (m *Model) removePlayer(seat int) {
 	r.view.Players = kept
 }
 
-// showRoom puts the room on screen in whatever form its Phaser state calls
-// for. The PR 8 shape rules: every known phase opens the room screen.
+// showRoom puts the room on screen in whatever form its state calls for: the
+// lobby and the countdown are this screen's; a round under way is the board's
+// when we are in it; a finished round is its result. The screens this leaves
+// for are the ones that would draw what a round has already decided.
 func (m *Model) showRoom() tea.Cmd {
 	if m.room == nil {
 		return nil
 	}
 	r := m.room
-	r.pending, r.pendingWord = 0, ""
 	m.roomJoin.busy = false
 	m.roomMake.busy = false
 	if m.screen == screenRoomJoin || m.screen == screenRoomMake {
 		m.roomJoin = roomJoinScreen{}
 		m.roomMake = roomMakeScreen{}
 	}
-	switch r.view.Phase {
-	case "lobby", "countdown", "playing", "results", "open":
+	switch {
+	case r.view.Mode == "async":
+		if r.view.You.Done {
+			m.openRoomResultFromView()
+			return nil
+		}
+		if r.view.You.InRound {
+			m.openRoomBoard()
+			return nil
+		}
 		m.roomScreen = roomScreen{}
 		m.screen = screenRoom
+	case r.view.Phase == "lobby" || r.view.Phase == "countdown":
+		m.roomScreen = roomScreen{}
+		m.screen = screenRoom
+	case r.view.Phase == "playing":
+		if r.view.You.InRound {
+			m.openRoomBoard()
+			return nil
+		}
+		m.roomScreen = roomRoomWatching()
+		m.screen = screenRoom
+	case r.view.Phase == "results":
+		m.openRoomResultFromView()
+		return nil
 	}
 	return nil
 }
+
+// roomRoomWatching is the watcher's room screen: empty of notes.
+func roomRoomWatching() roomScreen { return roomScreen{} }
 
 // roomJoinRowCode is the row the code field sits on.
 const roomJoinRowCode = 0
@@ -609,13 +651,42 @@ func (m *Model) updateRoomJoin(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateRoomResult is the room result stub's get-me-out keys. PR 9 fills it.
+// updateRoomResult answers the result screen's keys. It is the one path both
+// a keyboard and a click use, because a rematch may raise the lobby under the
+// player before the screen is otherwise touched.
 func (m *Model) updateRoomResult(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		m.openMenu()
+	case "enter", "r":
+		return m, m.reviewRoomResult()
+	case "n":
+		return m, m.rematchRoom()
+	case "l":
+		if room := m.room; room != nil && room.code == m.roomResult.r.code && room.mode == "live" {
+			return m, m.leaveRoom()
+		}
 	}
 	return m, nil
+}
+
+// reviewRoomResult opens the saved round on the board: the board shows the
+// round again, and enter there comes back to this screen (openResult).
+func (m *Model) reviewRoomResult() tea.Cmd {
+	if g := m.roomResult.r.g; g != nil {
+		m.openGame(g, true)
+	}
+	return nil
+}
+
+// rematchRoom asks for the next round, only when there is an open live room
+// whose finished round is what this screen shows.
+func (m *Model) rematchRoom() tea.Cmd {
+	if room := m.room; room != nil && room.code == m.roomResult.r.code &&
+		room.mode == "live" && room.conn != nil && room.view.Phase == "results" {
+		return m.sendRoom(online.Rematch())
+	}
+	return nil
 }
 
 // roomConnectionOver handles a listen loop that has stopped: the connection

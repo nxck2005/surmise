@@ -656,26 +656,290 @@ func (m *Model) sendRoom(msg online.ClientMsg) tea.Cmd {
 	return sendRoomCmd(m.room.conn, msg)
 }
 
-// --- the result stub ---
+// --- the round's result ---
 
-// roomResultScreen is the room's result card. PR 8 keeps only what the screen
-// enum and the tests need; the layout is PR 9's.
-type roomResultScreen struct {
-	note    string
-	noteErr bool
+// roomResult is one finished round as the result screen shows it: from a
+// saved game (yours) or from the live view (a watcher's).
+type roomResult struct {
+	code string
+	mode string
+
+	round   int
+	seat    int // ours; 0 for a watcher
+	length  int
+	word    string
+	ranking []game.RoomRank
+	g       *game.Game // the saved round, or nil
 }
 
+// roomResultScreen is what the result of a room round reads: the round, and
+// a note when something could not be done. room is the session this screen
+// belongs to, or nil: the keys above need to know whether this room is still
+// open, and a viewer whose result came from a saved game reads the same field.
+type roomResultScreen struct {
+	room    *roomSession
+	r       roomResult
+	note    string
+	noteErr bool
+
+	// width and height are the terminal's, pushed down by the root. The
+	// ranking sheds to fit them; zero is unmeasured, which is unbounded.
+	width, height int
+}
+
+// openRoomResultFor shows a saved round: the board we played, the ranking the
+// server gave it, and the word now spoken.
+func (m *Model) openRoomResultFor(g *game.Game) {
+	m.anim.clear()
+	m.roomResult = roomResultScreen{
+		r: roomResult{
+			code:    g.Room.Code,
+			mode:    g.Room.Mode,
+			round:   g.Room.Round,
+			seat:    g.Room.Seat,
+			length:  g.Length,
+			word:    g.Answer,
+			ranking: g.Room.Ranking,
+			g:       g,
+		},
+	}
+	m.screen = screenRoomResult
+}
+
+// openRoomResultFromView raises the round's result from the live view: the
+// saved round when it exists, and a watcher's card when it does not.
+func (m *Model) openRoomResultFromView() {
+	r := m.room
+	if r == nil || r.view.Results == nil {
+		return
+	}
+	res := r.view.Results
+	if g, err := m.store.Load(game.RoomRoundID(r.code, res.Round, r.seat)); err == nil && g.Room != nil {
+		// Ours: the saved record is the same card the live one would build,
+		// from disk, in case the room's view is older than the save.
+		m.openRoomResultFor(g)
+		return
+	}
+	ranking := make([]game.RoomRank, len(res.Ranking))
+	for i, e := range res.Ranking {
+		name := ""
+		if game.ValidRoomName(e.Name) {
+			name = e.Name
+		}
+		ranking[i] = game.RoomRank{
+			Seat: e.Seat, Name: name, Solved: e.Solved, Guesses: e.Guesses,
+			ElapsedMS: e.ElapsedMS, Rows: e.Rows,
+		}
+	}
+	m.anim.clear()
+	m.roomResult = roomResultScreen{r: roomResult{
+		code: r.code, mode: r.mode, round: res.Round,
+		seat: 0, length: r.view.Length, word: res.Word,
+		ranking: ranking,
+	}}
+	m.screen = screenRoomResult
+}
+
+// resize records the terminal size for the result screen's one decision: how
+// many ranking rows it can afford.
+func (m *roomResultScreen) resize(w, h int) { m.width, m.height = w, h }
+
+// ordinal renders a place as 1st, 2nd, 3rd, 4th…, with 11th, 12th and 13th —
+// and everything three off the tens — as th.
+func ordinal(n int) string {
+	suffix := "th"
+	switch {
+	case n%100 >= 11 && n%100 <= 13:
+	case n%10 == 1:
+		suffix = "st"
+	case n%10 == 2:
+		suffix = "nd"
+	case n%10 == 3:
+		suffix = "rd"
+	}
+	return fmt.Sprintf("%d%s", n, suffix)
+}
+
+// view draws the result card: our outcome, the round we played, the ranking
+// the server gave it, and the word the round kept until now.
 func (m *roomResultScreen) view(h *hitMap) string {
+	result := &m.r
+
+	// The outcome: our place among the solved, counting from one; not this
+	// time when we never solved; or the round number for a watcher, whose
+	// own card is everybody else's.
+	var outcome string
+	switch {
+	case result.seat == 0:
+		outcome = st.muted.Render(fmt.Sprintf("round %d", result.round))
+	case solvedBy(result.ranking, result.seat):
+		place := 0
+		for _, e := range result.ranking {
+			if !e.Solved {
+				place++
+				continue
+			}
+			place++
+			if e.Seat == result.seat {
+				break
+			}
+		}
+		if result.mode == "async" {
+			outcome = st.accent.Render(fmt.Sprintf("%s of %d so far", ordinal(place), len(result.ranking)))
+		} else {
+			outcome = st.accent.Render(fmt.Sprintf("%s of %d", ordinal(place), len(result.ranking)))
+		}
+	default:
+		outcome = st.err.Render("not this time")
+	}
+
+	title := fmt.Sprintf("room %s · round %d", result.code, result.round)
+	if result.mode == "async" {
+		title = fmt.Sprintf("room %s", result.code)
+	}
+	meta := fmt.Sprintf("%s · %d letters", metaMode(result.mode), result.length)
+	if g := result.g; g != nil {
+		meta += fmt.Sprintf(" · %s · %s", resultAttempts(g), formatDuration(g.Elapsed()))
+	}
+
+	rows := make([]string, 0, len(result.ranking))
+	for i, e := range result.ranking {
+		rows = append(rows, resultRankRow(h, result, i, e))
+	}
+	rows = m.fitRankingRows(rows)
+
+	cards := []string{outcome, st.title.Render(title), st.muted.Render(meta), ""}
+	cards = append(cards, rows...)
+	cards = append(cards, "", answerLine(result))
 	if m.note != "" {
 		style := st.muted
 		if m.noteErr {
 			style = st.err
 		}
-		return style.Render(safeText(m.note))
+		cards = append(cards, "", style.Render(safeText(m.note)))
 	}
-	return ""
+	return lipgloss.JoinVertical(lipgloss.Center, cards...)
 }
 
+// answerLine is the word the round kept until now, in capitals.
+func answerLine(result *roomResult) string {
+	return st.muted.Render("answer ") + st.text.Render(strings.ToUpper(result.word))
+}
+
+// metaMode is the mode word behind both the room screen's meta and this one's.
+func metaMode(mode string) string {
+	if mode == "async" {
+		return "any time"
+	}
+	return "together now"
+}
+
+// solvedBy reports whether a seat's entry says it solved the round. A
+// watcher's own seat is not in the ranking at all.
+func solvedBy(ranking []game.RoomRank, seat int) bool {
+	for _, e := range ranking {
+		if e.Seat == seat {
+			return e.Solved
+		}
+	}
+	return false
+}
+
+// fitRankingRows sheds a ranking too long for the screen: the head with our
+// row inside it and a "+N more", or the head, a mark where the fold is, and our
+// row. An unmeasured height shows every row.
+func (m *roomResultScreen) fitRankingRows(rows []string) []string {
+	const otherLines = 9 // outcome, title, meta, three blanks, answer, note
+	budget := bodyBudget(m.height) - otherLines
+	if budget < 3 || len(rows) <= budget {
+		return rows
+	}
+	ours := -1
+	for i := range m.r.ranking {
+		if m.r.ranking[i].Seat == m.r.seat {
+			ours = i
+			break
+		}
+	}
+	if ours < 0 || ours <= budget-1 {
+		return append(rows[:budget-1],
+			st.muted.Render(fmt.Sprintf("+%d more", len(rows)-(budget-1))))
+	}
+	out := make([]string, 0, budget)
+	out = append(out, rows[:budget-2]...)
+	out = append(out, st.muted.Render("…"), rows[ours])
+	return out
+}
+
+// resultRankRow is one line of the ranking: the place for solved entries in
+// order (— for unsolved), the cursor on ours, the name, the score and the
+// time.
+func resultRankRow(h *hitMap, result *roomResult, index int, e game.RoomRank) string {
+	place := "—"
+	if e.Solved {
+		place = ordinal(rankPlace(result, index))
+	}
+	prefix := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
+	name := fmt.Sprintf("%-12s", e.Name)
+	if e.Name == "" {
+		name = fmt.Sprintf("%-12s", fmt.Sprintf("player %d", e.Seat))
+	}
+	nameStyle := st.muted
+	if e.Seat == result.seat {
+		nameStyle = st.text
+		prefix = st.cursor.Render(st.glyph.Cursor)
+	}
+	played := fmt.Sprintf("X/%d", result.length)
+	if e.Solved {
+		played = fmt.Sprintf("%d/%d", e.Guesses, result.length)
+	}
+	playedStyle := st.muted
+	if e.Seat == result.seat {
+		playedStyle = st.accent
+	}
+	spent := st.muted.Render(formatDuration(time.Duration(e.ElapsedMS) * time.Millisecond))
+	if !e.Solved {
+		// Unsolved entries have no meaningful time; the board held ten exact
+		// minutes and the row shows that long a gap.
+		spent = st.muted.Render(formatDuration(time.Duration(game.RoomRoundMS) * time.Millisecond))
+	}
+	return fmt.Sprintf("%2s", st.muted.Render(place)) + "  " +
+		prefix + nameStyle.Render(name) + "  " +
+		fmt.Sprintf("%-4s", playedStyle.Render(played)) + "  " + spent
+}
+
+// rankPlace is a solved entry's place: 1, 2, … through the solved entries in
+// rank order (a client never re-sorts what arrived).
+func rankPlace(result *roomResult, index int) int {
+	place := 0
+	for i := 0; i <= index && i < len(result.ranking); i++ {
+		if result.ranking[i].Solved {
+			place++
+		}
+	}
+	return place
+}
+
+// help lists exactly the actions this end offers, in this order. A watcher
+// reviews nothing and has no room to rematch or leave.
 func (m *roomResultScreen) help(h *hitMap) string {
-	return renderHelp(h, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
+	result := &m.r
+	items := []helpItem{}
+	if result.g != nil {
+		items = append(items, helpItem{keys: "enter", label: "review", act: action{kind: actRoomReview}})
+	}
+	// Rematch and leave belong to a live room that is still open; the result
+	// of an any-time room keeps refresh (PR 10) and nothing else.
+	if room := m.room; room != nil && room.code == result.code {
+		switch {
+		case room.mode == "live" && room.conn != nil && room.view.Phase == "results":
+			items = append(items,
+				helpItem{keys: "n", label: "rematch", act: action{kind: actRoomRematch}},
+				helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
+		case room.mode == "live":
+			items = append(items, helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
+		}
+	}
+	return renderHelp(h, append(items,
+		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})...)
 }

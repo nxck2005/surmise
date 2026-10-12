@@ -8,9 +8,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/online"
@@ -37,6 +41,10 @@ func (f *fakeConn) Close() error {
 	f.closed = true
 	return nil
 }
+
+// count is how many frames went out, so a test can say a second key sent
+// nothing more.
+func (f *fakeConn) count() int { return len(f.sent) }
 
 // lastSent marshals the conn's most recent frame, failing when nothing was
 // sent: a test about what went over the wire must not pass empty.
@@ -439,8 +447,6 @@ func TestLobbyShowsWhoIsReady(t *testing.T) {
 	f := &fakeOnline{}
 	m := newOnlineModel(t, f, true)
 	openMakeRoom(t, m, f)
-	welcomeKey = f.created.Key
-
 	// You (seat 1, the host, ready), one connected and not ready, one away.
 	deliver(t, m, welcomeLive(1,
 		player(1, "nick", true, true, false),
@@ -719,4 +725,642 @@ func withWelcomeKey(t *testing.T, key string) {
 	old := welcomeKey
 	t.Cleanup(func() { welcomeKey = old })
 	welcomeKey = key
+}
+
+// ---- playing a round (PR 9) ----
+
+// roundNow is the fixed clock every round test freezes the frame's reads at.
+var roundNow = time.Date(2026, 10, 12, 14, 0, 0, 0, time.UTC)
+
+// countdownMsg is the wire message that rings a round's opener.
+func countdownMsg(now time.Time, at time.Time, round int) online.ServerMsg {
+	return online.ServerMsg{
+		T: "countdown", Now: now.UnixMilli(),
+		GoAt: at.UnixMilli(), Round: round,
+	}
+}
+
+func startRoundMsg(now, endsAt time.Time, round int) online.ServerMsg {
+	return online.ServerMsg{
+		T: "go", Now: now.UnixMilli(),
+		EndsAt: endsAt.UnixMilli(), Round: round,
+	}
+}
+
+// marksRow is the marks of one guess against the round's answer.
+func marksRowServer(guess, answer string) []game.Mark {
+	return game.Score(guess, answer)
+}
+
+func marksMsg(n int, marks []game.Mark) online.ServerMsg {
+	return online.ServerMsg{T: "marks", N: n, Marks: append([]game.Mark(nil), marks...)}
+}
+
+func progressMsg(seat, n int, marks []game.Mark) online.ServerMsg {
+	return online.ServerMsg{T: "progress", Seat: seat, N: n, Marks: append([]game.Mark(nil), marks...)}
+}
+
+func doneMsg(seat int, solved bool, guesses int, elapsedMS int64) online.ServerMsg {
+	v := solved
+	return online.ServerMsg{T: "done", Seat: seat, Solved: &v, Guesses: guesses, ElapsedMS: elapsedMS}
+}
+
+// resultsRound is the server's end-of-round card, made for the tests: our
+// seat's entry first when they led.
+func resultsRound(now time.Time, round int, word string, ranking ...online.RankEntry) online.ServerMsg {
+	return online.ServerMsg{T: "results", Round: round, Word: word, Ranking: ranking}
+}
+
+// rankEntry is one ranking line, in online.RankEntry shape.
+func rankEntry(seat int, name string, solved bool, guesses int, elapsedMS int64, rows [][]game.Mark) online.RankEntry {
+	return online.RankEntry{Seat: seat, Name: name, Solved: solved, Guesses: guesses, ElapsedMS: elapsedMS, Rows: rows}
+}
+
+// rowsSpent is the sheet rows of an unsolved seat.
+func spentRows(length int, guesses int) [][]game.Mark {
+	rows := make([][]game.Mark, guesses)
+	for i := range rows {
+		rows[i] = make([]game.Mark, length)
+	}
+	return rows
+}
+
+// scoreRows is the server marks for one guess string.
+func scoreRows(guesses ...string) [][]game.Mark {
+	rows := make([][]game.Mark, len(guesses))
+	for i, w := range guesses {
+		rows[i] = game.Score(w, "crane")
+	}
+	return rows
+}
+
+// forum is the standard room this round plays: our seat 1 ("nick"), with
+// players 2 and 3 both connected and dealt into the round.
+func forum(t *testing.T) (*Model, *fakeOnline, *fakeConn) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	conn := openMakeRoom(t, m, f)
+	// The welcome that makes the session a lobby: seat 1, the creator.
+	withWelcomeKey(t, f.created.Key)
+	deliver(t, m, welcomeLive(1, player(1, "nick", true, false, false)))
+	return m, f, conn
+}
+
+// startLiveRound takes forum through the countdown and go so the board is
+// showing, with players 2 and 3 in the round beside us.
+func startLiveRound(t *testing.T, m *Model) {
+	t.Helper()
+	now := roundNow
+	deliver(t, m, countdownMsg(now, now.Add(3*time.Second), 1))
+	now, m.room.view.GoAt = now.Add(3*time.Second), now.Add(3*time.Second).UnixMilli()
+	endsAt := now.Add(600 * time.Second)
+	// The go message treats the frozen clock: deliver handles the offset.
+	deliver(t, m, startRoundMsg(now, endsAt, 1))
+}
+
+func TestGoOpensTheBoard(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+	if m.screen != screenGame {
+		t.Fatalf("screen = %v, want the board", m.screen)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "room "+roomCode) {
+		t.Errorf("the header does not name the room:\n%s", frame)
+	}
+	if strings.Contains(frame, "tab+enter") {
+		t.Errorf("a room board offers the restart prompt:\n%s", frame)
+	}
+}
+
+func TestAGuessGoesToTheServer(t *testing.T) {
+	m, _, conn := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	before := conn.count()
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	if got := lastSent(t, conn); got != `{"t":"guess","n":1,"word":"slate"}` {
+		t.Errorf("the guess = %s, want slate as guess 1", got)
+	}
+	// While the guess is out the row cannot change: the row still reads as
+	// the word that was sent.
+	send(t, m, "backspace")
+	if m.game.typing != "slate" {
+		t.Errorf("typing while pending = %q, want the row as sent", m.game.typing)
+	}
+	draw(t, m)
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "checking…") {
+		t.Errorf("the status does not read as checking:\n%s", frame)
+	}
+	// A second enter does not send a second guess.
+	press(t, m, "enter")
+	if n := conn.count(); n != before+1 {
+		t.Errorf("frames = %d, want one guess on the wire", n)
+	}
+}
+
+func TestMarksFillTheRow(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("slate", "crane")))
+
+	if m.room.pending != 0 {
+		t.Errorf("pending = %d, want none after its marks", m.room.pending)
+	}
+	// The board's letters sit inside tiles, so the frame's own spacing has to
+	// go before the word is readable in it. The successful check is the same
+	// fact a priced-checked row asserts: the row is SLATE.
+	squashed := strings.ReplaceAll(plain(m.View().Content), " ", "")
+	if !strings.Contains(squashed, "SLATE") {
+		t.Errorf("the board's first row is not SLATE:\n%s", plain(m.View().Content))
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "5 guesses left") {
+		t.Errorf("the status does not count what is left:\n%s", frame)
+	}
+}
+
+func TestALocalNonWordIsNotSent(t *testing.T) {
+	m, _, conn := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "x", "x", "x", "x", "x")
+	before := conn.count()
+	press(t, m, "enter")
+	if conn.count() != before {
+		t.Errorf("frames = %+v, want the guess refused locally", conn.sent)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "not in word list") {
+		t.Errorf("the frame does not say why:\n%s", frame)
+	}
+}
+
+func TestRejectSaysWhy(t *testing.T) {
+	m, _, conn := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	deliver(t, m, online.ServerMsg{T: "reject", N: 1, Reason: "not_playing"})
+
+	if m.room.pending != 0 {
+		t.Errorf("pending = %d, want none after its refusal", m.room.pending)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "the round isn't running") {
+		t.Errorf("the frame does not say why:\n%s", frame)
+	}
+	_ = conn
+}
+
+func TestTheRoundBoardIsNeverSaved(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("slate", "crane")))
+	send(t, m, "q", "q", "q", "q", "q")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(2, marksRowServer("qqqqq", "crane")))
+
+	// esc from a mid-round board is the leave test's subject; here the save
+	// path's own leave() is what carries the assertion.
+	if err := m.game.leave(); err != nil {
+		t.Fatalf("leave: %v", err)
+	}
+	ids, _ := m.store.IDs()
+	if len(ids) != 0 {
+		t.Errorf("the store holds %d records mid-round, want 0", len(ids))
+	}
+	if m.room == nil {
+		t.Fatal("leaving a round board closed the session")
+	}
+}
+
+func TestStandingsShowEveryoneElse(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	// Two round fellows, both InRound.
+	deliver(t, m, welcomeLive(1,
+		player(1, "nick", true, false, false),
+		player(2, "sam", true, false, false),
+		player(3, "", true, false, false),
+	))
+	startLiveRound(t, m)
+	draw(t, m)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: testHeight})
+
+	deliver(t, m, progressMsg(2, 1, marksRowServer("slate", "crane")))
+	deliver(t, m, progressMsg(3, 1, marksRowServer("ghost", "crane")))
+	draw(t, m)
+	frame := plain(m.View().Content)
+	for _, want := range []string{"sam", "player 3", "1/6"} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("the standings do not show %q:\n%s", want, frame)
+		}
+	}
+
+	// Sam's solve moves her to the top with her state.
+	deliver(t, m, doneMsg(2, true, 3, 12_000))
+	draw(t, m)
+	frame = plain(m.View().Content)
+	if !strings.Contains(frame, "in 3") {
+		t.Errorf("sam's line does not read in 3:\n%s", frame)
+	}
+	// Sorted: sam (the solved seat) above player 3 (still playing).
+	samAt := strings.Index(frame, "sam")
+	thirdAt := strings.Index(frame, "player 3")
+	if samAt < 0 || thirdAt < 0 || samAt > thirdAt {
+		t.Errorf("sam's line did not move to the top:\n%s", frame)
+	}
+}
+
+func TestStandingsFallBackForWidth(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	deliver(t, m, welcomeLive(1,
+		player(1, "nick", true, false, false),
+		player(2, "sam", true, false, false),
+	))
+	startLiveRound(t, m)
+	deliver(t, m, progressMsg(2, 1, marksRowServer("slate", "crane")))
+
+	// The full form's width rule, computed here from the one the plan names:
+	// the number below is the narrowest terminal at which the full column
+	// still fits; one narrower speaks compact, one narrower than slash the
+	// compact the count. Verify both.
+	// A resize reaches the frame without draw()'s own resizes in either side
+	// of it: draw holds the terminal itself at testWidth. The board's width is
+	// its tiles plus the gutter between them, measured rather than guessed.
+	full := 8 + 1 + 5 + 1 + 4
+	board := renderBoard(m.game.g, m.game.typing, &hitMap{}, m.game.anim,
+		roundNow, m.game.layout().tiles, m.game.layout().boardGap, m.game.outlines)
+	boardWidth := lipgloss.Width(board)
+	needFull := boardWidth + 3 + full + 2 + 2*st.metric.PanelPadX
+	m.Update(tea.WindowSizeMsg{Width: needFull, Height: testHeight})
+	if got := plain(m.View().Content); !strings.Contains(got, "■") {
+		t.Errorf("the full column lost its marks:\n%s", got)
+	}
+	m.Update(tea.WindowSizeMsg{Width: needFull - 1, Height: testHeight})
+	if got := plain(m.View().Content); strings.Contains(got, "■") {
+		t.Errorf("the column did not fall back:\n%s", got)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 50, Height: testHeight})
+	got := plain(m.View().Content)
+	if strings.Contains(got, "■") {
+		t.Errorf("a narrow terminal kept the column:\n%s", got)
+	}
+	if !strings.Contains(got, "still playing") {
+		t.Errorf("the hidden form's status did not count:\n%s", got)
+	}
+}
+
+func TestStandingsNeverTallerThanTheBoard(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	others := []online.PlayerView{player(1, "nick", true, false, false)}
+	for i := 2; i <= 8; i++ {
+		others = append(others, player(i, fmt.Sprintf("p%d", i), true, false, false))
+	}
+	deliver(t, m, welcomeLive(1, others...))
+	startLiveRound(t, m)
+
+	// The tightest board is the flat one at the fewest rows it needs. Seven
+	// others and that few rows must be a "+N more" tail, and the frame exactly
+	// as tall as a frame with an empty column.
+	board := renderBoard(m.game.g, m.game.typing, &hitMap{}, m.game.anim,
+		roundNow, m.game.layout().tiles, m.game.layout().boardGap, m.game.outlines)
+	needFull := lipgloss.Width(board) + 3 + (8 + 1 + 5 + 1 + 4) + 2 + 2*st.metric.PanelPadX
+	tight := boardLayout{tiles: flatTile}.rows(6)
+	m.Update(tea.WindowSizeMsg{Width: needFull, Height: tight})
+	withStandings := plain(m.View().Content)
+	tall := strings.Count(withStandings, "\n")
+	if !strings.Contains(withStandings, "+") {
+		t.Errorf("the column did not count its tail:\n%s", withStandings)
+	}
+	m.room.view.Players = []online.PlayerView{player(1, "nick", true, false, false)}
+	m.room.view.Results = nil
+	if got := plain(m.View().Content); strings.Count(got, "\n") != tall {
+		t.Errorf("the standings changed the frame height: %d vs %d", tall, strings.Count(got, "\n"))
+	}
+}
+
+func TestSolvingWaitsForOthers(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	deliver(t, m, welcomeLive(1,
+		player(1, "nick", true, false, false),
+		player(2, "sam", true, false, false),
+		player(3, "priya", true, false, false),
+	))
+	startLiveRound(t, m)
+
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 1, 1_500))
+	draw(t, m)
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "solved in 1 · waiting for 2 still playing") {
+		t.Errorf("the status does not wait:\n%s", frame)
+	}
+}
+
+func TestResultsSaveTheRoundOnce(t *testing.T) {
+	m, f, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("slate", "crane")))
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(2, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 2, 81_000))
+	ranking := []online.RankEntry{
+		rankEntry(1, "nick", true, 2, 81_000, scoreRows("slate", "crane")),
+		rankEntry(2, "sam", false, 6, 600_000, spentRows(5, 6)),
+		rankEntry(3, "priya", false, 0, 600_000, nil),
+	}
+	// only 2 players inRound: gem the ranking to two of them.
+	ranking = ranking[:2]
+	deliver(t, m, resultsRound(roundNow, 1, "crane", ranking...))
+
+	if m.screen != screenRoomResult {
+		t.Fatalf("screen = %v, want the room result", m.screen)
+	}
+	ids, _ := m.store.IDs()
+	if len(ids) != 1 {
+		t.Fatalf("the store holds %d records, want the one round", len(ids))
+	}
+	g, err := m.store.Load(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Room == nil || g.Room.Code != roomCode || g.CountsForStats() {
+		t.Errorf("the saved round = %+v, want a room round that counts for nothing", g.Room)
+	}
+	if info := m.settingsOf(); info.PlaytimeMS != 81_000 {
+		t.Errorf("playtime = %d, want our elapsed 81s", info.PlaytimeMS)
+	}
+
+	before := len(ids)
+	screen := m.screen
+	deliver(t, m, resultsRound(roundNow, 1, "crane", ranking...))
+	ids2, _ := m.store.IDs()
+	if len(ids2) != before {
+		t.Errorf("the second results saved %d records", len(ids2)-0)
+	}
+	if info := m.settingsOf(); info.PlaytimeMS != 81_000 {
+		t.Errorf("the second results banked time again: %d", info.PlaytimeMS)
+	}
+	if m.screen != screen {
+		t.Errorf("the screen wandered to %v", m.screen)
+	}
+	_ = f
+}
+
+func TestResultScreenShowsTheRanking(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 1, 1_500))
+	ranking := []online.RankEntry{
+		rankEntry(1, "nick", true, 1, 1_500, scoreRows("crane")),
+		rankEntry(2, "sam", false, 0, 600_000, nil),
+		rankEntry(3, "priya", false, 0, 600_000, nil),
+	}
+	deliver(t, m, resultsRound(roundNow, 1, "crane", ranking...))
+
+	if m.screen != screenRoomResult {
+		t.Fatalf("screen = %v, want the room result", m.screen)
+	}
+	frame := plain(m.View().Content)
+	for _, want := range []string{
+		"1st of 3",
+		"room " + roomCode + " · round 1",
+		"answer CRANE",
+	} {
+		if !strings.Contains(frame, want) {
+			t.Errorf("the frame does not carry %q:\n%s", want, frame)
+		}
+	}
+	// One unsolved entry, marked with a dash and no time spent solving.
+	if !strings.Contains(frame, "—") {
+		t.Errorf("an unsolved ranking line lacks its dash:\n%s", frame)
+	}
+}
+
+func TestMarksThatDisagreeAreNotSaved(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("slate", "crane")))
+	ranking := []online.RankEntry{
+		rankEntry(1, "nick", false, 6, 600_000, spentRows(5, 6)),
+	}
+	// The word the round says it was over re-scores to something else.
+	deliver(t, m, resultsRound(roundNow, 1, "other", ranking...))
+
+	ids, _ := m.store.IDs()
+	if len(ids) != 0 {
+		t.Errorf("a disagreeing round was saved")
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "couldn't save this round") {
+		t.Errorf("the frame does not say why:\n%s", frame)
+	}
+}
+
+func TestReviewThenBack(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 1, 1_500))
+	ranking := []online.RankEntry{
+		rankEntry(1, "nick", true, 1, 1_500, scoreRows("crane")),
+		rankEntry(2, "sam", false, 0, 600_000, nil),
+	}
+	deliver(t, m, resultsRound(roundNow, 1, "crane", ranking...))
+
+	press(t, m, "enter")
+	if m.screen != screenGame {
+		t.Fatalf("screen = %v, want the saved round's board", m.screen)
+	}
+	// The round's letters sit inside tiles, so the frame's own spacing has to
+	// go before the word is readable in it.
+	squashed := strings.ReplaceAll(plain(m.View().Content), " ", "")
+	if !strings.Contains(squashed, "CRANE") {
+		t.Errorf("the board does not show the round:\n%s", plain(m.View().Content))
+	}
+	press(t, m, "enter")
+	if m.screen != screenRoomResult {
+		t.Fatalf("screen = %v, want the result again", m.screen)
+	}
+}
+
+func TestRematchFromTheResult(t *testing.T) {
+	m, _, conn := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 1, 1_500))
+	ranking := []online.RankEntry{
+		rankEntry(1, "nick", true, 1, 1_500, scoreRows("crane")),
+		rankEntry(2, "sam", false, 0, 600_000, nil),
+	}
+	deliver(t, m, resultsRound(roundNow, 1, "crane", ranking...))
+
+	press(t, m, "n")
+	if got := lastSent(t, conn); got != `{"t":"rematch"}` {
+		t.Errorf("n = %s, want rematch", got)
+	}
+	deliver(t, m, online.ServerMsg{T: "lobby", Round: 2})
+	if m.screen != screenRoom {
+		t.Fatalf("screen = %v, want the lobby", m.screen)
+	}
+	draw(t, m)
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "waiting for someone to join — share the code") {
+		t.Errorf("the lobby does read like one:\n%s", frame)
+	}
+}
+
+func TestAsyncFinishDropsTheRoom(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	conn := openJoinRoom(t, m, f)
+	deliver(t, m, welcomeAsync(1, player(1, "", false, false, false)))
+
+	press(t, m, "enter") // start
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 1, 9_000))
+	ranking := []online.RankEntry{
+		rankEntry(1, "", true, 1, 9_000, scoreRows("crane")),
+	}
+	deliver(t, m, online.ServerMsg{
+		T: "results", Round: 1, Word: "crane", Ranking: ranking,
+	})
+
+	if m.screen != screenRoomResult {
+		t.Fatalf("screen = %v, want the result", m.screen)
+	}
+	ids, _ := m.store.IDs()
+	if len(ids) != 1 {
+		t.Fatalf("the store holds %d records, want one", len(ids))
+	}
+	g, err := m.store.Load(ids[0])
+	if err != nil || g.Room == nil || g.Room.Key == "" {
+		t.Fatalf("saved round = %+v %v, want one with the reading key", g.Room, err)
+	}
+	if codes := roomFile(t, m); len(codes) != 0 {
+		t.Errorf("rooms file = %v, want the async room gone", codes)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "1st of 1 so far") {
+		t.Errorf("the frame does not read so far:\n%s", frame)
+	}
+	_ = conn
+}
+
+func TestTheListLabelsRoomRounds(t *testing.T) {
+	m, _, _ := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+	send(t, m, "c", "r", "a", "n", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("crane", "crane")))
+	deliver(t, m, doneMsg(1, true, 1, 1_500))
+	ranking := []online.RankEntry{
+		rankEntry(1, "nick", true, 1, 1_500, scoreRows("crane")),
+	}
+	deliver(t, m, resultsRound(roundNow, 1, "crane", ranking...))
+
+	// Back to the menu, into the list: the room round labels one.
+	send(t, m, "esc")
+	if m.screen != screenMenu {
+		t.Fatalf("screen = %v, want the menu", m.screen)
+	}
+	m.menu.cursor = menuIndex(t, m, choiceList, 0)
+	send(t, m, "enter")
+	draw(t, m)
+	list, err := m.store.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Room == nil {
+		t.Fatalf("the list has no room round: %+v", list)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "room") {
+		t.Errorf("the list did not label the round:\n%s", frame)
+	}
+}
+
+func TestWatchersSeeTheResultWithoutSaving(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	openJoinRoom(t, m, f)
+	withWelcomeKey(t, f.created.Key)
+	// The welcome lands with the round already over and us nowhere in its
+	// ranking: the results the room holds are the public view's.
+	roomMsg := welcomeLive(3,
+		player(1, "nick", true, false, true),
+		player(2, "sam", true, false, true),
+		player(3, "priya", true, false, false),
+	).Room
+	roomMsg.Phase = "results"
+	roomMsg.Results = &online.Results{
+		Round: 1, Word: "crane",
+		Ranking: []online.RankEntry{
+			rankEntry(1, "nick", true, 2, 81_000, scoreRows("slate", "crane")),
+			rankEntry(2, "sam", false, 6, 600_000, spentRows(5, 6)),
+		},
+	}
+	deliver(t, m, online.ServerMsg{T: "welcome", V: 1, Seat: 3, Key: welcomeKey, Room: roomMsg})
+
+	if m.screen != screenRoomResult {
+		t.Fatalf("screen = %v, want the result screen", m.screen)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "round 1") {
+		t.Errorf("the watcher card does not announce the round:\n%s", frame)
+	}
+	if strings.Contains(frame, "of 2") {
+		t.Errorf("a watcher's card claims a place:\n%s", frame)
+	}
+	// Their screen holds no record of a round they never played.
+	ids, _ := m.store.IDs()
+	if len(ids) != 0 {
+		t.Errorf("a watcher's visit saved %d records", len(ids))
+	}
 }
