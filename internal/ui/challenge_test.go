@@ -165,7 +165,7 @@ func TestChallengeByClickingOnly(t *testing.T) {
 	draw(t, m)
 	click(t, m, action{kind: actMenuChoice, index: menuIndex(t, m, choiceSocial, 0)})
 	draw(t, m)
-	click(t, m, action{kind: actSocialChoice, index: socialNewChallenge})
+	click(t, m, action{kind: actSocialChoice, index: socialRowIndex(t, m, socialNewChallenge)})
 	if m.screen != screenChallenge || !m.challenge.creating {
 		t.Fatalf("clicking new challenge opened screen %v", m.screen)
 	}
@@ -191,7 +191,7 @@ func TestEnteredChallengeFieldHasMouseParity(t *testing.T) {
 	m := newModel(t)
 	m.openSocialScreen()
 	draw(t, m)
-	click(t, m, action{kind: actSocialChoice, index: socialEnterChallenge})
+	click(t, m, action{kind: actSocialChoice, index: socialRowIndex(t, m, socialEnterChallenge)})
 	if m.screen != screenChallenge || !m.challenge.entry.editing {
 		t.Fatalf("enter-code click opened screen %v, editing %v", m.screen, m.challenge.entry.editing)
 	}

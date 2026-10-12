@@ -111,14 +111,15 @@ func run(cfg config) error {
 	// connect-src 'self'. A host with no location (the Node smoke test) has
 	// no server, and the UI then offers nothing online.
 	var api online.Client
+	var clientName string
 	if loc := js.Global().Get("location"); loc.Truthy() {
 		if origin := loc.Get("origin"); origin.Truthy() {
-			api = online.New(origin.String()+"/api/v1",
-				online.ClientName(brand.Name, build.Get().Version, runtime.GOOS, runtime.GOARCH))
+			clientName = online.ClientName(brand.Name, build.Get().Version, runtime.GOOS, runtime.GOARCH)
+			api = online.New(origin.String()+"/api/v1", clientName)
 		}
 	}
 
-	opts := uiOptions(cfg, browserDataDir, transfer, api)
+	opts := uiOptions(cfg, browserDataDir, transfer, api, clientName)
 	// The page grants each clipboard write on its own, so copying goes through
 	// the terminal, which arms that grant. See web.Terminal.Copy.
 	opts.Clipboard = term.Copy

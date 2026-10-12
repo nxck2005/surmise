@@ -1155,3 +1155,18 @@ func TestEscIsNamedForWhereItGoes(t *testing.T) {
 		check(t, m, send(t, m, "enter"), label)
 	}
 }
+
+// socialRowIndex is the row of a social screen's kind, so a click not only
+// finds it but cannot pass an index another row had claimed. Rooms shift the
+// offline rows down whenever one is showing, and the rows move for the test
+// that runs with them on.
+func socialRowIndex(t *testing.T, m *Model, kind socialKind) int {
+	t.Helper()
+	for i, row := range m.social.rows {
+		if row.kind == kind {
+			return i
+		}
+	}
+	t.Fatalf("social screen has no row of kind %v", kind)
+	return 0
+}
