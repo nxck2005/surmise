@@ -4,6 +4,8 @@ package ui
 // and a finished round reaches disk only through finishRoomRound.
 
 import (
+	"errors"
+	"net/http"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -383,4 +385,94 @@ func marksMatch(got, want [][]game.Mark) bool {
 		}
 	}
 	return true
+}
+
+// settleRefresh files a refresh's answer. The screen it belongs to is the
+// judge of whether it still matters: one that is gone is one whose ranking
+// nobody asked to update.
+func (m *Model) settleRefresh(msg roomResultsMsg) tea.Cmd {
+	if s := &m.roomResult; s.refreshing {
+		s.refreshing = false
+	}
+	if m.screen != screenRoomResult || m.roomResult.r.g == nil ||
+		m.roomResult.r.g.ID != msg.id {
+		// The screen has been left, or the round on it is not the round the
+		// answer names: nothing the answer is owed is on screen.
+		return nil
+	}
+	if msg.err != nil {
+		if m.markGone(msg.err) {
+			return nil
+		}
+		var gone *online.StatusError
+		if errors.As(msg.err, &gone) && gone.Code == http.StatusNotFound {
+			m.roomSay("this room has closed", true)
+			return nil
+		}
+		m.roomSay("couldn't refresh — try again", true)
+		return nil
+	}
+
+	// The saved round grows: its copy carries the new ranking, with names the
+	// room's own rule would still show, and it is refused when it no longer
+	// validates — a record this build wrote cannot become one it would not.
+	g := *m.roomResult.r.g
+	g.Room = &game.RoomInfo{
+		Code:    g.Room.Code,
+		Mode:    g.Room.Mode,
+		Round:   g.Room.Round,
+		Seat:    g.Room.Seat,
+		Key:     g.Room.Key,
+		Ranking: convertRanking(msg.results.Ranking),
+	}
+	if g.Validate() != nil {
+		m.roomSay("couldn't refresh — try again", true)
+		return nil
+	}
+	if err := m.store.Save(&g); err != nil {
+		m.note = saveFailed(err)
+		return nil
+	}
+	m.roomResult = roomResultScreen{r: buildRoomResult(&g), note: "updated"}
+	m.roomResult.room = m.room
+	m.roomResult.resize(m.width, m.height)
+	m.screen = screenRoomResult
+	return nil
+}
+
+// convertRanking is one ranking's shape change at the refresh's edge.
+func convertRanking(entries []online.RankEntry) []game.RoomRank {
+	out := make([]game.RoomRank, len(entries))
+	for i, e := range entries {
+		name := ""
+		if game.ValidRoomName(e.Name) {
+			name = e.Name
+		}
+		out[i] = game.RoomRank{
+			Seat: e.Seat, Name: name, Solved: e.Solved, Guesses: e.Guesses,
+			ElapsedMS: e.ElapsedMS, Rows: e.Rows,
+		}
+	}
+	return out
+}
+
+// buildRoomResult is one saved round's card.
+func buildRoomResult(g *game.Game) roomResult {
+	return roomResult{
+		code:    g.Room.Code,
+		mode:    g.Room.Mode,
+		round:   g.Room.Round,
+		seat:    g.Room.Seat,
+		length:  g.Length,
+		word:    g.Answer,
+		ranking: g.Room.Ranking,
+		g:       g,
+	}
+}
+
+// roomResultsMsg is one refresh's answer, named by the round it belongs to.
+type roomResultsMsg struct {
+	id      string // the saved round's game id
+	results online.Results
+	err     error
 }

@@ -681,6 +681,10 @@ type roomResultScreen struct {
 	r       roomResult
 	note    string
 	noteErr bool
+	// refreshing holds while the server is being asked for a new ranking; a
+	// second f while it is out does nothing, and its answer is dropped when
+	// the screen has been left.
+	refreshing bool
 
 	// width and height are the terminal's, pushed down by the root. The
 	// ranking sheds to fit them; zero is unmeasured, which is unbounded.
@@ -928,8 +932,8 @@ func (m *roomResultScreen) help(h *hitMap) string {
 	if result.g != nil {
 		items = append(items, helpItem{keys: "enter", label: "review", act: action{kind: actRoomReview}})
 	}
-	// Rematch and leave belong to a live room that is still open; the result
-	// of an any-time room keeps refresh (PR 10) and nothing else.
+	// Rematch and leave belong to a live room that is still open; an
+	// any-time room's saved result is what f refreshes, for thirty days.
 	if room := m.room; room != nil && room.code == result.code {
 		switch {
 		case room.mode == "live" && room.conn != nil && room.view.Phase == "results":
@@ -938,8 +942,20 @@ func (m *roomResultScreen) help(h *hitMap) string {
 				helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
 		case room.mode == "live":
 			items = append(items, helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
+		case m.canRefresh(result.g):
+			items = append(items, helpItem{keys: "f", label: "refresh", act: action{kind: actRoomRefresh}})
 		}
 	}
 	return renderHelp(h, append(items,
 		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})...)
+}
+
+// canRefresh reports whether this screen's saved result may be read again:
+// the round was played in an any-time room whose key is on record, the
+// room's thirty days have not run out, and the player has consent.
+func (s *roomResultScreen) canRefresh(g *game.Game) bool {
+	if g == nil || g.Room == nil || g.Room.Mode != "async" || g.Room.Key == "" {
+		return false
+	}
+	return timeNow().Before(g.StartedAt.Add(30 * 24 * time.Hour))
 }
