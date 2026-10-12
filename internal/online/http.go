@@ -133,7 +133,7 @@ func (h *HTTP) CreateRoom(ctx context.Context, opts RoomOptions) (Created, error
 	if err != nil {
 		return Created{}, err
 	}
-	if !game.ValidRoomCode(created.Code) || !validHex32(created.Key) || created.Seat != 1 {
+	if !game.ValidRoomCode(created.Code) || !game.ValidSeatKey(created.Key) || created.Seat != 1 {
 		return Created{}, ErrBadResponse
 	}
 	return created, nil
@@ -200,18 +200,3 @@ var (
 	_ error  = (*GoneError)(nil)
 	_ error  = (*StatusError)(nil)
 )
-
-// validHex32 reports whether s is 32 lowercase hex characters, the shape a
-// seat key arrives in.
-func validHex32(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
-}

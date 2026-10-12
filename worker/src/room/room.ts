@@ -209,12 +209,19 @@ export class Room extends DurableObject<Env> {
       pickAnswer,
     });
 
-    for (const effect of effects) {
-      await this.apply(effect, socket);
-    }
+    // The new state is committed before any effect runs. An effect can await
+    // (the D1 write of a finished async round does), and a Durable Object
+    // takes its next event while a non-storage await is in flight: that event
+    // must see this one's state, or one of the two updates is lost. The
+    // storage write also holds the outgoing messages below until it is
+    // durable (the output gate), so no player hears of a change the room
+    // could still forget.
     this.state = state;
     if (this.state !== null) {
       await this.ctx.storage.put("room", this.state);
+    }
+    for (const effect of effects) {
+      await this.apply(effect, socket);
     }
     await this.schedule();
   }

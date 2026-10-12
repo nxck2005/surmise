@@ -257,8 +257,20 @@ export function roomView(state: RoomState, seat: number, connected: ReadonlySet<
       solved: you.solved,
       elapsedMs: you.elapsedMs,
     },
-    results: s.results,
+    // A live room's results are the room's; an async room's are each
+    // player's own, once they have finished: the ranking so far, the same
+    // one their finish was answered with.
+    results: s.mode === "live"
+      ? s.results
+      : you.done ? { round: s.round, word: s.answer, ranking: asyncRanking(s) } : null,
   };
+}
+
+// asyncRanking is an async room's ranking so far: every seat that finished,
+// including one that has left since — it played, and the results endpoint,
+// which reads D1, counts it the same way.
+function asyncRanking(s: RoomState): RankEntry[] {
+  return rank(s.seats.filter((p) => p.done).map(rankEntry));
 }
 
 // startCondition, A.8: at least LIVE_MIN connected seats, and every one of
@@ -404,7 +416,11 @@ function onHello(s: RoomState, event: HelloEvent, ctx: Ctx, effects: Effect[]): 
       except: seat.seat,
     });
     if (s.phase === "lobby" && s.autoStart && startCondition(s, connectedPlusS)) {
-      startCountdown(s, effects, ctx);
+      // The countdown takes its players from the same set the condition was
+      // checked on: ctx.connected does not hold the seat saying hello yet, and
+      // a ready player whose return completes the room must be in the round
+      // it starts.
+      startCountdown(s, effects, { ...ctx, connected: connectedPlusS });
     }
   }
   return s;
@@ -588,7 +604,7 @@ function finishAsync(s: RoomState, seat: Seat, effects: Effect[], ctx: Ctx, solv
         t: "results",
         round: s.round,
         word: s.answer,
-        ranking: rank(nonRemoved(s).filter((p) => p.done).map(rankEntry)),
+        ranking: asyncRanking(s),
       },
     });
   }
@@ -721,7 +737,7 @@ function onAlarm(s: RoomState, ctx: Ctx, effects: Effect[]): { state: RoomState 
             t: "results",
             round: s.round,
             word: s.answer,
-            ranking: rank(nonRemoved(s).filter((x) => x.done).map(rankEntry)),
+            ranking: asyncRanking(s),
           },
         });
       }

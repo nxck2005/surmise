@@ -150,7 +150,7 @@ func validRoom(g *Game) error {
 		return fmt.Errorf("game: room mode %q is not valid", r.Mode)
 	case r.Round < 1 || r.Round > 10_000 || r.Seat < 1 || r.Seat > MaxRoomRanking:
 		return fmt.Errorf("game: room round or seat is out of range")
-	case r.Key != "" && !validHex32(r.Key), r.Mode == "live" && r.Key != "":
+	case r.Key != "" && !ValidSeatKey(r.Key), r.Mode == "live" && r.Key != "":
 		return fmt.Errorf("game: room key is not valid")
 	case !g.Status.Done():
 		return fmt.Errorf("game: room round is not finished")
@@ -193,10 +193,10 @@ func validRoom(g *Game) error {
 	return fmt.Errorf("game: room ranking does not include this player")
 }
 
-// validHex32 reports whether s is 32 lowercase hex characters, the shape of a
-// seat key. An empty string is not one: callers that allow no key check for
-// that separately.
-func validHex32(s string) bool {
+// ValidSeatKey reports whether s is a room seat key: 32 lowercase hex
+// characters. An empty string is not one: callers that allow no key check
+// for that separately. The store and the online client use this one check.
+func ValidSeatKey(s string) bool {
 	if len(s) != 32 {
 		return false
 	}
