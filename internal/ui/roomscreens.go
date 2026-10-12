@@ -1,9 +1,7 @@
 package ui
 
 // The room screens: making a room, joining one by code, and the room itself
-// with its lobby, countdown, watch and open views. The result screen arrives
-// with PR 9; its stub here only keeps unreachable draws away from the real
-// layout.
+// with its lobby, countdown, watch and open views, and the round's result.
 //
 // Every player-facing string here is Appendix C's, verbatim.
 
@@ -337,14 +335,13 @@ func (m *Model) joinRoom() tea.Cmd {
 
 // --- the room itself ---
 
-// roomScreen draws the room from the session; it keeps no copy of it. The
-// result screen is PR 9's; nothing raises screenRoomResult here.
+// roomScreen draws the room from the session; it keeps no copy of it.
 type roomScreen struct {
 	note    string
 	noteErr bool
 }
 
-// liveOrOpen is the shape of the first two lines every room view starts with.
+// header is the first lines every room view starts with: the code and the meta.
 func (m *roomScreen) header(h *hitMap, r *roomSession) []string {
 	v := &r.view
 	codeStyle := st.accent
@@ -427,7 +424,7 @@ func roomPlayersLobby(r *roomSession) func(online.PlayerView) (string, lipgloss.
 }
 
 // roomPlayersPlaying is the watching view's state column.
-func roomPlayersPlaying(h *hitMap) func(online.PlayerView) (string, lipgloss.Style) {
+func roomPlayersPlaying() func(online.PlayerView) (string, lipgloss.Style) {
 	return func(p online.PlayerView) (string, lipgloss.Style) {
 		switch {
 		case p.Solved:
@@ -440,7 +437,8 @@ func roomPlayersPlaying(h *hitMap) func(online.PlayerView) (string, lipgloss.Sty
 	}
 }
 
-// playerStates in question — the shape each form's note line takes.
+// lobbyNote is the line under the lobby's players: a note when one is set,
+// otherwise how far the room is from starting.
 func (m *roomScreen) lobbyNote(r *roomSession) (string, lipgloss.Style) {
 	if m.note != "" {
 		if m.noteErr {
@@ -504,7 +502,7 @@ func (m *roomScreen) view(h *hitMap, r *roomSession) string {
 
 	case v.Mode == "live" && (v.Phase == "playing" || v.Phase == "results"):
 		lines = append(lines, st.muted.Render("a round is under way — you'll play the next one"), "")
-		lines = append(lines, renderRoomPlayers(r, roomPlayersPlaying(h)), "")
+		lines = append(lines, renderRoomPlayers(r, roomPlayersPlaying()), "")
 
 	default: // async "open"
 		var who []string
@@ -673,11 +671,8 @@ type roomResult struct {
 }
 
 // roomResultScreen is what the result of a room round reads: the round, and
-// a note when something could not be done. room is the session this screen
-// belongs to, or nil: the keys above need to know whether this room is still
-// open, and a viewer whose result came from a saved game reads the same field.
+// a note when something could not be done.
 type roomResultScreen struct {
-	room    *roomSession
 	r       roomResult
 	note    string
 	noteErr bool
@@ -707,6 +702,7 @@ func (m *Model) openRoomResultFor(g *game.Game) {
 			g:       g,
 		},
 	}
+	m.roomResult.resize(m.width, m.height)
 	m.screen = screenRoomResult
 }
 
@@ -741,6 +737,7 @@ func (m *Model) openRoomResultFromView() {
 		seat: 0, length: r.view.Length, word: res.Word,
 		ranking: ranking,
 	}}
+	m.roomResult.resize(m.width, m.height)
 	m.screen = screenRoomResult
 }
 
@@ -813,7 +810,7 @@ func (m *roomResultScreen) view(h *hitMap) string {
 	rows = m.fitRankingRows(rows)
 
 	cards := []string{outcome, st.title.Render(title), st.muted.Render(meta), ""}
-	cards = append(cards, rows...)
+	cards = append(cards, block(strings.Join(rows, "\n")))
 	cards = append(cards, "", answerLine(result))
 	if m.note != "" {
 		style := st.muted
@@ -876,40 +873,34 @@ func (m *roomResultScreen) fitRankingRows(rows []string) []string {
 }
 
 // resultRankRow is one line of the ranking: the place for solved entries in
-// order (— for unsolved), the cursor on ours, the name, the score and the
-// time.
+// order (— for unsolved), the cursor on ours, the name, the score out of the
+// round's guesses and the time. Each cell is padded as plain text before it is
+// styled, so the columns line up whatever the styles add.
 func resultRankRow(h *hitMap, result *roomResult, index int, e game.RoomRank) string {
 	place := "—"
 	if e.Solved {
-		place = ordinal(rankPlace(result, index))
+		place = strconv.Itoa(rankPlace(result, index))
 	}
 	prefix := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
-	name := fmt.Sprintf("%-12s", e.Name)
-	if e.Name == "" {
-		name = fmt.Sprintf("%-12s", fmt.Sprintf("player %d", e.Seat))
+	name := e.Name
+	if name == "" {
+		name = fmt.Sprintf("player %d", e.Seat)
 	}
-	nameStyle := st.muted
+	nameStyle, playedStyle := st.muted, st.muted
 	if e.Seat == result.seat {
-		nameStyle = st.text
 		prefix = st.cursor.Render(st.glyph.Cursor)
+		nameStyle, playedStyle = st.text, st.accent
 	}
-	played := fmt.Sprintf("X/%d", result.length)
+	guesses := result.length + 1
+	played := fmt.Sprintf("X/%d", guesses)
 	if e.Solved {
-		played = fmt.Sprintf("%d/%d", e.Guesses, result.length)
+		played = fmt.Sprintf("%d/%d", e.Guesses, guesses)
 	}
-	playedStyle := st.muted
-	if e.Seat == result.seat {
-		playedStyle = st.accent
-	}
-	spent := st.muted.Render(formatDuration(time.Duration(e.ElapsedMS) * time.Millisecond))
-	if !e.Solved {
-		// Unsolved entries have no meaningful time; the board held ten exact
-		// minutes and the row shows that long a gap.
-		spent = st.muted.Render(formatDuration(time.Duration(game.RoomRoundMS) * time.Millisecond))
-	}
-	return fmt.Sprintf("%2s", st.muted.Render(place)) + "  " +
-		prefix + nameStyle.Render(name) + "  " +
-		fmt.Sprintf("%-4s", playedStyle.Render(played)) + "  " + spent
+	spent := formatDuration(time.Duration(e.ElapsedMS) * time.Millisecond)
+	return st.muted.Render(fmt.Sprintf("%2s", place)) + "  " +
+		prefix + nameStyle.Render(fmt.Sprintf("%-12s", name)) + "  " +
+		playedStyle.Render(fmt.Sprintf("%-4s", played)) + "  " +
+		st.muted.Render(fmt.Sprintf("%5s", spent))
 }
 
 // rankPlace is a solved entry's place: 1, 2, … through the solved entries in
@@ -924,27 +915,23 @@ func rankPlace(result *roomResult, index int) int {
 	return place
 }
 
-// help lists exactly the actions this end offers, in this order. A watcher
-// reviews nothing and has no room to rematch or leave.
-func (m *roomResultScreen) help(h *hitMap) string {
+// help lists exactly the actions this end offers, in this order. room is the
+// open session, or nil; consent is the network's. A watcher reviews nothing.
+func (m *roomResultScreen) help(h *hitMap, room *roomSession, consent bool) string {
 	result := &m.r
 	items := []helpItem{}
 	if result.g != nil {
 		items = append(items, helpItem{keys: "enter", label: "review", act: action{kind: actRoomReview}})
 	}
-	// Rematch and leave belong to a live room that is still open; an
-	// any-time room's saved result is what f refreshes, for thirty days.
-	if room := m.room; room != nil && room.code == result.code {
-		switch {
-		case room.mode == "live" && room.conn != nil && room.view.Phase == "results":
-			items = append(items,
-				helpItem{keys: "n", label: "rematch", act: action{kind: actRoomRematch}},
-				helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
-		case room.mode == "live":
-			items = append(items, helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
-		case m.canRefresh(result.g):
-			items = append(items, helpItem{keys: "f", label: "refresh", act: action{kind: actRoomRefresh}})
-		}
+	ours := room != nil && room.code == result.code
+	if ours && room.mode == "live" && room.conn != nil && room.view.Phase == "results" {
+		items = append(items, helpItem{keys: "n", label: "rematch", act: action{kind: actRoomRematch}})
+	}
+	if consent && !m.refreshing && m.canRefresh(result.g) {
+		items = append(items, helpItem{keys: "f", label: "refresh", act: action{kind: actRoomRefresh}})
+	}
+	if ours && room.mode == "live" {
+		items = append(items, helpItem{keys: "l", label: "leave", act: action{kind: actRoomLeave}})
 	}
 	return renderHelp(h, append(items,
 		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})...)

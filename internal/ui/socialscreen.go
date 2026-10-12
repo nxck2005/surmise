@@ -156,11 +156,7 @@ func (m *socialScreen) view(h *hitMap) string {
 			style = st.text
 		}
 		cell := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(style.Render(row.label))
-		atom := action{kind: actSocialChoice, index: i}
-		if row.kind == socialRejoin && !m.confirmLeave {
-			atom = action{kind: actSocialChoice, index: i}
-		}
-		rows[i] = h.mark(atom, prefix+cell+suffix)
+		rows[i] = h.mark(action{kind: actSocialChoice, index: i}, prefix+cell+suffix)
 	}
 
 	sections := []string{block(strings.Join(rows, "\n"))}

@@ -494,13 +494,18 @@ func (m *Model) applyRoomMsg(msg online.ServerMsg) tea.Cmd {
 			// An any-time round is the one player's own clock: EndsAt is
 			// theirs, and InRound says a row can now be typed.
 			r.view.You.InRound = true
+		} else {
+			// The live round is under way for the whole room. The phase has to
+			// move here, not only the screen: a player who is on the menu when
+			// this arrives reopens the room later, and showRoom reads the phase
+			// to put them on their board.
+			r.view.Phase = "playing"
 		}
 		r.view.EndsAt = msg.EndsAt
-		// A round under way is the board's business, not this screen's: whoever
-		// is looking at the room goes to their board now, and a watcher stays
-		// to watch.
+		// Whoever is looking at the room goes to their board now. Whether we
+		// are in the round was settled by the countdown (or the welcome); a
+		// watcher stays on the room screen and watches.
 		if m.screen == screenRoom {
-			r.resetYou(true)
 			if r.view.You.InRound {
 				m.openRoomBoard()
 			} else {
@@ -549,7 +554,7 @@ func (r *roomSession) resetYou(inRound bool) {
 	r.view.You = online.YouView{Seat: r.seat, InRound: inRound}
 }
 
-// upsertPlayer kinds a joined seat into the view, keeping the list sorted.
+// upsertPlayer puts a joined seat into the view, keeping the list sorted.
 func (m *Model) upsertPlayer(p online.PlayerView) {
 	r := m.room
 	if r == nil {
@@ -624,7 +629,7 @@ func (m *Model) showRoom() tea.Cmd {
 			m.openRoomBoard()
 			return nil
 		}
-		m.roomScreen = roomRoomWatching()
+		m.roomScreen = roomScreen{}
 		m.screen = screenRoom
 	case r.view.Phase == "results":
 		m.openRoomResultFromView()
@@ -632,9 +637,6 @@ func (m *Model) showRoom() tea.Cmd {
 	}
 	return nil
 }
-
-// roomRoomWatching is the watcher's room screen: empty of notes.
-func roomRoomWatching() roomScreen { return roomScreen{} }
 
 // roomJoinRowCode is the row the code field sits on.
 const roomJoinRowCode = 0
@@ -726,8 +728,6 @@ func (m *Model) reviewRoomResult() tea.Cmd {
 	}
 	return nil
 }
-
-// rematchRoom asks for the next round, only when there is an open live room
 
 // rematchRoom asks for the next round, only when there is an open live room
 // whose finished round is what this screen shows.

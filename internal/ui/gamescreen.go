@@ -746,20 +746,21 @@ func (m *gameScreen) help(h *hitMap) string {
 			}
 			return renderHelp(h, items...)
 		}
-		if m.g.Room != nil {
-			// A saved round under review.
-			return renderHelp(h,
-				helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
-				helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
-			)
-		}
-		if m.room.view.Results == nil && !m.g.Status.Done() {
+		if m.room.view.Results == nil {
 			return renderHelp(h,
 				helpItem{label: "type a word"},
 				helpItem{keys: "enter", label: "submit", act: action{kind: actSubmit}},
 				helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
 			)
 		}
+		return renderHelp(h,
+			helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
+			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+		)
+	}
+	if m.g.Room != nil {
+		// A saved room round under review, opened from the puzzles list: no
+		// session, and no restart either — the server dealt it.
 		return renderHelp(h,
 			helpItem{keys: "enter", label: "result", act: action{kind: actSubmit}},
 			helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},

@@ -209,8 +209,8 @@ func (m *Model) settleProbe(msg roomProbeMsg) tea.Cmd {
 		return nil
 	}
 	if m.room != nil {
-		// The player opened a room while the probe ran; its disc: the probe's
-		// one, whose answer came late.
+		// The player opened a room while the probe ran; that session wins and
+		// the probe's late connection is closed.
 		_ = msg.conn.Close()
 		return nil
 	}
