@@ -26,6 +26,10 @@ import (
 type fakeConn struct {
 	sent   []online.ClientMsg
 	closed bool
+	// queue holds the frames Receive serves, for the tests that script a
+	// probe's welcome; a Receive past an empty queue errors, the way a real
+	// closed connection does.
+	queue []online.ServerMsg
 }
 
 func (f *fakeConn) Send(_ context.Context, m online.ClientMsg) error {
@@ -34,7 +38,12 @@ func (f *fakeConn) Send(_ context.Context, m online.ClientMsg) error {
 }
 
 func (f *fakeConn) Receive(context.Context) (online.ServerMsg, error) {
-	return online.ServerMsg{}, errors.New("rooms_test: Receive is not scripted here")
+	if len(f.queue) == 0 {
+		return online.ServerMsg{}, errors.New("fakeConn: nothing scripted")
+	}
+	msg := f.queue[0]
+	f.queue = f.queue[1:]
+	return msg, nil
 }
 
 func (f *fakeConn) Close() error {
@@ -1362,5 +1371,451 @@ func TestWatchersSeeTheResultWithoutSaving(t *testing.T) {
 	ids, _ := m.store.IDs()
 	if len(ids) != 0 {
 		t.Errorf("a watcher's visit saved %d records", len(ids))
+	}
+}
+
+// ---- coming back (PR 10) ----
+
+func TestALostConnectionRetries(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	conn := openMakeRoom(t, m, f)
+	withWelcomeKey(t, f.created.Key)
+	deliver(t, m, welcomeLive(1, player(1, "nick", true, false, false)))
+
+	gen := m.room.gen
+	_, next := m.Update(roomRecvMsg{gen: gen, err: errors.New("drop")})
+	if m.room == nil {
+		t.Fatal("a drop closed the session")
+	}
+	if m.room.conn != nil {
+		t.Error("the lost connection is still set")
+	}
+	if m.room.retries != 1 {
+		t.Errorf("retries = %d, want 1", m.room.retries)
+	}
+	if next == nil {
+		t.Error("a lost connection scheduled no retry")
+	}
+	// The retry is a later tick; do not run it.
+	_ = conn
+}
+
+func TestBackoffSteps(t *testing.T) {
+	for n, want := range map[int]time.Duration{
+		1: time.Second, 2: 2 * time.Second, 3: 4 * time.Second,
+		4: 8 * time.Second, 5: 16 * time.Second,
+		6: 30 * time.Second, 7: 30 * time.Second,
+	} {
+		if got := roomBackoff(n); got != want {
+			t.Errorf("roomBackoff(%d) = %v, want %v", n, got, want)
+		}
+	}
+}
+
+func TestARetryRedials(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	conn := openMakeRoom(t, m, f)
+	withWelcomeKey(t, f.created.Key)
+	deliver(t, m, welcomeLive(1, player(1, "nick", true, false, false)))
+	const key = "00112233445566778899aabbccddeeff"
+	m.room.key = key
+
+	// The connection is gone first: the drop's own command is a wait, whose
+	// arrival is simulated here by sending the retry itself.
+	f.conn = conn
+	_, _ = m.Update(roomRecvMsg{gen: m.room.gen, err: errors.New("drop")})
+	if m.room.conn != nil || m.room.retries != 1 {
+		t.Fatalf("the drop left a connection (%v) and retcount %d", m.room.conn, m.room.retries)
+	}
+	gen := m.room.gen
+	f.calls = nil
+	_, next := m.Update(roomRetryMsg{gen: gen})
+	runCmd(t, m, next)
+	if !asked(f, "dial "+roomCode) {
+		t.Errorf("calls = %v, want the retry's dial", f.calls)
+	}
+	if got := conn.helloKey(); got != key {
+		t.Errorf("the retry's hello key = %q, want the saved key", got)
+	}
+
+	// An old generation's retry does nothing at all.
+	f.calls = nil
+	before := conn.count()
+	_, next = m.Update(roomRetryMsg{gen: gen - 1})
+	runCmd(t, m, next)
+	if asked(f, "dial") || conn.count() != before {
+		t.Errorf("a stale retry did anything: %v, %d frames", f.calls, conn.count()-before)
+	}
+}
+
+// beginRoundWith starts a forum board and puts guess 2 in flight, so the
+// re-welcome tests owe someone an answer about one guess.
+func beginRoundWith(t *testing.T, pending int) (*Model, *fakeOnline, *fakeConn) {
+	m, f, conn := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+	if pending == 2 {
+		send(t, m, "s", "l", "a", "t", "e")
+		press(t, m, "enter")
+		deliver(t, m, marksMsg(1, marksRowServer("slate", "crane")))
+		send(t, m, "g", "i", "v", "e", "r")
+		press(t, m, "enter")
+	}
+	return m, f, conn
+}
+
+func TestAPendingGuessIsResent(t *testing.T) {
+	m, f, conn := beginRoundWith(t, 2)
+	if m.room.pending != 2 {
+		t.Fatalf("pending = %d, want the guess 2 this test owes", m.room.pending)
+	}
+	const key = "00112233445566778899aabbccddeeff"
+	m.room.key = key
+
+	// The connection is gone, at the moment the drop lands; the re-welcome
+	// shows one word — nothing landed while we were away.
+	f.conn = conn
+	m.room.conn = nil
+	m.room.retries++
+	f.calls = nil
+	reGen := m.room.gen + 1
+	m.roomGen = reGen
+	m.room.gen = reGen
+	_, next := m.Update(roomRetryMsg{gen: reGen})
+	runCmd(t, m, next)
+	if !asked(f, "dial "+roomCode) {
+		t.Fatalf("calls = %v, want the redial", f.calls)
+	}
+	f.conn = conn
+	m.room.conn = conn
+	// The re-welcome has one word, and the resend then goes out.
+	welcome := welcomeLive(1, player(1, "nick", true, false, false))
+	welcome.Room.You.Words = []string{"slate"}
+	welcome.Room.You.Marks = scoreRows("slate")
+	deliver(t, m, welcome)
+	if got := lastSent(t, conn); !strings.Contains(got, `"t":"guess"`) ||
+		!strings.Contains(got, `"n":2`) {
+		t.Errorf("the pending guess was not resent: %s", got)
+	}
+}
+
+func TestAPendingGuessThatLandedIsNotResent(t *testing.T) {
+	m, f, conn := beginRoundWith(t, 2)
+	const key = "00112233445566778899aabbccddeeff"
+	m.room.key = key
+
+	f.conn = conn
+	m.room.conn = nil
+	m.room.retries++
+	reGen := m.room.gen + 1
+	m.roomGen = reGen
+	m.room.gen = reGen
+	_, next := m.Update(roomRetryMsg{gen: reGen})
+	runCmd(t, m, next)
+	f.conn = conn
+	m.room.conn = conn
+	// The re-welcome carries both words: the guess landed while we were away.
+	welcome := welcomeLive(1, player(1, "nick", true, false, false))
+	welcome.Room.You.Words = []string{"slate", "giver"}
+	welcome.Room.You.Marks = append(scoreRows("slate"), scoreRows("giver")...)
+	frames := conn.count()
+	deliver(t, m, welcome)
+	if got := lastSent(t, conn); strings.Contains(got, `"t":"guess"`) {
+		t.Errorf("a landed guess was resent: %s", got)
+	}
+	if m.room.pending != 0 {
+		t.Errorf("pending = %d, want none", m.room.pending)
+	}
+	if conn.count() != frames {
+		t.Errorf("the re-welcome sent %d frames, want none", conn.count()-frames)
+	}
+	// The board shows both rows.
+	draw(t, m)
+	squashed := strings.ReplaceAll(plain(m.View().Content), " ", "")
+	if !strings.Contains(squashed, "GIVER") {
+		t.Errorf("the board does not show the round's second row:\n%s", plain(m.View().Content))
+	}
+}
+
+func TestReconnectingAfterTheEndShowsTheResult(t *testing.T) {
+	m, f, conn := forum(t)
+	withClock(t, &roundNow)
+	startLiveRound(t, m)
+	send(t, m, "s", "l", "a", "t", "e")
+	press(t, m, "enter")
+	deliver(t, m, marksMsg(1, marksRowServer("slate", "crane")))
+
+	// The round ends while the connection is dark; the retry then lands its
+	// welcome into a room the server has already moved on for us.
+	f.conn = conn
+	m.room.conn = nil
+	m.room.retries++
+	reGen := m.room.gen + 1
+	m.roomGen = reGen
+	m.room.gen = reGen
+	_, next := m.Update(roomRetryMsg{gen: reGen})
+	runCmd(t, m, next)
+	f.conn = conn
+	m.room.conn = conn
+	welcome := welcomeLive(1,
+		player(1, "nick", true, false, false),
+		player(2, "sam", true, false, false),
+	)
+	welcome.Room.Phase = "results"
+	welcome.Room.Results = &online.Results{
+		Round: 1, Word: "crane",
+		Ranking: []online.RankEntry{
+			rankEntry(1, "nick", false, 6, 600_000, spentRows(5, 6)),
+			rankEntry(2, "sam", true, 2, 81_000, scoreRows("slate", "crane")),
+		},
+	}
+	deliver(t, m, welcome)
+
+	if m.screen != screenRoomResult {
+		t.Fatalf("screen = %v, want the room result", m.screen)
+	}
+	ids, _ := m.store.IDs()
+	if len(ids) != 1 {
+		t.Fatalf("the store holds %d records, want the round", len(ids))
+	}
+	g, err := m.store.Load(ids[0])
+	if err != nil || g.Room == nil || g.Room.Code != roomCode {
+		t.Errorf("the round did not save: %+v %v", g.Room, err)
+	}
+}
+
+func TestLeavingNeverReconnects(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	conn := openMakeRoom(t, m, f)
+	withWelcomeKey(t, f.created.Key)
+	deliver(t, m, welcomeLive(1, player(1, "nick", true, false, false)))
+	m.room.leaving = true
+
+	_, next := m.Update(roomRecvMsg{gen: m.room.gen, err: errors.New("drop")})
+	if m.room != nil {
+		t.Fatal("a leaving session stayed open")
+	}
+	if next != nil {
+		t.Error("a leaving session scheduled a retry")
+	}
+	_ = conn
+}
+
+// runningWelcome is the welcome of a live round mid-board: the shape the
+// startup check is looking for.
+func runningWelcome(now time.Time) online.ServerMsg {
+	room := welcomeLive(1, player(1, "nick", true, false, false)).Room
+	room.Phase = "playing"
+	room.EndsAt = now.Add(400 * time.Second).UnixMilli()
+	room.You = online.YouView{Seat: 1, InRound: true}
+	room.You.Words = []string{"slate"}
+	room.You.Marks = scoreRows("slate")
+	welcome := welcomeRoom(roomCode, "live", 5, true, "playing", 1, welcomeKey,
+		player(1, "nick", true, false, false))
+	welcome.Room = room
+	welcome.Now = now.UnixMilli()
+	return welcome
+}
+
+func TestStartupReopensARunningRound(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	setRoomFile(t, m, roomCode)
+	withWelcomeKey(t, welcomeKey)
+	// The opening board, with the splash raised over it exactly as New does.
+	m.raiseSplash()
+	if m.screen != screenSplash {
+		t.Fatalf("screen = %v, want the splash", m.screen)
+	}
+
+	f.conn = &fakeConn{queue: []online.ServerMsg{runningWelcome(roundNow)}}
+	runCmd(t, m, m.probeCmd())
+
+	// The splash went back over the reopened board.
+	if m.screen != screenSplash {
+		t.Fatalf("screen = %v, want the splash keeping its dismissal", m.screen)
+	}
+	if m.splash.next != screenGame {
+		t.Fatalf("splash.next = %v, want the board", m.splash.next)
+	}
+}
+
+func TestStartupLeavesYouAloneWhenBusy(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	setRoomFile(t, m, roomCode)
+	// The first board holds a typed letter: a puzzle in hand, which the
+	// probe does not disturb.
+	m.openGame(mustGame(t, 5), false)
+	send(t, m, "a")
+
+	f.conn = &fakeConn{queue: []online.ServerMsg{runningWelcome(roundNow)}}
+	runCmd(t, m, m.probeCmd())
+	if m.screen != screenGame {
+		t.Fatalf("screen = %v, want the board alone to its own round", m.screen)
+	}
+	if !strings.Contains(plain(m.View().Content),
+		"your round in room "+roomCode+" is still running — open it from social play") {
+		t.Errorf("the note never said where the round is:\n%s", plain(m.View().Content))
+	}
+}
+
+func TestStartupDropsDeadRooms(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	setRoomFile(t, m, roomCode)
+	conn := &fakeConn{}
+	conn.queue = []online.ServerMsg{{T: "refuse", Reason: "no_room"}}
+	f.conn = conn
+
+	runCmd(t, m, m.probeCmd())
+	if codes := roomFile(t, m); len(codes) != 0 {
+		t.Errorf("rooms file = %v, want the dead room dropped", codes)
+	}
+	if m.note != "a room you were in ended while you were away" {
+		t.Errorf("note = %q, want the dead-room line", m.note)
+	}
+}
+
+func TestStartupAsksNothingOffline(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, false)
+	setRoomFile(t, m, roomCode)
+	if cmd := m.probeCmd(); cmd != nil {
+		t.Error("the probe asked without consent")
+	}
+	if asked(f, "dial") {
+		t.Errorf("calls = %v, want none offline", f.calls)
+	}
+}
+
+func mustGame(t *testing.T, length int) *game.Game {
+	t.Helper()
+	g, err := game.New(length)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+func TestRefreshUpdatesTheRanking(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	key := welcomeKey
+	withClock(t, &roundNow)
+	g, err := game.NewRoomRound(game.RoomInfo{
+		Code: roomCode, Mode: "async", Round: 1, Seat: 1, Key: key,
+		Ranking: []game.RoomRank{
+			{Seat: 1, Name: "nick", Solved: true, Guesses: 2, ElapsedMS: 81_000,
+				Rows: scoreRows("slate", "crane")},
+		},
+	}, "crane", []string{"slate", "crane"}, 81_000, roundNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	m.roomResult.r = roomResult{
+		code: roomCode, mode: "async", round: 1, seat: 1, length: 5, word: "crane",
+		ranking: g.Room.Ranking, g: g,
+	}
+	m.roomResult.room = nil
+	m.screen = screenRoomResult
+	m.roomResult.resize(testWidth, testHeight)
+	f.results = online.Results{
+		Round: 1, Word: "crane",
+		Ranking: []online.RankEntry{
+			rankEntry(1, "nick", true, 2, 81_000, scoreRows("slate", "crane")),
+			rankEntry(2, "sam", true, 3, 120_000, scoreRows("ghost", "ghost", "ghost")),
+		},
+	}
+	m.roomResult.room = nil
+
+	press(t, m, "f")
+	// The refresh's rounds happen synchronously in the test drain: its note
+	// is already the answer's, so the announcement is checked via the state
+	// the busy flag the press opened the request with.
+	if len(m.roomResult.note) == 0 || !strings.Contains(m.roomResult.note, "updated") {
+		t.Errorf("note = %q, want updated", m.roomResult.note)
+	}
+	frame := plain(m.View().Content)
+	if !strings.Contains(frame, "sam") {
+		t.Errorf("the refreshed ranking lacks the new player:\n%s", frame)
+	}
+	ids, _ := m.store.IDs()
+	if len(ids) != 1 {
+		t.Fatal("the refresh lost the record")
+	}
+	got, err := m.store.Load(ids[0])
+	if err != nil || len(got.Room.Ranking) != 2 {
+		t.Errorf("the saved ranking = %+v %v, want two entries", got.Room, err)
+	}
+}
+
+func TestRefreshAfterTheRoomClosed(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	withClock(t, &roundNow)
+	g, err := game.NewRoomRound(game.RoomInfo{
+		Code: roomCode, Mode: "async", Round: 1, Seat: 1, Key: welcomeKey,
+		Ranking: []game.RoomRank{
+			{Seat: 1, Name: "nick", Solved: true, Guesses: 1, ElapsedMS: 1_500,
+				Rows: scoreRows("crane")},
+		},
+	}, "crane", []string{"crane"}, 1_500, roundNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	m.roomResult.r = roomResult{
+		code: roomCode, mode: "async", round: 1, seat: 1, length: 5, word: "crane",
+		ranking: g.Room.Ranking, g: g,
+	}
+	m.screen = screenRoomResult
+	m.roomResult.resize(testWidth, testHeight)
+	f.resultsErr = &online.StatusError{Code: 404}
+
+	press(t, m, "f")
+	if !strings.Contains(plain(m.View().Content), "this room has closed") {
+		t.Errorf("the frame does not say the room closed:\n%s", plain(m.View().Content))
+	}
+	got, err := m.store.Load(g.ID)
+	if err != nil || len(got.Room.Ranking) != 1 {
+		t.Errorf("the record changed: %+v %v", got.Room, err)
+	}
+}
+
+func TestNoRefreshForLiveRounds(t *testing.T) {
+	f := &fakeOnline{}
+	m := newOnlineModel(t, f, true)
+	withClock(t, &roundNow)
+	g, err := game.NewRoomRound(game.RoomInfo{
+		Code: roomCode, Mode: "live", Round: 1, Seat: 1,
+		Ranking: []game.RoomRank{
+			{Seat: 1, Name: "nick", Solved: true, Guesses: 1, ElapsedMS: 1_500,
+				Rows: scoreRows("crane")},
+		},
+	}, "crane", []string{"crane"}, 1_500, roundNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.roomResult.r = roomResult{
+		code: roomCode, mode: "live", round: 1, seat: 1, length: 5, word: "crane",
+		ranking: g.Room.Ranking, g: g,
+	}
+	m.screen = screenRoomResult
+	m.roomResult.resize(testWidth, testHeight)
+	draw(t, m)
+	if strings.Contains(plain(m.View().Content), "f refresh") {
+		t.Error("a live round's result was offered the refresh")
+	}
+	press(t, m, "f")
+	if asked(f, "results") {
+		t.Errorf("calls = %v, want none", f.calls)
 	}
 }

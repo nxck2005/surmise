@@ -1000,7 +1000,7 @@ func (m *Model) Init() tea.Cmd {
 	// splash sweep normally starts when the first size arrives, after the first
 	// frame can be composed at the right phase; animCmd also covers a splash
 	// raised by a caller that already has a measured size.
-	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd(), m.animCmd(), m.statusCmd())
+	return tea.Batch(tick(), watchThemes(m.themeLib), m.splashCmd(), m.animCmd(), m.statusCmd(), m.probeCmd())
 }
 
 // splashCmd is the timer a timed splash runs on, or nil when there is nothing
@@ -1170,12 +1170,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.err != nil {
-			if m.markGone(msg.err) {
-				return m, nil
-			}
-			m.roomSay("couldn't reach the server — try again", true)
-			m.closeRoom()
-			return m, nil
+			// One path for a lost connection, for a dial and a listen alike:
+			// gone is gone, unwelcomed is unanswered, the rest walk back.
+			return m, m.roomLost(msg.err)
 		}
 		m.room.conn = msg.conn
 		return m, m.listen(msg.conn, msg.gen)
@@ -1186,13 +1183,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.err != nil {
-			return m, m.roomConnectionOver(msg.err)
+			return m, m.roomLost(msg.err)
 		}
 		cmd := m.applyRoomMsg(msg.msg)
 		if m.room == nil || msg.gen != m.room.gen || m.room.conn == nil {
 			return m, cmd
 		}
 		return m, tea.Batch(cmd, m.listen(m.room.conn, msg.gen))
+
+	case roomRetryMsg:
+		return m, m.roomRetryNext(msg)
+
+	case roomResultsMsg:
+		return m, m.settleRefresh(msg)
+
+	case roomProbeMsg:
+		return m, m.settleProbe(msg)
 
 	case roomCreatedMsg:
 		m.roomMake.busy = false
@@ -1737,6 +1743,18 @@ func (m *Model) dispatch(a action) tea.Cmd {
 			m.social.confirmLeave = true
 		}
 		return nil
+
+	case actRoomReview:
+		return m.reviewRoomResult()
+
+	case actRoomRematch:
+		return m.rematchRoom()
+
+	case actRoomRefresh:
+		if m.screen != screenRoomResult {
+			return nil
+		}
+		return m.refreshRoomResult()
 
 	case actSocialLeaveConfirm:
 		if m.screen != screenSocial || !m.social.confirmLeave {

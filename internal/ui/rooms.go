@@ -10,7 +10,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -43,6 +42,9 @@ type roomSession struct {
 	retries int
 	// leaving is the player's own choice to leave: never reconnect (PR 10).
 	leaving bool
+	// probe marks a session the startup check made: its first welcome moves
+	// the screen by the probe's own rule, not the ordinary one.
+	probe bool
 }
 
 // local turns a server time into ours.
@@ -363,17 +365,39 @@ func (m *Model) applyRoomMsg(msg online.ServerMsg) tea.Cmd {
 		})
 		m.roomJoin.busy = false
 		m.roomMake.busy = false
-		// A guess that is out keeps its number: PR 10's re-welcome decides
-		// whether it landed while we were away or must be sent again.
 		if first {
 			return m.showRoom()
 		}
-		if r.view.Results != nil {
-			for _, e := range r.view.Results.Ranking {
-				if e.Seat == r.seat {
-					m.finishRoomRound()
-					return nil
-				}
+		// A re-welcome is the truth overtaking what we remember, and four
+		// things are owed it, in this order:
+		//  - a guess that was out either landed while we were away (the view)
+		//    or answers for another send;
+		//  - the board of this room, when it is showing, is rebuilt from the
+		//    view rather than argued with;
+		//  - an open finished round saves itself, and the screen of this room
+		//    moves to wherever its state now says;
+		//  - everything else happens wherever the player is standing.
+		if r.pending != 0 {
+			if len(r.view.You.Words) >= r.pending {
+				// Landed while we were away.
+				r.pending, r.pendingWord = 0, ""
+			} else {
+				// Still owed: send it again.
+				return m.sendRoom(online.Guess(r.pending, r.pendingWord))
+			}
+		}
+		if m.screen == screenGame && m.game != nil && m.game.room == r {
+			keep := m.game.typing
+			m.openRoomBoard()
+			if r.pending == 0 {
+				m.game.typing = keep
+			}
+		}
+		m.finishRoomRound()
+		switch m.screen {
+		case screenRoom, screenRoomResult:
+			if cond := m.roomOnScreen(r); cond {
+				return m.showRoom()
 			}
 		}
 		return nil
@@ -662,12 +686,36 @@ func (m *Model) updateRoomResult(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.reviewRoomResult()
 	case "n":
 		return m, m.rematchRoom()
+	case "f":
+		return m, m.refreshRoomResult()
 	case "l":
 		if room := m.room; room != nil && room.code == m.roomResult.r.code && room.mode == "live" {
 			return m, m.leaveRoom()
 		}
 	}
 	return m, nil
+}
+
+// refreshRoomResult reads the room's ranking again, so a card that has been
+// sitting in the list can pick up everyone who played since. One ask at a
+// time, and the answer is filed even after the player has moved on.
+func (m *Model) refreshRoomResult() tea.Cmd {
+	s := &m.roomResult
+	g := s.r.g
+	// Consent is the same one rule every network call goes through: the
+	// screen's key alone is not the check.
+	if s.refreshing || !s.canRefresh(g) || !m.consent() {
+		return nil
+	}
+	s.refreshing = true
+	s.note, s.noteErr = "refreshing…", false
+	client, code, key, id := m.online, g.Room.Code, g.Room.Key, g.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), netTimeout)
+		defer cancel()
+		results, err := client.Results(ctx, code, key)
+		return roomResultsMsg{id: id, results: results, err: err}
+	}
 }
 
 // reviewRoomResult opens the saved round on the board: the board shows the
@@ -680,6 +728,8 @@ func (m *Model) reviewRoomResult() tea.Cmd {
 }
 
 // rematchRoom asks for the next round, only when there is an open live room
+
+// rematchRoom asks for the next round, only when there is an open live room
 // whose finished round is what this screen shows.
 func (m *Model) rematchRoom() tea.Cmd {
 	if room := m.room; room != nil && room.code == m.roomResult.r.code &&
@@ -689,24 +739,19 @@ func (m *Model) rematchRoom() tea.Cmd {
 	return nil
 }
 
-// roomConnectionOver handles a listen loop that has stopped: the connection
-// failed or the room closed it. PR 8's shape is today's: report where the
-// player is, and let the room go. PR 10 replaces this with reconnection.
-func (m *Model) roomConnectionOver(err error) tea.Cmd {
-	r := m.room
+// roomOnScreen reports whether the screen the player is on belongs to this
+// room: its room screen, its board, its result screen.
+func (m *Model) roomOnScreen(r *roomSession) bool {
 	if r == nil {
-		return nil
+		return false
 	}
-	r.conn = nil
-	if !r.welcomed {
-		if m.markGone(err) {
-			return nil
-		}
-		m.roomSay("couldn't reach the server — try again", true)
-		m.closeRoom()
-		return nil
+	switch m.screen {
+	case screenRoom:
+		return true
+	case screenGame:
+		return m.game != nil && m.game.room == r
+	case screenRoomResult:
+		return m.roomResult.r.code == r.code
 	}
-	m.note = fmt.Sprintf("lost the connection to room %s", r.code)
-	m.closeRoom()
-	return nil
+	return false
 }
