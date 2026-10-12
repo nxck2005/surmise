@@ -143,7 +143,7 @@ func (m *roomMakeScreen) renderRow(h *hitMap, row int, label, value string) stri
 		if h.hovered(next) {
 			valueStyle = st.hover(valueStyle)
 		}
-		cell := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center).
+		cell := lipgloss.NewStyle().Width(roomMakeValueWidth()).Align(lipgloss.Center).
 			Render(valueStyle.Render(value))
 		cell = h.mark(next, cell)
 		return prefix +
@@ -153,7 +153,7 @@ func (m *roomMakeScreen) renderRow(h *hitMap, row int, label, value string) stri
 			arrow(next, st.glyph.ValueNext)
 	}
 
-	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
+	valueBox := lipgloss.NewStyle().Width(roomMakeValueWidth()).Align(lipgloss.Center)
 	return prefix +
 		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
 		strings.Repeat(" ", lipgloss.Width(st.glyph.ValuePrev)) +
@@ -181,6 +181,17 @@ func (m *roomMakeScreen) view(h *hitMap) string {
 	return lipgloss.JoinVertical(lipgloss.Center,
 		lipgloss.JoinVertical(lipgloss.Left, rows...),
 	)
+}
+
+// roomMakeValueWidth is the value column: the longest start value with a cell
+// of air on each side, which is wider than settings' column, so no value ever
+// wraps or touches its arrows.
+func roomMakeValueWidth() int {
+	widest := valueWidth
+	for _, v := range []string{"when everyone's ready", "when the host starts it", "when you start it"} {
+		widest = max(widest, lipgloss.Width(v)+2)
+	}
+	return widest
 }
 
 func makePlayLabel(v bool) string {
