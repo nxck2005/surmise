@@ -548,3 +548,59 @@ test("nextDeadline picks the earliest", () => {
   const seat = (begun.state as RoomState).seats.find((s) => s.seat === 1) as { endsAt: number };
   assert.equal(nextDeadline(begun.state as RoomState), Math.min(T + ASYNC_LIFETIME_MS, seat.endsAt));
 });
+
+// --- found in review (2026-10-12) ---
+
+test("a ready player whose return starts the round is in it", () => {
+  // Both seats ready, but seat 1's socket dropped before seat 2 readied, so
+  // nothing started. Seat 1 coming back completes the start condition.
+  let s = start(true);
+  s = handle(s, { type: "message", seat: 1, msg: { t: "ready", ready: true } }, ctx(T, [1, 2])).state as RoomState;
+  s = handle(s, { type: "disconnect", seat: 1 }, ctx(T + 1, [2])).state as RoomState;
+  s = handle(s, { type: "message", seat: 2, msg: { t: "ready", ready: true } }, ctx(T + 2, [2])).state as RoomState;
+  assert.equal(s.phase, "lobby", "one connected seat starts nothing");
+
+  const back = handle(s, { type: "hello", msg: hello("nick", KEY1.key), keyHash: "h1", fresh: KEY3 }, ctx(T + 3, [2]));
+  const st = back.state as RoomState;
+  assert.equal(sent(back.effects, "countdown").length, 1);
+  assert.equal(st.phase, "countdown");
+  assert.equal(st.seats.find((p) => p.seat === 1)?.inRound, true, "the returning seat plays");
+  assert.equal(st.seats.find((p) => p.seat === 2)?.inRound, true);
+});
+
+// asyncDone builds an async room where seat 1 has solved its round.
+function asyncDone(): RoomState {
+  let s = createRoom({ code: "K7M2QX", mode: "async", length: 5, autoStart: false }, ctx(T), { keyHash: "h1" });
+  s = handle(s, { type: "message", seat: 1, msg: { t: "start" } }, ctx(T + 1, [1])).state as RoomState;
+  s = handle(s, { type: "message", seat: 1, msg: { t: "guess", n: 1, word: WORD } }, ctx(T + 2, [1])).state as RoomState;
+  return s;
+}
+
+test("a finished async player who comes back gets the ranking so far", () => {
+  const r = handle(asyncDone(), { type: "hello", msg: hello("nick", KEY1.key), keyHash: "h1", fresh: KEY3 }, ctx(T + 3, []));
+  const welcome = sent(r.effects, "welcome")[0] as { room: { you: { done: boolean }; results: unknown } };
+  assert.equal(welcome.room.you.done, true);
+  assert.deepEqual(welcome.room.results, {
+    round: 1,
+    word: WORD,
+    ranking: [{ seat: 1, name: "nick", solved: true, guesses: 1, elapsedMs: 1, rows: [score(WORD, WORD)] }],
+  });
+});
+
+test("an unfinished async player gets no results", () => {
+  let s = createRoom({ code: "K7M2QX", mode: "async", length: 5, autoStart: false }, ctx(T), { keyHash: "h1" });
+  s = handle(s, { type: "message", seat: 1, msg: { t: "start" } }, ctx(T + 1, [1])).state as RoomState;
+  const r = handle(s, { type: "hello", msg: hello("nick", KEY1.key), keyHash: "h1", fresh: KEY3 }, ctx(T + 2, []));
+  const welcome = sent(r.effects, "welcome")[0] as { room: { results: unknown } };
+  assert.equal(welcome.room.results, null);
+});
+
+test("an async ranking keeps a player who finished and then left", () => {
+  let s = asyncDone();
+  s = handle(s, { type: "message", seat: 1, msg: { t: "leave" } }, ctx(T + 3, [1])).state as RoomState;
+  s = handle(s, { type: "hello", msg: hello("sam"), keyHash: null, fresh: KEY2 }, ctx(T + 4, [])).state as RoomState;
+  s = handle(s, { type: "message", seat: 2, msg: { t: "start" } }, ctx(T + 5, [2])).state as RoomState;
+  const r = handle(s, { type: "message", seat: 2, msg: { t: "guess", n: 1, word: WORD } }, ctx(T + 6, [2]));
+  const results = sent(r.effects, "results")[0] as { ranking: { seat: number }[] };
+  assert.deepEqual(results.ranking.map((e) => e.seat), [1, 2]);
+});

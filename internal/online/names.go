@@ -11,7 +11,7 @@ import (
 // plan, the same ones the server applies to a hello (its cleanName). The two
 // must reach the same answer so what the player typed is what everyone sees.
 //
-//  1. Keep only A–Z, a–z, 0–9, space, '_' and '-'.
+//  1. Keep only A–Z, a–z, 0–9, space, '_', '.' and '-'.
 //  2. Trim leading and trailing spaces.
 //  3. Cut to the first 12 characters, then trim the end again.
 //  4. A name whose letter runs are blocked or profane becomes empty.

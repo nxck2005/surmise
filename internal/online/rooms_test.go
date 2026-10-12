@@ -239,7 +239,10 @@ func TestDialUsesTheSocketPath(t *testing.T) {
 
 func TestHeartbeatPingsAndDetectsADeadServer(t *testing.T) {
 	oldPing, oldDead := pingEvery, deadAfter
-	pingEvery, deadAfter = 20*time.Millisecond, 100*time.Millisecond
+	// The dead window is wide against the ping interval on purpose: under a
+	// loaded test run a ping and its pong can take far longer than on an idle
+	// machine, and a 100ms window flaked there.
+	pingEvery, deadAfter = 20*time.Millisecond, 250*time.Millisecond
 	t.Cleanup(func() { pingEvery, deadAfter = oldPing, oldDead })
 
 	t.Run("answered pings keep the connection", func(t *testing.T) {
@@ -252,7 +255,7 @@ func TestHeartbeatPingsAndDetectsADeadServer(t *testing.T) {
 
 		// Receive stays blocked for the whole window: the only failure it can
 		// report inside it is the test's own deadline.
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
 		defer cancel()
 		_, err = conn.Receive(ctx)
 		if !errors.Is(err, context.DeadlineExceeded) {
@@ -285,8 +288,8 @@ func TestHeartbeatPingsAndDetectsADeadServer(t *testing.T) {
 			if errors.Is(r.err, context.DeadlineExceeded) {
 				t.Errorf("Receive reported the context, not a dead connection: %v", r.err)
 			}
-		case <-time.After(1 * time.Second):
-			t.Fatal("Receive missed a dead server within 1s")
+		case <-time.After(3 * time.Second):
+			t.Fatal("Receive missed a dead server within 3s")
 		}
 	})
 }

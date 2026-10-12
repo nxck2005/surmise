@@ -32,24 +32,9 @@ const MaxRooms = 5
 // valid code, a 32-hex seat key, mode live or async, and a joined time.
 func ValidRoomEntry(e RoomEntry) bool {
 	return game.ValidRoomCode(e.Code) &&
-		validSeatKey(e.Key) &&
+		game.ValidSeatKey(e.Key) &&
 		(e.Mode == "live" || e.Mode == "async") &&
 		!e.JoinedAt.IsZero()
-}
-
-// validSeatKey reports whether s is 32 lowercase hex characters, the shape the
-// room server mints seat keys in.
-func validSeatKey(s string) bool {
-	if len(s) != 32 {
-		return false
-	}
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 // roomsFile is the shape of rooms.json and of the browser key's value. It
