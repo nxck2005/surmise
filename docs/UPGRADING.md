@@ -64,6 +64,25 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.9.1 → v0.10.0: online rooms
+
+- **Rooms, when network is on.** Social play gets **make room** and **join
+  room**. A room is *together now* (a live race with a ranking) or *any time*
+  (open for 30 days; everyone plays when they like). The server picks the word
+  and scores every guess.
+- **A finished round is saved like a puzzle** and shows in the puzzles list as
+  `room`. It never counts toward your stats. Older versions read it as an
+  ordinary finished puzzle — and, not knowing it is a room round, would count
+  it.
+- **A small new file, `rooms.json`,** sits next to `settings.json` and lists
+  the rooms you are in (at most five), so the game can take you back to one.
+  It is not part of a backup.
+- **One new dependency**, `github.com/coder/websocket`, for the room
+  connection. It is in THIRD_PARTY_NOTICES.md.
+
+`schema` does not move, no daily answer moves, and no theme or word list
+changed.
+
 ## v0.9.0 → v0.9.1: the day's count on the menu
 
 - **With network on, the menu's status line says how many dailies everyone has

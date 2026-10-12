@@ -48,6 +48,8 @@ In scope:
   request read or change data it should not, and anything that makes the
   Worker serve code other than this repository's.
 - How the game handles what the server sends back.
+- A way to read a room's word or another player's letters before a round ends,
+  or to post a result for a seat that is not yours.
 
 Not in scope:
 
@@ -73,6 +75,13 @@ features invite.
 - **Daily counts.** For each day and word length: how many players solved it
   in each number of guesses, and how many did not. No name, no id, no IP
   address. Kept 90 days, then deleted by a daily job.
+
+- **Rooms.** A live room exists only while it is in use: its players' names
+  (as each chose them, cut to 12 plain characters), each seat key's SHA-256,
+  the word, and the guesses of the round in play. It is deleted 10 minutes
+  after its last round ends, once nobody is connected. An any-time room keeps
+  the same for 30 days, plus each finished player's name, colours, guess
+  count and time, then a daily job deletes it.
 
 Every request also carries the app's version, OS and architecture in
 `X-Surmise-Client`, so the server can turn an old version away; it is not

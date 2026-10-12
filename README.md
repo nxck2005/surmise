@@ -239,9 +239,23 @@ every request also says which version of surmise you're on and your os, so an
 old version can be told to update. your ip address reaches cloudflare like it
 would for any website — the rate limit uses it, and it isn't kept.
 
-that's all for now. the server keeps those counts for 90 days. if it can't be
-reached, nothing changes — the game just leaves the online bits out. an old
-version the server no longer supports says so once and carries on offline.
+- **rooms.** social play gets **make room** and **join room**. make one,
+  share its 6-character code, and friends join from their own copy.
+  - **together now**: everyone readies up, gets the same word, and races.
+    you see the others' colours as they guess — never their letters — and a
+    ranking at the end: solved first, then fewer guesses, then time. `n`
+    there is a rematch.
+  - **any time**: the room stays open for 30 days. everyone plays their own
+    10-minute round whenever they like, and the ranking fills in as they do.
+
+  the server picks the word and checks every guess, so nobody can peek. a
+  finished round shows up in your puzzles list as `room`; it doesn't count
+  toward your stats. esc leaves the screen, not the room — `l` leaves.
+
+the server keeps daily counts for 90 days, and an any-time room for 30. a live
+room is gone 10 minutes after its last round. if it can't be reached, nothing
+changes — the game just leaves the online bits out. an old version the server
+no longer supports says so once and carries on offline.
 
 ## backing it up
 

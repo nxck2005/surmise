@@ -217,4 +217,9 @@ After the deploy it runs `scripts/smoke-api.mjs`: in full against staging,
 and read-only against production, so a release never adds a fake player to a
 real day.
 
+Rooms run in a Durable Object, one instance per room code, which holds the
+room's WebSockets and its state; its class is declared in `wrangler.jsonc`
+under `migrations`, which is append-only. The browser build opens its socket
+to its own origin, so the CSP still says `connect-src 'self'`.
+
 [xterm.js]: https://xtermjs.org
