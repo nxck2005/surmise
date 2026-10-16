@@ -88,7 +88,7 @@ func (t *Transfer) Load() (b []byte, from string, err error) {
 
 	type picked struct {
 		name string
-		body string
+		body []byte
 		err  string
 	}
 	// Buffered, so the callback can leave its answer and return even if nobody
@@ -110,8 +110,12 @@ func (t *Transfer) Load() (b []byte, from string, err error) {
 			if n := v.Get("name"); n.Truthy() {
 				p.name = n.String()
 			}
-			if body := v.Get("text"); body.Truthy() {
-				p.body = body.String()
+			// Bytes, copied once out of the page's Uint8Array: a string would
+			// cross as a JS string and a Go string, and a wasm heap does not
+			// shrink until the page reloads (audit S7).
+			if body := v.Get("bytes"); body.Truthy() {
+				p.body = make([]byte, body.Get("length").Int())
+				js.CopyBytesToGo(p.body, body)
 			}
 		}
 		select {
@@ -131,7 +135,7 @@ func (t *Transfer) Load() (b []byte, from string, err error) {
 		if p.name == "" {
 			return nil, "", nil // closed without choosing
 		}
-		return []byte(p.body), p.name, nil
+		return p.body, p.name, nil
 	case <-time.After(pickTimeout):
 		done.Release()
 		return nil, "", nil

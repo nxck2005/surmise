@@ -194,7 +194,9 @@ function openFile(done) {
       return;
     }
     try {
-      answer({ name: file.name, text: await file.text() });
+      // Bytes, not text: the Go side copies them once, where a string would
+      // be held twice more on the way in.
+      answer({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
     } catch (error) {
       answer({ error: `could not read ${file.name}: ${error}` });
     }
