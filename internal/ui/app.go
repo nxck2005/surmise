@@ -2738,6 +2738,18 @@ func (m *Model) deleteSelected() tea.Cmd {
 // quit saves any open puzzle before exiting, so quitting mid-game is a pause
 // rather than a loss.
 func (m *Model) quit() tea.Cmd {
+	m.Shutdown()
+	return tea.Quit
+}
+
+// Shutdown is quit's work without the quit: it banks the open board's time,
+// saves it and closes any room connection. The program calls it after the
+// loop ends, because a signal (the terminal closing, a kill) ends the loop
+// without passing through Update. It runs once; a second call does nothing.
+func (m *Model) Shutdown() {
+	if m.quitting {
+		return
+	}
 	m.quitting = true
 	// A room connection dies with the program; the room itself keeps running
 	// for whoever is left in it, and this run shows up disconnected.
@@ -2747,7 +2759,6 @@ func (m *Model) quit() tea.Cmd {
 			m.err = err
 		}
 	}
-	return tea.Quit
 }
 
 // View composes the frame. It is called for every message the framework
