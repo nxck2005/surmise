@@ -3,8 +3,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"runtime"
 	"strconv"
@@ -96,18 +98,25 @@ func run(cfg config) error {
 	}
 
 	// Themes live beside the puzzles, so -data isolates the look as well as the
-	// history. Seeding the directory means "write your own theme" starts from a
-	// file that is already there.
+	// history.
 	themeDir := theme.Dir(dataDir)
+
+	// -themes and -playtime only answer a question, so they run before anything
+	// is created: on a new install they find nothing, and say so.
+	if cfg.listThemes {
+		printThemes(theme.Open(themeDir), themeDir)
+		return nil
+	}
+	if cfg.showPlaytime {
+		return printPlaytime(dataDir)
+	}
+
+	// Seeding the directory means "write your own theme" starts from a file
+	// that is already there.
 	if err := theme.EnsureDir(themeDir); err != nil {
 		return err
 	}
 	lib := theme.Open(themeDir)
-
-	if cfg.listThemes {
-		printThemes(lib, themeDir)
-		return nil
-	}
 
 	s, err := store.NewJSON(dataDir)
 	if err != nil {
@@ -129,10 +138,6 @@ func run(cfg config) error {
 		}
 		return nil
 	}
-	if cfg.showPlaytime {
-		return printPlaytime(s)
-	}
-
 	// The server the online features use. $SURMISE_API points one run at
 	// staging or a local Worker; nothing is called unless the player has
 	// turned network on in settings.
@@ -151,8 +156,18 @@ func run(cfg config) error {
 
 // printPlaytime reports the lifetime counter. It only reads: the seeded value an
 // older install resolves to is written back by the app itself, and a command
-// that answers a question should not change what it is answering about.
-func printPlaytime(s *store.JSON) error {
+// that answers a question should not change what it is answering about. An
+// install with no puzzle directory has never been opened, so it has no time
+// to report and nothing is created to find that out.
+func printPlaytime(dataDir string) error {
+	if _, err := os.Stat(store.PuzzleDir(dataDir)); errors.Is(err, fs.ErrNotExist) {
+		fmt.Println("no time played yet")
+		return nil
+	}
+	s, err := store.NewJSON(dataDir)
+	if err != nil {
+		return err
+	}
 	games, err := s.All()
 	if err != nil {
 		return err
