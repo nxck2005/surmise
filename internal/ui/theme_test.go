@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 )
@@ -544,5 +545,29 @@ func TestThemePickerDoesNotMoveAsTheCursorDoes(t *testing.T) {
 				m.themes.entries[i].Name, got, want)
 		}
 		send(t, m, "down")
+	}
+}
+
+// A theme file of junk can carry thousands of warnings; the picker lists a
+// few and a count, so the screen stays the terminal's height.
+func TestThemeWarningsAreCapped(t *testing.T) {
+	m := newModel(t)
+	withTheme(t, theme.Default())
+	warnings := make([]theme.Warning, 30_000)
+	for i := range warnings {
+		warnings[i] = theme.Warning{Line: i + 1, Msg: "not a setting"}
+	}
+	m.themes.entries = []theme.Entry{{Name: "junk", Source: "/tmp/junk.toml", Warnings: warnings}}
+	m.screen = screenThemes
+
+	frame := sgr.ReplaceAllString(draw(t, m), "")
+	if got := strings.Count(frame, "not a setting"); got != 3 {
+		t.Errorf("the picker lists %d warnings, want 3", got)
+	}
+	if want := "and 29997 more — " + brand.Name + " -themes lists them all"; !strings.Contains(frame, want) {
+		t.Errorf("the picker does not say %q", want)
+	}
+	if lines := strings.Count(frame, "\n") + 1; lines > testHeight {
+		t.Errorf("the frame is %d lines on a %d-line terminal", lines, testHeight)
 	}
 }
