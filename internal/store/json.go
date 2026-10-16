@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/game"
@@ -27,8 +28,14 @@ import (
 // deleting a puzzle could leave a hole in. An older install may still have a
 // meta.json holding the retired puzzle counter; it is simply never read.
 type JSON struct {
-	dir string
+	dir    string
+	writes atomic.Uint64 // see Writes
 }
+
+// Writes reports how many puzzle writes this store has made; see store.Writes.
+func (s *JSON) Writes() uint64 { return s.writes.Load() }
+
+var _ Writes = (*JSON)(nil)
 
 const puzzleDir = "puzzles"
 
@@ -82,6 +89,7 @@ func (s *JSON) pathFor(id string) (string, error) {
 }
 
 func (s *JSON) Save(g *game.Game) error {
+	s.writes.Add(1)
 	b, err := encodeRecord(g)
 	if err != nil {
 		return err
@@ -183,6 +191,7 @@ func readLimited(path string) ([]byte, error) {
 // An unfinished puzzle is unlinked outright: streaks ignore in-progress
 // puzzles, so a tombstone for one would record nothing.
 func (s *JSON) Delete(id string) error {
+	s.writes.Add(1)
 	g, err := s.load(id)
 	if err != nil {
 		return err

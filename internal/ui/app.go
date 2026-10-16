@@ -154,6 +154,12 @@ const tagline = "a word game for the terminal"
 type Model struct {
 	store store.Store
 
+	// hist is the saved history as All last returned it, and histWrites the
+	// store's write count when it was read; see history.
+	hist       []*game.Game
+	histWrites uint64
+	histOK     bool
+
 	// themes is every theme available this run; themeName is the committed
 	// choice, which the picker restores when a preview is abandoned.
 	themeLib  *theme.Library
@@ -969,6 +975,33 @@ func (m *Model) bankPlaytime(d time.Duration) {
 	s := m.settingsOf()
 	s.PlaytimeMS += d.Milliseconds()
 	m.saveSettings(s)
+}
+
+// history is every saved puzzle, as All returns it, read again only when the
+// store has written since the last read (store.Writes). The menu asks on every
+// esc, and All decodes the whole history: about 70 ms at 1,000 puzzles in a
+// browser (audit P3). Every puzzle write in this run goes through m.store, so
+// the copy is never older than this run's own last write. A store that does
+// not count its writes is read every time. The games are shared: read them,
+// never change them.
+func (m *Model) history() ([]*game.Game, error) {
+	counter, counts := m.store.(store.Writes)
+	var writes uint64
+	if counts {
+		writes = counter.Writes()
+		if m.histOK && writes == m.histWrites {
+			return m.hist, nil
+		}
+	}
+	// The count is taken before the read, so a write that lands during it
+	// makes the next call read again.
+	games, err := m.store.All()
+	if err != nil {
+		m.histOK = false
+		return nil, err
+	}
+	m.hist, m.histWrites, m.histOK = games, writes, counts
+	return games, nil
 }
 
 // openProfile shows the profile from one pass over the saved puzzles. Both
@@ -1887,9 +1920,14 @@ func (m *Model) back() tea.Cmd {
 // openMenu raises the menu, deriving the status line first. What it says is
 // read off the saves, so it has to be recomputed every time the menu comes up
 // — a puzzle finished, a mode of the day played, a puzzle deleted since the
-// last visit would all otherwise be missed.
+// last visit would all otherwise be missed. The saves themselves come from
+// history, which reads the disk again only after a write.
 func (m *Model) openMenu() {
-	m.menu.reload(m.store, m.day)
+	if games, err := m.history(); err == nil {
+		m.menu.reload(games, m.day)
+	} else {
+		m.menu.reload(nil, m.day)
+	}
 	// The day's count is the server's, not the disk's, so reload leaves it
 	// alone; it goes when the player has turned the network off since.
 	if !m.dailyOnline() {
@@ -3113,11 +3151,9 @@ type menuScreen struct {
 // reload derives the status line from what is on disk. One pass over the saves
 // feeds both halves, the same bargain the daily screen's trio makes; a read
 // error leaves it empty rather than half-said.
-func (m *menuScreen) reload(s store.Store, day daily.Day) {
+func (m *menuScreen) reload(games []*game.Game, day daily.Day) {
 	m.modesDone, m.modesOf, m.streak = 0, len(words.Lengths), 0
-
-	games, err := s.All()
-	if err != nil {
+	if games == nil {
 		return
 	}
 	byID := make(map[string]*game.Game, len(games))
