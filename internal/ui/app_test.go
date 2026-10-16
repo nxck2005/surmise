@@ -1170,3 +1170,34 @@ func socialRowIndex(t *testing.T, m *Model, kind socialKind) int {
 	t.Fatalf("social screen has no row of kind %v", kind)
 	return 0
 }
+
+// A signal ends the program without the quit key, so the program calls
+// Shutdown after the loop: it banks the open board's time and saves it, once.
+func TestShutdownBanksTheOpenBoardOnce(t *testing.T) {
+	s, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(s, nil, Options{})
+	send(t, m, "down", "enter")
+	m.game.g.Answer = "crane"
+	send(t, m, "a", "b", "o", "u", "t", "enter")
+	id := m.game.g.ID
+	before := m.game.g.ElapsedMS
+	m.game.sessionStart = time.Now().Add(-90 * time.Second)
+
+	m.Shutdown()
+	g, err := s.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := g.ElapsedMS - before; got < 90_000 || got > 100_000 {
+		t.Errorf("Shutdown banked %d ms, want about 90000", got)
+	}
+	playtime := s.Settings().PlaytimeMS
+
+	m.Shutdown()
+	if again, _ := s.Load(id); again.ElapsedMS != g.ElapsedMS || s.Settings().PlaytimeMS != playtime {
+		t.Errorf("a second Shutdown banked again: %d ms, playtime %d", again.ElapsedMS, s.Settings().PlaytimeMS)
+	}
+}

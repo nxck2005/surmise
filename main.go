@@ -116,9 +116,13 @@ func uiOptions(cfg config, dataDir string, transfer ui.Transfer, api online.Clie
 // attach is the platform's chance to hold the Program, which the browser needs
 // so a resize can be sent in. It is a no-op natively.
 func start(s store.Store, lib *theme.Library, opts ui.Options, popts ...tea.ProgramOption) error {
-	p := tea.NewProgram(ui.New(s, lib, opts), popts...)
+	m := ui.New(s, lib, opts)
+	p := tea.NewProgram(m, popts...)
 	attach(p)
 	_, err := p.Run()
+	// A signal ends the loop without the quit path, so the open board's time
+	// is banked here. After a normal quit this does nothing.
+	m.Shutdown()
 	return err
 }
 

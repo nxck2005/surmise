@@ -9,7 +9,9 @@ import (
 	"io/fs"
 	"os"
 	"runtime"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -182,6 +184,14 @@ func printPlaytime(dataDir string) error {
 	return nil
 }
 
-// attach has nothing to do here: a terminal reports a resize with SIGWINCH, and
-// bubbletea listens for that itself.
-func attach(*tea.Program) {}
+// attach quits the program when its terminal hangs up. bubbletea handles
+// SIGINT and SIGTERM itself, and a resize (SIGWINCH), but not SIGHUP, which is
+// what closing the terminal window sends. start then runs the exit path.
+func attach(p *tea.Program) {
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		<-hup
+		p.Quit()
+	}()
+}
