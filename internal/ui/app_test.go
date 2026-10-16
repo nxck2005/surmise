@@ -1201,3 +1201,60 @@ func TestShutdownBanksTheOpenBoardOnce(t *testing.T) {
 		t.Errorf("a second Shutdown banked again: %d ms, playtime %d", again.ElapsedMS, s.Settings().PlaytimeMS)
 	}
 }
+
+// allCountingStore counts All, the read the menu used to make on every esc.
+type allCountingStore struct {
+	*store.JSON
+	all int
+}
+
+func (s *allCountingStore) All() ([]*game.Game, error) {
+	s.all++
+	return s.JSON.All()
+}
+
+// The menu reads the history once and again only after a write (audit P3),
+// and what it shows still follows every write.
+func TestTheMenuReadsTheHistoryOnlyAfterAWrite(t *testing.T) {
+	js, err := store.NewJSON(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &allCountingStore{JSON: js}
+	m := New(s, nil, Options{})
+	m.openMenu()
+	base := s.all
+	for range 5 {
+		m.openMenu()
+	}
+	if s.all != base {
+		t.Errorf("five more menus read the history %d more times, want 0", s.all-base)
+	}
+
+	// A win is a write: the next menu reads again and shows the streak.
+	g, err := game.NewFrom("3f2a7c1e-8b4d-4c6a-9e2f-1d5b8a7c3e90", "crane", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Guess("crane"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	m.openMenu()
+	if s.all != base+1 {
+		t.Errorf("the menu after a save read the history %d times, want 1", s.all-base)
+	}
+	if m.menu.streak != 1 {
+		t.Errorf("streak = %d after a win, want 1", m.menu.streak)
+	}
+
+	if err := s.Delete(g.ID); err != nil {
+		t.Fatal(err)
+	}
+	m.openMenu()
+	if s.all != base+2 {
+		t.Errorf("the menu after a delete read the history %d times, want 2", s.all-base)
+	}
+}

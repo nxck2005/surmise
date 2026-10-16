@@ -87,6 +87,15 @@ type Store interface {
 	All() ([]*game.Game, error)
 }
 
+// Writes counts the puzzle writes a store has made through itself: every Save
+// and Delete adds one, whether or not it succeeded. A reader that keeps a copy
+// of All re-reads only when the count has moved, which is how the menu stays
+// cheap without ever showing a history older than its own last write. Writes
+// by another process (a second copy, another browser tab) are not counted.
+type Writes interface {
+	Writes() uint64
+}
+
 func summarize(g *game.Game) Summary {
 	return Summary{
 		ID:        g.ID,

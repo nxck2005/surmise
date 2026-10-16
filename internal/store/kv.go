@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"unicode/utf16"
 
 	"github.com/nxck2005/surmise/internal/brand"
@@ -36,7 +37,13 @@ type KV interface {
 // two are the same history in two places and the tombstone rules come from one
 // codec (see codec.go). Nothing here is browser-specific; the browser part is
 // the KV it is given, so all of this is testable on any platform.
-type KVStore struct{ kv KV }
+type KVStore struct {
+	kv     KV
+	writes atomic.Uint64 // see Writes
+}
+
+// Writes reports how many puzzle writes this store has made; see store.Writes.
+func (s *KVStore) Writes() uint64 { return s.writes.Load() }
 
 // KVStore has to satisfy both Store and the preferences pair the UI looks for
 // by type assertion (see settingsStore in internal/ui/app.go). That assertion
@@ -44,6 +51,7 @@ type KVStore struct{ kv KV }
 // pinned here, where dropping a method is a compile error instead.
 var _ interface {
 	Store
+	Writes
 	Settings() Settings
 	SaveSettings(Settings) error
 	Rooms() []RoomEntry
@@ -75,6 +83,7 @@ func puzzleIDFromKey(key string) (string, bool) {
 }
 
 func (s *KVStore) Save(g *game.Game) error {
+	s.writes.Add(1)
 	b, err := encodeRecord(g)
 	if err != nil {
 		return err
@@ -123,6 +132,7 @@ func (s *KVStore) load(id string) (*game.Game, error) {
 // longest streak. There is no atomic-write dance here because there is nothing
 // to make atomic — a single key is written whole or not at all.
 func (s *KVStore) Delete(id string) error {
+	s.writes.Add(1)
 	g, err := s.load(id)
 	if err != nil {
 		return err
