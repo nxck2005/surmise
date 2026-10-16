@@ -3,11 +3,12 @@
  * --surmise-bg is set from the theme at run time: bubbletea emits the palette's
  * background as OSC 11, and boot.js turns that into this variable. So switching
  * theme in the picker recolours the letterboxing as well as the board, and the
- * page never disagrees with the game inside it. The value below is "ember
- * dark", the default palette, so the first paint is already right. */
+ * page never disagrees with the game inside it. The values below are "tokyo
+ * night", the default palette (theme.Default), so the first paint is already
+ * right. */
 :root {
-  --surmise-bg: #14100e;
-  --surmise-fg: #e8ded5;
+  --surmise-bg: #1a1b26;
+  --surmise-fg: #c0caf5;
 }
 
 * {

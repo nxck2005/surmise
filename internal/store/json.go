@@ -64,6 +64,10 @@ func NewJSON(dir string) (*JSON, error) {
 	return s, nil
 }
 
+// PuzzleDir is where an install's puzzles live. Every opened install has it,
+// so its absence is how a read-only command tells a new install apart.
+func PuzzleDir(dir string) string { return filepath.Join(dir, puzzleDir) }
+
 // pathFor names a puzzle's file. It is checked because an id is about to be
 // joined into a path, and an id can arrive from outside — a crafted backup, a
 // hand-edited save. Without this, an id like "../settings" writes
