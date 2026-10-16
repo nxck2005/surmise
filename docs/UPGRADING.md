@@ -64,6 +64,34 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.10.0 → v0.10.1: fixes from the 10-02 audit
+
+- **The menu is faster.** It used to read your whole history every time it
+  came up; now it reads it again only after a puzzle is saved or deleted. With
+  a long history, esc back to the menu no longer pauses, most of all in a
+  browser.
+- **Closing the terminal saves the time on the open puzzle**, the same as
+  quitting does. Before, the time since your last guess was lost when the
+  window closed or the game was killed.
+- **A saved puzzle must be one play could make.** Its colours must match its
+  answer, and its status must match its guesses: won ends on the answer, lost
+  used every guess, in progress has a guess left. A record that breaks this
+  could only come from a hand-edited save or a crafted backup. Such a record
+  is now hidden from the history and refused in a backup. Before, one could
+  take a guess past the board's last row and then never save again.
+- **A broken theme lists its first three warnings and a count** in the theme
+  picker, not every one. `surmise -themes` still lists them all.
+- **A hostile backup is refused sooner.** A record over the size limit is
+  turned away before it is copied, and the browser hands the game the file as
+  bytes, so loading one costs far less memory.
+- **`-playtime` and `-themes` only read.** On a new install they no longer
+  create the data folder.
+- The web page starts in the default theme's colours, so it no longer shows
+  another colour for a moment before the game loads.
+
+`schema` does not move, no daily answer moves, and no theme or word list
+changed.
+
 ## v0.9.1 → v0.10.0: online rooms
 
 - **Rooms, when network is on.** Social play gets **make room** and **join
