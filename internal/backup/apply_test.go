@@ -97,8 +97,9 @@ func TestApplyNeverOverwritesAPuzzle(t *testing.T) {
 	g := wonGame(t, "crane")
 
 	from := newStore(t)
-	stale := *g
-	stale.Answer = "slate"
+	// The archive's copy has the same id and a different board.
+	stale := *wonGame(t, "slate")
+	stale.ID = g.ID
 	if err := from.Save(&stale); err != nil {
 		t.Fatal(err)
 	}
@@ -215,8 +216,9 @@ func TestApplyDoesNotOverwriteAnUnreadableRecord(t *testing.T) {
 	g := wonGame(t, "crane")
 
 	from := newStore(t)
-	stale := *g
-	stale.Answer = "slate"
+	// The archive's copy has the same id and a different board.
+	stale := *wonGame(t, "slate")
+	stale.ID = g.ID
 	if err := from.Save(&stale); err != nil {
 		t.Fatal(err)
 	}

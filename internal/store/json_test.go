@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 func newStore(t *testing.T) *JSON {
@@ -30,6 +31,27 @@ func mustPath(t *testing.T, s *JSON, id string) string {
 		t.Fatalf("pathFor(%q): %v", id, err)
 	}
 	return p
+}
+
+// lose plays a puzzle to a loss with words that are not its answer, so the
+// record is one real play could write.
+func lose(t testing.TB, g *game.Game) {
+	t.Helper()
+	for i := 1; !g.Status.Done(); i++ {
+		w, err := words.AnswerAt(g.Length, i)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w == g.Answer {
+			continue
+		}
+		if err := g.Guess(w); err != nil {
+			t.Fatalf("Guess(%q): %v", w, err)
+		}
+	}
+	if g.Status != game.Lost {
+		t.Fatalf("status = %v, want lost", g.Status)
+	}
 }
 
 func newGame(t testing.TB, length int) *game.Game {
@@ -304,7 +326,7 @@ func TestDeleteFinishedLeavesTombstone(t *testing.T) {
 func TestDeleteDailyKeepsItsDate(t *testing.T) {
 	s := newStore(t)
 	g := newDaily(t, "2026-08-06")
-	g.Status = game.Lost
+	lose(t, g)
 	if err := s.Save(g); err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +361,7 @@ func TestDeleteDailyKeepsItsDate(t *testing.T) {
 func TestDeleteTombstoneReturnsNotFound(t *testing.T) {
 	s := newStore(t)
 	g := newGame(t, 5)
-	g.Status = game.Lost
+	lose(t, g)
 	if err := s.Save(g); err != nil {
 		t.Fatal(err)
 	}
