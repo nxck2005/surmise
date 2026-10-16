@@ -360,6 +360,7 @@ func TestBuildRefusesWhatReadWouldRefuse(t *testing.T) {
 			g.Guesses = append(g.Guesses, w)
 			g.Marks = append(g.Marks, game.Score(w, g.Answer))
 		}
+		g.Status = game.Lost
 		if err := g.Validate(); err != nil {
 			t.Fatalf("a maximal record = %v, want it valid", err)
 		}
@@ -595,6 +596,7 @@ func TestReadRefusesWordsWithControlCharacters(t *testing.T) {
 	// each case has to reach its own check.
 	g.Guesses[0] = "about"
 	g.Marks = [][]game.Mark{game.Score("about", g.Answer)}
+	g.Status = game.InProgress
 	raw, err := store.EncodeRecord(g)
 	if err != nil {
 		t.Fatal(err)

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/words"
@@ -368,7 +369,9 @@ func Code(id string) string {
 // player should correct, leaving the game untouched, so a rejected guess never
 // costs an attempt.
 func (g *Game) Guess(word string) error {
-	if g.Status.Done() {
+	// The attempt count is checked as well as the status, so a record that
+	// somehow has no attempts left can never take another guess.
+	if g.Status.Done() || len(g.Guesses) >= g.MaxAttempts {
 		return ErrFinished
 	}
 
@@ -553,6 +556,43 @@ func (g *Game) Validate() error {
 			if m < Absent || m > Correct {
 				return fmt.Errorf("game: guess %d has mark %d, want 0-%d", i, m, Correct)
 			}
+		}
+		// The marks are what Score says, so the board can never show colours
+		// the answer does not give.
+		if !slices.Equal(g.Marks[i], Score(guess, g.Answer)) {
+			return fmt.Errorf("game: guess %d marks do not match the answer", i)
+		}
+		// The answer ends a puzzle, so it can only be the last guess.
+		if guess == g.Answer && i != len(g.Guesses)-1 {
+			return fmt.Errorf("game: guess %d is the answer but play went on", i)
+		}
+	}
+	return validOutcome(g)
+}
+
+// validOutcome holds the status to the guesses, the same rule Guess follows:
+// a won puzzle ends on the answer; a lost one used every attempt without it;
+// one in progress has an attempt left. Without this a record could say "in
+// progress" with no attempts left, take one more guess, and then never save
+// again. A room round is the one exception: its clock can end it, so it can be
+// lost with attempts left.
+func validOutcome(g *Game) error {
+	solved := len(g.Guesses) > 0 && g.Guesses[len(g.Guesses)-1] == g.Answer
+	switch g.Status {
+	case Won:
+		if !solved {
+			return errors.New("game: won without the answer")
+		}
+	case Lost:
+		if solved {
+			return errors.New("game: lost with the answer")
+		}
+		if g.Room == nil && len(g.Guesses) != g.MaxAttempts {
+			return fmt.Errorf("game: lost after %d of %d guesses", len(g.Guesses), g.MaxAttempts)
+		}
+	case InProgress:
+		if solved || len(g.Guesses) >= g.MaxAttempts {
+			return errors.New("game: in progress but already over")
 		}
 	}
 	return nil

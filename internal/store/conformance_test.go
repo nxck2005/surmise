@@ -328,7 +328,7 @@ func newDaily(t *testing.T, date string) *game.Game {
 func TestStoreDeletedDailyKeepsItsDate(t *testing.T) {
 	eachStore(t, "delete-daily", func(t *testing.T, s settingsCapable) {
 		g := newDaily(t, "2026-08-06")
-		g.Status = game.Lost
+		lose(t, g)
 		if err := s.Save(g); err != nil {
 			t.Fatal(err)
 		}

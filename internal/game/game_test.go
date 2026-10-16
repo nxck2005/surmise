@@ -428,6 +428,24 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 		// ElapsedMS is multiplied by time.Millisecond, so a value past a
 		// duration's range wraps Elapsed() negative and takes the profile's
 		// totals and averages with it. See MaxElapsedMS.
+		// The status and marks follow from the guesses (audit S6): a record
+		// that disagrees is one play could never write.
+		{"marks that are not the answer's", func(g *Game) { g.Marks[0] = Score("about", "about") }},
+		{"won without the answer", func(g *Game) { g.Status = Won }},
+		{"lost with attempts left", func(g *Game) { g.Status = Lost }},
+		{"play went on after the answer", func(g *Game) {
+			g.Guesses[0], g.Marks[0] = "crane", Score("crane", "crane")
+		}},
+		{"lost with the answer", func(g *Game) {
+			g.Guesses[1], g.Marks[1] = "crane", Score("crane", "crane")
+			g.Status = Lost
+		}},
+		{"in progress with no attempts left", func(g *Game) {
+			for len(g.Guesses) < g.MaxAttempts {
+				g.Guesses = append(g.Guesses, "about")
+				g.Marks = append(g.Marks, Score("about", "crane"))
+			}
+		}},
 		{"negative elapsed", func(g *Game) { g.ElapsedMS = -1 }},
 		{"elapsed past a duration", func(g *Game) { g.ElapsedMS = math.MaxInt64 }},
 	}
@@ -444,6 +462,22 @@ func TestValidateRejectsCorruptState(t *testing.T) {
 				t.Error("Validate accepted corrupt game")
 			}
 		})
+	}
+}
+
+// A record with no attempts left takes no more guesses, whatever its status
+// says, so it can never grow past what Save accepts.
+func TestGuessRefusesPastTheLastAttempt(t *testing.T) {
+	g := newFixed(t, "crane")
+	for len(g.Guesses) < g.MaxAttempts {
+		g.Guesses = append(g.Guesses, "about")
+		g.Marks = append(g.Marks, Score("about", "crane"))
+	}
+	if err := g.Guess("crane"); err != ErrFinished {
+		t.Errorf("Guess = %v, want ErrFinished", err)
+	}
+	if len(g.Guesses) != g.MaxAttempts {
+		t.Errorf("the board grew to %d guesses", len(g.Guesses))
 	}
 }
 
