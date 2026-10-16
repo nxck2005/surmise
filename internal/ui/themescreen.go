@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/theme"
 )
 
@@ -241,6 +242,9 @@ func (m *themeScreen) renderRow(e theme.Entry, selected bool) string {
 		st.muted.Render(origin)
 }
 
+// themeWarningsShown is how many of a theme's warnings the picker lists.
+const themeWarningsShown = 3
+
 // note explains whatever is wrong with the highlighted theme, since a file the
 // picker silently skipped is a file the author cannot debug.
 func (m *themeScreen) note() string {
@@ -256,10 +260,16 @@ func (m *themeScreen) noteFor(e theme.Entry) string {
 	case e.Err != nil:
 		return st.err.Render(safeText(fmt.Sprintf("%s: %v", e.Source, e.Err)))
 	case len(e.Warnings) > 0:
-		lines := make([]string, 0, len(e.Warnings)+1)
+		// The first few, then a count: a file of junk has thousands, and every
+		// one drawn would push the list off the top of the screen.
+		shown := e.Warnings[:min(len(e.Warnings), themeWarningsShown)]
+		lines := make([]string, 0, len(shown)+2)
 		lines = append(lines, st.err.Render(safeText(e.Source)))
-		for _, w := range e.Warnings {
+		for _, w := range shown {
 			lines = append(lines, st.err.Render(safeText("  "+w.String())))
+		}
+		if more := len(e.Warnings) - len(shown); more > 0 {
+			lines = append(lines, st.muted.Render(fmt.Sprintf("  and %d more — %s -themes lists them all", more, brand.Name)))
 		}
 		return strings.Join(lines, "\n")
 	case !e.Builtin():
