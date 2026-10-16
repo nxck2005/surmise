@@ -92,7 +92,7 @@ type Archive struct {
 type recordList []json.RawMessage
 
 func (l *recordList) UnmarshalJSON(b []byte) error {
-	elems, err := decodeBounded[json.RawMessage](b, maxPuzzles, "records")
+	elems, err := decodeBounded[json.RawMessage](b, maxPuzzles, store.MaxRecordBytes, "records")
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (l *recordList) UnmarshalJSON(b []byte) error {
 type themeList []theme.File
 
 func (l *themeList) UnmarshalJSON(b []byte) error {
-	elems, err := decodeBounded[theme.File](b, maxThemes, "themes")
+	elems, err := decodeBounded[theme.File](b, maxThemes, maxThemeElemBytes, "themes")
 	if err != nil {
 		return err
 	}
@@ -126,38 +126,110 @@ func (e tooManyError) Error() string {
 }
 
 // decodeBounded reads one JSON array without ever holding more than max
-// elements. The cap is checked before each element is decoded, so a hostile
-// array is refused at the limit rather than after it has been allocated.
-func decodeBounded[T any](b []byte, max int, what string) ([]T, error) {
-	dec := json.NewDecoder(bytes.NewReader(b))
-	tok, err := dec.Token()
-	if err != nil {
-		return nil, err
-	}
-	if tok == nil {
+// elements, or any element longer than maxElem bytes. Both are checked before
+// an element is decoded: the array is split in place, so an oversized element
+// is refused while it is still a slice of the input, and nothing has been
+// copied or allocated for it (audit S7, where a 60 MiB record once cost three
+// times its size before the refusal).
+func decodeBounded[T any](b []byte, max, maxElem int, what string) ([]T, error) {
+	i := skipSpace(b, 0)
+	if bytes.HasPrefix(b[i:], []byte("null")) {
 		// A JSON null is a section that is not there, the same as no elements.
 		return nil, nil
 	}
-	if d, ok := tok.(json.Delim); !ok || d != '[' {
+	if i >= len(b) || b[i] != '[' {
 		return nil, fmt.Errorf("backup: want an array of %s", what)
+	}
+	i = skipSpace(b, i+1)
+	if i < len(b) && b[i] == ']' {
+		return nil, nil
 	}
 
 	var out []T
-	for dec.More() {
+	for {
 		if len(out) >= max {
 			return nil, tooManyError{what: what, n: max + 1, max: max}
 		}
+		end := skipValue(b, i, maxElem)
+		if end < 0 {
+			return nil, fmt.Errorf("backup: one of the %s is larger than %d bytes", what, maxElem)
+		}
 		var elem T
-		if err := dec.Decode(&elem); err != nil {
+		if err := json.Unmarshal(b[i:end], &elem); err != nil {
 			return nil, err
 		}
 		out = append(out, elem)
+
+		i = skipSpace(b, end)
+		switch {
+		case i < len(b) && b[i] == ',':
+			i = skipSpace(b, i+1)
+		case i < len(b) && b[i] == ']':
+			return out, nil
+		default:
+			return nil, fmt.Errorf("backup: the %s array is not well formed", what)
+		}
 	}
-	if _, err := dec.Token(); err != nil { // the closing ']'
-		return nil, err
-	}
-	return out, nil
 }
+
+// skipSpace returns the index of the first byte at or after i that is not
+// JSON whitespace.
+func skipSpace(b []byte, i int) int {
+	for i < len(b) && (b[i] == ' ' || b[i] == '\t' || b[i] == '\n' || b[i] == '\r') {
+		i++
+	}
+	return i
+}
+
+// skipValue returns the end of the JSON value that starts at i, or -1 when it
+// runs past max bytes. It only finds the boundary: strings, with their
+// escapes, and nesting. Whether the bytes are valid JSON is json.Unmarshal's
+// question, asked of the slice afterwards, so a malformed value fails there.
+func skipValue(b []byte, i, max int) int {
+	start, depth, inString := i, 0, false
+	for ; i < len(b); i++ {
+		if i-start >= max {
+			return -1
+		}
+		c := b[i]
+		switch {
+		case inString:
+			switch c {
+			case '\\':
+				i++
+			case '"':
+				inString = false
+				if depth == 0 {
+					return i + 1
+				}
+			}
+		case c == '"':
+			inString = true
+		case c == '[' || c == '{':
+			depth++
+		case c == ']' || c == '}':
+			if depth == 0 {
+				return i // the end of a scalar, at the array's closing bracket
+			}
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		case depth == 0 && (c == ',' || c == ' ' || c == '\t' || c == '\n' || c == '\r'):
+			return i // the end of a scalar
+		}
+	}
+	// A backslash on the last byte steps past the end; the slice stops there.
+	i = min(i, len(b))
+	if i-start > max {
+		return -1
+	}
+	return i
+}
+
+// maxThemeElemBytes bounds one theme in the array: a body at its cap with
+// every byte escaped as \u00XX, and room for the name and the keys.
+const maxThemeElemBytes = 6*theme.MaxFileBytes + 1024
 
 // checkCounts refuses a history the reader would refuse for its shape. It
 // raises tooManyError so a writer and a reader say the same sentence about the

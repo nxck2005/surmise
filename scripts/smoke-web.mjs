@@ -181,7 +181,9 @@ globalThis.surmise = {
     // Answered on a later turn of the event loop, as a real picker would be:
     // answering inline would prove nothing about the wait.
     setTimeout(() => {
-      done(files.offer ? { name: "surmise-backup-smoke.json", text: files.offer } : {});
+      done(files.offer
+        ? { name: "surmise-backup-smoke.json", bytes: new TextEncoder().encode(files.offer) }
+        : {});
     }, 20);
   },
 };

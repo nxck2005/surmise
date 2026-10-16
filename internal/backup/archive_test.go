@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -689,5 +690,50 @@ func TestReadRefusesARepeatedPuzzle(t *testing.T) {
 
 	if _, _, err := Read(doubled); err == nil || !strings.Contains(err.Error(), "not consistent") {
 		t.Errorf("Read of a file repeating a puzzle = %v, want a refusal", err)
+	}
+}
+
+// An oversized record is refused while it is still part of the input: Read
+// allocates a small fraction of the file to say no (audit S7, where a 60 MiB
+// archive once cost 188 MiB before the refusal).
+func TestAnOversizedRecordIsRefusedWithoutCopyingIt(t *testing.T) {
+	const size = 16 << 20
+	b := []byte(`{"format":"` + Format + `","version":1,"createdAt":"2026-10-16T00:00:00Z","puzzles":[{"id":"` +
+		strings.Repeat("a", size) + `"}]}`)
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	_, _, err := Read(b)
+	runtime.ReadMemStats(&after)
+
+	if err == nil || !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("Read = %v, want the size refusal", err)
+	}
+	if got := after.TotalAlloc - before.TotalAlloc; got > size/8 {
+		t.Errorf("refusing a %d MiB record allocated %d MiB", size>>20, got>>20)
+	}
+}
+
+// The splitter finds each element's end the way JSON does: through escaped
+// quotes and nested brackets, and refuses an array it cannot split.
+func TestDecodeBoundedSplitsTheArray(t *testing.T) {
+	got, err := decodeBounded[json.RawMessage]([]byte(` [ {"a":"x\"]}"} , [1,[2]] ,"s\\", 3 ] `), 10, 100, "records")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`{"a":"x\"]}"}`, `[1,[2]]`, `"s\\"`, `3`}
+	if len(got) != len(want) {
+		t.Fatalf("got %d elements %q, want %q", len(got), got, want)
+	}
+	for i := range want {
+		if string(got[i]) != want[i] {
+			t.Errorf("element %d = %s, want %s", i, got[i], want[i])
+		}
+	}
+	for _, bad := range []string{`[1,]`, `[1 2]`, `[1`, `["\`, `{}`, `[{"a":1}`} {
+		if _, err := decodeBounded[json.RawMessage]([]byte(bad), 10, 100, "records"); err == nil {
+			t.Errorf("%s split without an error", bad)
+		}
 	}
 }
