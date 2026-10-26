@@ -327,6 +327,13 @@ func TestNoScreenRepeatsItsTitle(t *testing.T) {
 	press(t, cal, "enter")
 	press(t, cal, "c")
 	check(t, cal, "calendar")
+
+	// Trends opens off the profile too.
+	tr := newModel(t)
+	tr.menu.cursor = menuIndex(t, tr, choiceProfile, 0)
+	press(t, tr, "enter")
+	press(t, tr, "t")
+	check(t, tr, "trends")
 }
 
 // panelWidthOf is how wide the drawn panel is, from its top rule.
@@ -402,6 +409,17 @@ func TestPanelsComeInAFewWidths(t *testing.T) {
 		press(t, m, "c")
 		return m
 	}
+	// The trends screen off the profile: one saved puzzle, so there is a form
+	// table to draw, and the table must fit the narrow step.
+	trends := func() *Model {
+		m := newModel(t)
+		at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+		savedGame(t, m.store, fixedID(1), 5, game.Won, at, at)
+		m.menu.cursor = menuIndex(t, m, choiceProfile, 0)
+		press(t, m, "enter")
+		press(t, m, "t")
+		return m
+	}
 	groups := map[string][]*Model{
 		"narrow": {open(choiceQuit, 0), open(choiceDaily, 0), open(choiceSocial, 0),
 			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0),
@@ -410,7 +428,7 @@ func TestPanelsComeInAFewWidths(t *testing.T) {
 			// its Appendix-C help bar asks one cell past the narrow step, and
 			// the stop-and-ask on 2026-10-12 concluded make joins the wide
 			// group rather than shortening any string.
-			roomScreen(socialJoinRoom), filterList()},
+			roomScreen(socialJoinRoom), filterList(), trends()},
 		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0),
 			roomScreen(socialMakeRoom), roomLobby(), calendar()},
 	}

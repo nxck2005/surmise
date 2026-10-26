@@ -115,6 +115,9 @@ const (
 	actOpenCalendar       // c: the calendar, from the profile
 	actCalendarDay        // index: days since the shown range's first day; select it and list its puzzles
 	actCalendarRange      // index: range row entry
+	actOpenTrends         // t: the trends screen, from the profile
+	actTrendsPrev         // the previous mode
+	actTrendsNext         // the next mode
 )
 
 // action identifies one clickable thing. It is comparable so it doubles as the

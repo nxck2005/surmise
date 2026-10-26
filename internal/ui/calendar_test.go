@@ -390,7 +390,7 @@ func TestCalendarByMouse(t *testing.T) {
 func TestProfileOpensTheCalendar(t *testing.T) {
 	m, _ := calendarSaved(t)
 
-	if got, want := listHelpLine(t, draw(t, m)), "c calendar · esc menu"; got != want {
+	if got, want := listHelpLine(t, draw(t, m)), "c calendar · t trends · esc menu"; got != want {
 		t.Errorf("profile help = %q, want %q", got, want)
 	}
 	click(t, m, action{kind: actOpenCalendar})
