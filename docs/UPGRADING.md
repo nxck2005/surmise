@@ -64,41 +64,34 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
-## v0.11.1 → v0.11.2: trends and personal bests
+## v0.10.1 → v0.11.0: filters, a calendar and trends
 
-Press <kbd>t</kbd> on your profile for trends, one mode at a time: your last
-20 finished games next to all of them, your fastest win and fewest guesses,
-and the five first guesses you use most. <kbd>←</kbd> and <kbd>→</kbd>
-change the mode. When a win is your best yet, the result screen says so.
+**Filters on the puzzle list.** Press <kbd>f</kbd> on the puzzle list to
+show three filters: mode, kind and status. <kbd>m</kbd>, <kbd>t</kbd> and
+<kbd>s</kbd> change them, or click them. Press <kbd>f</kbd> again to hide
+the filters and see everything. The list's hint bar no longer shows
+`↑/↓ move`. The arrows still move.
 
-Like the profile, trends leave out custom puzzles and room rounds. Nothing
-about your saves changed.
-
-## v0.11.0 → v0.11.1: a calendar of what you played
-
-Press <kbd>c</kbd> on your profile for a year of play, one square a day,
-darker the more you played that day. Move with the arrows or the mouse, and
-press <kbd>enter</kbd> or click a day to list its puzzles.
-<kbd>[</kbd> and <kbd>]</kbd> switch between the last year and each year
-you played in.
+**A calendar of what you played.** Press <kbd>c</kbd> on your profile for a
+year of play, one square a day, darker the more you played that day. Move
+with the arrows or the mouse, and press <kbd>enter</kbd> or click a day to
+list its puzzles. <kbd>[</kbd> and <kbd>]</kbd> switch between the last year
+and each year you played in.
 
 A daily goes on its own date. Anything else goes on the day you started it,
 by your computer's clock, so a game started before midnight and finished
 after stays on the first day. Deleted puzzles aren't shown. Custom puzzles
 and room rounds are, though they still don't count on your profile.
 
-Themes have one new glyph, `day`, for the squares. Nothing about your saves
-changed.
+**Trends and personal bests.** Press <kbd>t</kbd> on your profile for
+trends, one mode at a time: your last 20 finished games next to all of them,
+your fastest win and fewest guesses, and the five first guesses you use
+most. <kbd>←</kbd> and <kbd>→</kbd> change the mode. When a win is your best
+yet, the result screen says so. Like the profile, trends leave out custom
+puzzles and room rounds.
 
-## v0.10.1 → v0.11.0: filters on the puzzle list
-
-Press <kbd>f</kbd> on the puzzle list to show three filters: mode, kind and
-status. <kbd>m</kbd>, <kbd>t</kbd> and <kbd>s</kbd> change them, or click
-them. Press <kbd>f</kbd> again to hide the filters and see everything.
-
-The list's hint bar no longer shows `↑/↓ move`. The arrows still move.
-
-Nothing about your saves changed.
+Themes have one new glyph, `day`, for the calendar's squares. Nothing about
+your saves changed.
 
 ## v0.10.0 → v0.10.1: fixes from the 10-02 audit
 
