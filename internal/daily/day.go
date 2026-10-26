@@ -8,7 +8,8 @@ import (
 // dayLayout is the one textual form of a Day: the date, and nothing else.
 const dayLayout = "2006-01-02"
 
-// Day is a calendar date in UTC.
+// Day is a calendar date. For the daily it is always the date in UTC; the
+// profile's calendar also uses it for dates in the player's own zone (DayIn).
 //
 // UTC rather than local time so that every player's daily changes at the same
 // instant — which is what a shared board, and eventually a leaderboard, needs.
@@ -66,3 +67,30 @@ func (d Day) AddDays(n int) Day { return DayOf(d.startsAt().AddDate(0, 0, n)) }
 // Before reports whether d falls earlier than e. Day is comparable, so equality
 // needs no method; ordering does.
 func (d Day) Before(e Day) bool { return d.startsAt().Before(e.startsAt()) }
+
+// DayIn is the date an instant falls on in loc. The daily itself always
+// lives in UTC (DayOf); this is for filing a player's own history by their
+// own calendar. loc must not be nil.
+func DayIn(t time.Time, loc *time.Location) Day {
+	l := t.In(loc)
+	return Day{year: l.Year(), month: l.Month(), day: l.Day()}
+}
+
+// DayFrom is the date with this year, month and day, normalised the way
+// time.Date normalises, so day 0 is the last day of the month before.
+func DayFrom(year int, month time.Month, day int) Day {
+	return DayOf(time.Date(year, month, day, 0, 0, 0, 0, time.UTC))
+}
+
+// Date returns the year, month and day.
+func (d Day) Date() (year int, month time.Month, day int) { return d.year, d.month, d.day }
+
+// Weekday is the day of the week d falls on.
+func (d Day) Weekday() time.Weekday { return d.startsAt().Weekday() }
+
+// DaysSince is how many days after e d falls, negative when d is earlier.
+// It counts in Unix seconds rather than through a time.Duration, which
+// overflows past 292 years, and a hand-edited date can be in the year 1.
+func (d Day) DaysSince(e Day) int {
+	return int((d.startsAt().Unix() - e.startsAt().Unix()) / 86400)
+}
