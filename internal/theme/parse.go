@@ -228,7 +228,7 @@ func (t *Theme) setGlyph(key, value string) error {
 		"value_prev": &t.Glyphs.ValuePrev, "value_next": &t.Glyphs.ValueNext,
 		"jump_first": &t.Glyphs.JumpFirst, "jump_last": &t.Glyphs.JumpLast,
 		"enter": &t.Glyphs.Enter, "delete": &t.Glyphs.Delete,
-		"bar": &t.Glyphs.Bar, "close": &t.Glyphs.Close,
+		"bar": &t.Glyphs.Bar, "day": &t.Glyphs.Day, "close": &t.Glyphs.Close,
 		"border": &t.Glyphs.Border,
 	}
 	p, ok := targets[key]

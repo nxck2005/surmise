@@ -94,6 +94,7 @@ jump_last    = "⇲"        # scrolling list: jump to the last row
 enter        = "⏎"
 delete       = "⌫"
 bar          = "█"        # the profile histogram (see the note below)
+day          = "■"        # one day on the profile's calendar
 close        = "×"        # the panel's close box
 ```
 
@@ -104,6 +105,11 @@ histogram goes back to whole copies of it. A bar glyph two cells wide is drawn
 half as many times, so the longest bar keeps the same width. Each bar is also shaded along its
 length, from a dimmed `bar` up to `bar` itself, so nothing there is a colour you
 did not choose.
+
+The calendar draws one `day` glyph per day, shaded from your `slot` colour
+up to `correct` by how much you played. A glyph two cells wide makes every
+week two cells wide; on a terminal too narrow for the whole year the
+calendar shows the most recent weeks that fit.
 
 ## Metrics
 

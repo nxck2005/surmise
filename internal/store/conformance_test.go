@@ -582,6 +582,25 @@ func TestStoreSummaryCarriesTheCustomMarker(t *testing.T) {
 	})
 }
 
+// TestListCarriesTheStartTime: the list files a puzzle under a calendar day by
+// when it was started, and only has a Summary to read it from.
+func TestListCarriesTheStartTime(t *testing.T) {
+	eachStore(t, "start-time", func(t *testing.T, s settingsCapable) {
+		g := wonGame(t)
+		g.StartedAt = time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+		list, err := s.List()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list) != 1 || !list[0].StartedAt.Equal(g.StartedAt) {
+			t.Errorf("List = %+v, want one summary started %v", list, g.StartedAt)
+		}
+	})
+}
+
 func TestStoreCarriesChallengeOriginWithoutKeepingADeletedCode(t *testing.T) {
 	eachStore(t, "challenge-origin", func(t *testing.T, s settingsCapable) {
 		c, err := challenge.Parse("4500-820C-20A1-G73J")
