@@ -64,6 +64,22 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.11.0 → v0.11.1: a calendar of what you played
+
+Press <kbd>c</kbd> on your profile for a year of play, one square a day,
+darker the more you played that day. Move with the arrows or the mouse, and
+press <kbd>enter</kbd> or click a day to list its puzzles.
+<kbd>[</kbd> and <kbd>]</kbd> switch between the last year and each year
+you played in.
+
+A daily goes on its own date. Anything else goes on the day you started it,
+by your computer's clock, so a game started before midnight and finished
+after stays on the first day. Deleted puzzles aren't shown. Custom puzzles
+and room rounds are, though they still don't count on your profile.
+
+Themes have one new glyph, `day`, for the squares. Nothing about your saves
+changed.
+
 ## v0.10.1 → v0.11.0: filters on the puzzle list
 
 Press <kbd>f</kbd> on the puzzle list to show three filters: mode, kind and
