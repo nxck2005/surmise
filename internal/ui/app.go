@@ -1555,6 +1555,22 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		m.list.confirmDelete = false
 		return nil
 
+	case actListFilter:
+		if m.screen != screenList {
+			return nil
+		}
+		// The same method the m, t and s keys call.
+		m.list.cycle(a.index)
+		return nil
+
+	case actListFilters:
+		if m.screen != screenList {
+			return nil
+		}
+		// The same method the f key calls.
+		m.list.toggleFilters()
+		return nil
+
 	case actJumpTop, actJumpBottom:
 		// The ends of a scrolling list, on whichever list is showing. Both go
 		// through the same methods home and end do.
@@ -3041,7 +3057,10 @@ func (m *Model) screenStatus() string {
 		return fmt.Sprintf("%s · %d/%d", what, g.Attempts(), g.MaxAttempts)
 
 	case screenList:
-		if n := len(m.list.items); n > 0 {
+		if m.list.filtered() {
+			return fmt.Sprintf("%d of %d", len(m.list.items), len(m.list.all))
+		}
+		if n := len(m.list.all); n > 0 {
 			return fmt.Sprintf("%d saved", n)
 		}
 

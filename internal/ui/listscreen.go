@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/words"
 )
 
 // defaultRows is how many rows a list shows when it has not been told the
@@ -36,6 +38,68 @@ func windowRows(height, n int) int {
 	return max(budget, minRows)
 }
 
+// puzzleKind is where a puzzle came from, as the list labels it and as its
+// kind filter picks it. kindAll is the filter's "any".
+type puzzleKind int
+
+const (
+	kindAll puzzleKind = iota
+	kindRandom
+	kindDaily
+	kindChallenge
+	kindCustom
+	kindRoom
+)
+
+// kindOf classifies a puzzle. The order of the cases is renderRow's order, and
+// renderRow now reads it from here, so a label and a filter cannot disagree.
+func kindOf(s store.Summary) puzzleKind {
+	switch {
+	case s.Daily != "":
+		return kindDaily
+	case s.Custom:
+		return kindCustom
+	case s.Challenge:
+		return kindChallenge
+	case s.Room:
+		return kindRoom
+	}
+	return kindRandom
+}
+
+// statusFilter is the status choice on the filter bar. statusAll is "any".
+type statusFilter int
+
+const (
+	statusAll statusFilter = iota
+	statusPlaying
+	statusWon
+	statusLost
+)
+
+// listFilter is what the filter bar has chosen. Its zero value lets
+// everything through.
+type listFilter struct {
+	length int // 0 is any mode
+	kind   puzzleKind
+	status statusFilter
+}
+
+// The filter bar's three fields, in the order they are drawn. They are the
+// index of an actListFilter click.
+const (
+	filterMode = iota
+	filterKind
+	filterStatus
+)
+
+// filterKinds and filterStatuses are the order each field steps through,
+// starting from "all" and wrapping back to it.
+var (
+	filterKinds    = []puzzleKind{kindAll, kindRandom, kindDaily, kindChallenge, kindCustom, kindRoom}
+	filterStatuses = []statusFilter{statusAll, statusPlaying, statusWon, statusLost}
+)
+
 // listScreen browses saved puzzles. Unfinished ones can be resumed, finished
 // ones reviewed.
 type listScreen struct {
@@ -53,6 +117,15 @@ type listScreen struct {
 	// never outlive the row it was armed on, so anything that moves the cursor
 	// or leaves the screen clears it.
 	confirmDelete bool
+
+	// all is everything List returned; items is the part of it the filters
+	// let through, and is what every row, cursor and click indexes.
+	all []store.Summary
+
+	// filtersOpen shows the filter bar. Closing it clears the filter, so the
+	// list a player comes back to is always the whole one.
+	filtersOpen bool
+	filter      listFilter
 }
 
 func (m *listScreen) resize(h int) {
@@ -60,21 +133,112 @@ func (m *listScreen) resize(h int) {
 	m.clampOffset()
 }
 
-// rows is the size of the visible window.
-func (m *listScreen) rows() int { return windowRows(m.height, len(m.items)) }
+// matches reports whether a puzzle passes the filter.
+func (m *listScreen) matches(s store.Summary) bool {
+	f := m.filter
+	if f.length != 0 && s.Length != f.length {
+		return false
+	}
+	if f.kind != kindAll && kindOf(s) != f.kind {
+		return false
+	}
+	switch f.status {
+	case statusPlaying:
+		return s.Status == game.InProgress
+	case statusWon:
+		return s.Status == game.Won
+	case statusLost:
+		return s.Status == game.Lost
+	}
+	return true
+}
 
-func (m *listScreen) reload(s store.Store) {
-	m.items, m.err = s.List()
+// apply rebuilds items from all.
+func (m *listScreen) apply() {
+	m.items = m.items[:0:0]
+	for _, s := range m.all {
+		if m.matches(s) {
+			m.items = append(m.items, s)
+		}
+	}
+}
+
+// filtered reports whether the rows are fewer than everything by choice.
+func (m *listScreen) filtered() bool { return m.filter != listFilter{} }
+
+// toggleFilters shows or hides the filter bar. Hiding it clears the filter.
+// The keys and the help bar's button both come here.
+func (m *listScreen) toggleFilters() {
+	m.filtersOpen = !m.filtersOpen
+	if !m.filtersOpen {
+		m.filter = listFilter{}
+	}
+	m.apply()
 	m.cursor, m.offset = 0, 0
 	m.confirmDelete = false
 }
 
-// refresh re-reads the puzzles while holding the cursor where the player left
-// it, clamped to whatever is still there. reload resets to the top, which is
-// right on entering the screen and wrong after deleting a row.
+// cycle steps one field of the filter bar to its next value, wrapping round
+// to "all". The keys and a click on the field both come here. It does
+// nothing while the bar is hidden.
+func (m *listScreen) cycle(field int) {
+	if !m.filtersOpen {
+		return
+	}
+	switch field {
+	case filterMode:
+		modes := append([]int{0}, words.Lengths...)
+		m.filter.length = modes[(slices.Index(modes, m.filter.length)+1)%len(modes)]
+	case filterKind:
+		m.filter.kind = filterKinds[(slices.Index(filterKinds, m.filter.kind)+1)%len(filterKinds)]
+	case filterStatus:
+		m.filter.status = filterStatuses[(slices.Index(filterStatuses, m.filter.status)+1)%len(filterStatuses)]
+	default:
+		return
+	}
+	m.apply()
+	m.cursor, m.offset = 0, 0
+	m.confirmDelete = false
+}
+
+// headerLines is how many lines the body spends above the rows: the filter
+// bar and the blank under it.
+func (m *listScreen) headerLines() int {
+	if m.filtersOpen {
+		return 2
+	}
+	return 0
+}
+
+// rows is the size of the visible window, after the lines above the rows.
+func (m *listScreen) rows() int {
+	h := m.height
+	if h > 0 {
+		h = max(h-m.headerLines(), 1)
+	}
+	return windowRows(h, len(m.items))
+}
+
+// reload reads the puzzles afresh for a list opened from the menu: the whole
+// list, no filter, cursor at the top.
+func (m *listScreen) reload(s store.Store) {
+	m.all, m.err = s.List()
+	m.filtersOpen = false
+	m.filter = listFilter{}
+	m.apply()
+	m.cursor, m.offset = 0, 0
+	m.confirmDelete = false
+}
+
+// refresh re-reads the puzzles while holding the filter and the cursor where
+// the player left them, clamped to whatever is still there. reload resets
+// everything, which is right on entering the screen and wrong after deleting
+// a row.
 func (m *listScreen) refresh(s store.Store) {
 	cursor := m.cursor
-	m.reload(s)
+	m.all, m.err = s.List()
+	m.apply()
+	m.confirmDelete = false
 	m.cursor = min(max(cursor, 0), max(len(m.items)-1, 0))
 	m.clampOffset()
 }
@@ -125,6 +289,14 @@ func (m *listScreen) update(msg tea.KeyPressMsg) (open, del, back bool) {
 		if _, ok := m.selected(); ok {
 			m.confirmDelete = true
 		}
+	case "f":
+		m.toggleFilters()
+	case "m":
+		m.cycle(filterMode)
+	case "t":
+		m.cycle(filterKind)
+	case "s":
+		m.cycle(filterStatus)
 	}
 	return false, false, false
 }
@@ -188,17 +360,53 @@ func (m *listScreen) clampOffset() {
 	m.offset = max(m.offset, 0)
 }
 
+// filterBar is the three filters on one line. Each field is a click target
+// that steps it, like its key.
+func (m *listScreen) filterBar(h *hitMap) string {
+	mode := "all"
+	if m.filter.length != 0 {
+		mode = fmt.Sprint(m.filter.length)
+	}
+	kinds := map[puzzleKind]string{
+		kindAll: "all", kindRandom: "random", kindDaily: "daily",
+		kindChallenge: "challenge", kindCustom: "custom", kindRoom: "room",
+	}
+	statuses := map[statusFilter]string{
+		statusAll: "all", statusPlaying: "in play", statusWon: "won", statusLost: "lost",
+	}
+	field := func(i int, key, name, value string) string {
+		a := action{kind: actListFilter, index: i}
+		label, val := st.muted, st.text
+		if h.hovered(a) {
+			label, val = st.hover(label), st.hover(val)
+		}
+		return h.mark(a, label.Render(key+" "+name+" ")+val.Render(value))
+	}
+	sep := st.muted.Render(" · ")
+	return field(filterMode, "m", "mode", mode) + sep +
+		field(filterKind, "t", "kind", kinds[m.filter.kind]) + sep +
+		field(filterStatus, "s", "status", statuses[m.filter.status])
+}
+
 func (m *listScreen) view(h *hitMap) string {
 	switch {
 	case m.err != nil:
 		return block(st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
-	case len(m.items) == 0:
+	case len(m.all) == 0:
 		return block(st.muted.Render("no puzzles yet — start one from the menu"))
 	}
 
-	// The counter and the delete prompt join the rows in one block, so they
-	// centre with the list rather than drifting against it.
+	// The filter bar, the counter and the delete prompt join the rows in one
+	// block, so they centre with the list rather than drifting against it.
 	var lines []string
+	if m.filtersOpen {
+		lines = append(lines, m.filterBar(h), "")
+	}
+	if len(m.items) == 0 {
+		lines = append(lines, st.muted.Render("no puzzles match"))
+		return block(strings.Join(lines, "\n"))
+	}
+
 	end := min(m.offset+m.rows(), len(m.items))
 	for i := m.offset; i < end; i++ {
 		// One click opens a puzzle; esc comes straight back, so there is no
@@ -254,14 +462,14 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 	// width counts invisible escape codes as characters.
 	// Codes are fixed-width, so this column needs no padding to stay aligned.
 	what := fmt.Sprintf("%d letters", s.Length)
-	switch {
-	case s.Daily != "":
+	switch kindOf(s) {
+	case kindDaily:
 		what = fmt.Sprintf("daily %s", s.Daily)
-	case s.Custom:
+	case kindCustom:
 		what = "custom"
-	case s.Challenge:
+	case kindChallenge:
 		what = "challenge"
-	case s.Room:
+	case kindRoom:
 		what = "room"
 	}
 	left := fmt.Sprintf("#%s %-16s ", game.Code(s.ID), what)
@@ -301,10 +509,22 @@ func (m *listScreen) help(h *hitMap) string {
 			helpItem{keys: "esc", label: "keep", act: action{kind: actCancelDelete}},
 		)
 	}
-	return renderHelp(h,
-		helpItem{keys: "↑/↓", label: "move"},
-		helpItem{keys: "enter", label: "open", act: action{kind: actListRow, index: m.cursor}},
-		helpItem{keys: "d", label: "delete", act: action{kind: actDeletePuzzle, index: m.cursor}},
-		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
-	)
+	back := helpItem{keys: "esc", label: "menu", act: action{kind: actBack}}
+	if len(m.all) == 0 {
+		// Nothing saved: nothing to open, delete or filter.
+		return renderHelp(h, back)
+	}
+	var items []helpItem
+	if len(m.items) > 0 {
+		items = append(items,
+			helpItem{keys: "enter", label: "open", act: action{kind: actListRow, index: m.cursor}},
+			helpItem{keys: "d", label: "delete", act: action{kind: actDeletePuzzle, index: m.cursor}},
+		)
+	}
+	toggle := "filter"
+	if m.filtersOpen {
+		toggle = "close"
+	}
+	items = append(items, helpItem{keys: "f", label: toggle, act: action{kind: actListFilters}}, back)
+	return renderHelp(h, items...)
 }

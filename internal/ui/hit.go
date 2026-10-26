@@ -110,6 +110,8 @@ const (
 	actRoomReview         // enter: review your board from the result
 	actRoomRematch        // n: rematch
 	actRoomRefresh        // f: refresh an async result (PR 10)
+	actListFilter         // index: filter bar field (filterMode, filterKind, filterStatus); steps it
+	actListFilters        // f: show or hide the filter bar
 )
 
 // action identifies one clickable thing. It is comparable so it doubles as the

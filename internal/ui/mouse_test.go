@@ -149,6 +149,11 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			m.list.reload(m.store)
 			m.screen, m.list.confirmDelete = screenList, true
 		}},
+		{"list with filters", func() {
+			m.list.reload(m.store)
+			m.list.toggleFilters()
+			m.screen = screenList
+		}},
 		{"daily", func() { m.daily.reload(m.store, m.day); m.screen = screenDaily }},
 		{"daily with a finished trio", func() {
 			m.daily.reload(m.store, m.day)
