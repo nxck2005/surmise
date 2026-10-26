@@ -158,6 +158,7 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			m.zone = time.UTC
 			m.openCalendar()
 		}},
+		{"trends", func() { m.openTrends() }},
 		{"day list", func() {
 			m.list.openDay(m.store, m.day, time.UTC)
 			m.screen = screenList
