@@ -106,6 +106,7 @@ and the daily screen also shows how everyone else did.
 | <kbd>esc</kbd> | back to the menu (in a sprint: ends the run and shows the summary) |
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
+| <kbd>f</kbd>, then <kbd>m</kbd> / <kbd>t</kbd> / <kbd>s</kbd> | show the filters in the puzzle list, then change mode, kind or status (<kbd>f</kbd> again shows everything) |
 | <kbd>r</kbd> | re-read the themes directory (in the theme picker) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
 
