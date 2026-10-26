@@ -64,6 +64,16 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.10.1 → v0.11.0: filters on the puzzle list
+
+Press <kbd>f</kbd> on the puzzle list to show three filters: mode, kind and
+status. <kbd>m</kbd>, <kbd>t</kbd> and <kbd>s</kbd> change them, or click
+them. Press <kbd>f</kbd> again to hide the filters and see everything.
+
+The list's hint bar no longer shows `↑/↓ move`. The arrows still move.
+
+Nothing about your saves changed.
+
 ## v0.10.0 → v0.10.1: fixes from the 10-02 audit
 
 - **The menu is faster.** It used to read your whole history every time it
