@@ -83,8 +83,8 @@ install gets the same board, with no account or server involved.
 
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode. a calendar shows a
-year of play, one square a day, and trends compare your
-last 20 games with all of them.
+year of play, one square a day, and trends compare your last 20 games with
+all of them.
 
 **wide assortment of themes, live preview.**  ember, catppuccin, dracula, gruvbox,
 nord and a lot more. write your own themes as well.
