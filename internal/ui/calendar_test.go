@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
@@ -473,5 +474,27 @@ func TestCalendarRangesAreBounded(t *testing.T) {
 	tallies[calDay(2027, time.January, 5)] = stats.DayTally{Games: 1}
 	if got := strings.Join(labels(), ","); got != want {
 		t.Errorf("with a game in 2027: ranges = %s, want %s", got, want)
+	}
+}
+
+// The selected day is the one square drawn reversed, so the player can see
+// which day the detail line is about. The plain text cannot show it.
+func TestCalendarShowsTheSelectedDay(t *testing.T) {
+	m := calendarModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	view := m.calendar.view(nil)
+	l := m.calendar.layout()
+	peak := 3 // the fixture's busiest day in the last year
+	ramp := calendarRamp()
+	level := calendarLevel(m.calendar.tally(m.calendar.cursor).Games, peak)
+	picked := lipgloss.NewStyle().Foreground(ramp[level]).Reverse(true).Render(l.glyph)
+	if n := strings.Count(view, picked); n != 1 {
+		t.Errorf("the reversed square appears %d times, want once", n)
+	}
+	m.calendar.move(-1)
+	level = calendarLevel(m.calendar.tally(m.calendar.cursor).Games, peak)
+	moved := lipgloss.NewStyle().Foreground(ramp[level]).Reverse(true).Render(l.glyph)
+	if n := strings.Count(m.calendar.view(nil), moved); n != 1 {
+		t.Errorf("after moving, the reversed square appears %d times, want once", n)
 	}
 }
