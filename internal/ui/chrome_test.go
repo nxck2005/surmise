@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -372,6 +373,17 @@ func TestPanelsComeInAFewWidths(t *testing.T) {
 		m.screen = screenRoom
 		return m
 	}
+	// The puzzle list with its filter bar showing: one saved puzzle, so there
+	// is a bar to draw, and the bar must not widen the panel.
+	filterList := func() *Model {
+		m := newModel(t)
+		at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+		savedGame(t, m.store, fixedID(1), 5, game.Won, at, at)
+		m.menu.cursor = menuIndex(t, m, choiceList, 0)
+		press(t, m, "enter")
+		press(t, m, "f")
+		return m
+	}
 	groups := map[string][]*Model{
 		"narrow": {open(choiceQuit, 0), open(choiceDaily, 0), open(choiceSocial, 0),
 			open(choiceSettings, 0), open(choiceHowTo, 0), open(choiceThemes, 0),
@@ -380,7 +392,7 @@ func TestPanelsComeInAFewWidths(t *testing.T) {
 			// its Appendix-C help bar asks one cell past the narrow step, and
 			// the stop-and-ask on 2026-10-12 concluded make joins the wide
 			// group rather than shortening any string.
-			roomScreen(socialJoinRoom)},
+			roomScreen(socialJoinRoom), filterList()},
 		"wide": {open(choiceNewGame, 4), open(choiceNewGame, 6), open(choiceSprint, 0),
 			roomScreen(socialMakeRoom), roomLobby()},
 	}
