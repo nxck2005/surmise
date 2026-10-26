@@ -154,6 +154,14 @@ func TestMarkersDoNotAffectLayout(t *testing.T) {
 			m.list.toggleFilters()
 			m.screen = screenList
 		}},
+		{"calendar", func() {
+			m.zone = time.UTC
+			m.openCalendar()
+		}},
+		{"day list", func() {
+			m.list.openDay(m.store, m.day, time.UTC)
+			m.screen = screenList
+		}},
 		{"daily", func() { m.daily.reload(m.store, m.day); m.screen = screenDaily }},
 		{"daily with a finished trio", func() {
 			m.daily.reload(m.store, m.day)

@@ -82,7 +82,8 @@ minutes, your pick of length. one setup, no pauses, a summary at the end.
 install gets the same board, with no account or server involved.
 
 **it keeps score.** win rate, average attempts, average solve time, current and
-best streak, guess distribution, all broken down by mode.
+best streak, guess distribution, all broken down by mode. a calendar shows a
+year of play, one square a day.
 
 **wide assortment of themes, live preview.**  ember, catppuccin, dracula, gruvbox,
 nord and a lot more. write your own themes as well.
@@ -107,6 +108,7 @@ and the daily screen also shows how everyone else did.
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
 | <kbd>f</kbd>, then <kbd>m</kbd> / <kbd>t</kbd> / <kbd>s</kbd> | show the filters in the puzzle list, then change mode, kind or status (<kbd>f</kbd> again shows everything) |
+| <kbd>c</kbd> | the calendar (on the profile): arrows pick a day, <kbd>enter</kbd> lists its puzzles, <kbd>[</kbd> / <kbd>]</kbd> change the year |
 | <kbd>r</kbd> | re-read the themes directory (in the theme picker) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
 

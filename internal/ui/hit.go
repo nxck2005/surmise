@@ -112,6 +112,9 @@ const (
 	actRoomRefresh        // f: refresh an async result (PR 10)
 	actListFilter         // index: filter bar field (filterMode, filterKind, filterStatus); steps it
 	actListFilters        // f: show or hide the filter bar
+	actOpenCalendar       // c: the calendar, from the profile
+	actCalendarDay        // index: days since the shown range's first day; select it and list its puzzles
+	actCalendarRange      // index: range row entry
 )
 
 // action identifies one clickable thing. It is comparable so it doubles as the
