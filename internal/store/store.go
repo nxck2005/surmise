@@ -34,6 +34,9 @@ type Summary struct {
 	Attempts  int
 	Elapsed   time.Duration
 	UpdatedAt time.Time
+	// StartedAt is when the puzzle was begun. The list files a puzzle under
+	// a calendar day by it (stats.PlayDay), like the profile's calendar.
+	StartedAt time.Time
 	// Daily is the date this puzzle is the daily for, or empty. Carried here so
 	// the browse list can label one without loading the whole game.
 	Daily string
@@ -104,6 +107,7 @@ func summarize(g *game.Game) Summary {
 		Attempts:  g.Attempts(),
 		Elapsed:   g.Elapsed(),
 		UpdatedAt: g.UpdatedAt,
+		StartedAt: g.StartedAt,
 		Daily:     g.Daily,
 		Custom:    g.Custom,
 		Challenge: g.Challenge != nil,

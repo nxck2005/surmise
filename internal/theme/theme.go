@@ -95,6 +95,7 @@ type Glyphs struct {
 	Enter       string // submit keycap
 	Delete      string // backspace keycap
 	Bar         string // profile histogram
+	Day         string // one day on the profile's calendar
 	Close       string // the panel's close box
 	Border      string // rounded | normal | thick | double | hidden | block
 }
@@ -174,6 +175,7 @@ func Default() *Theme {
 			Enter:       "⏎",
 			Delete:      "⌫",
 			Bar:         "█",
+			Day:         "■",
 			Close:       "×",
 			Border:      "rounded",
 		},

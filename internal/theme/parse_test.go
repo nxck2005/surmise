@@ -157,6 +157,16 @@ tile_width = 5
 	}
 }
 
+func TestDayGlyphIsThemeable(t *testing.T) {
+	th := parse(t, "[glyphs]\nday = \"#\"\n")
+	if th.Glyphs.Day != "#" {
+		t.Errorf("day glyph = %q, want #", th.Glyphs.Day)
+	}
+	if got := Default().Glyphs.Day; got != "■" {
+		t.Errorf("default day glyph = %q, want ■", got)
+	}
+}
+
 // Bad input is reported, never fatal: a theme with one broken line still loads,
 // so a typo costs one colour instead of the whole file.
 func TestBadLinesWarnAndAreSkipped(t *testing.T) {
