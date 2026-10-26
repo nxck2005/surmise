@@ -64,6 +64,16 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.11.1 → v0.11.2: trends and personal bests
+
+Press <kbd>t</kbd> on your profile for trends, one mode at a time: your last
+20 finished games next to all of them, your fastest win and fewest guesses,
+and the five first guesses you use most. <kbd>←</kbd> and <kbd>→</kbd>
+change the mode. When a win is your best yet, the result screen says so.
+
+Like the profile, trends leave out custom puzzles and room rounds. Nothing
+about your saves changed.
+
 ## v0.11.0 → v0.11.1: a calendar of what you played
 
 Press <kbd>c</kbd> on your profile for a year of play, one square a day,
