@@ -54,6 +54,7 @@ const (
 	screenHowTo
 	screenAbout
 	screenBackup
+	screenCalendar
 	screenSplash
 )
 
@@ -175,6 +176,11 @@ type Model struct {
 	day      daily.Day
 	dailySrc daily.Source
 
+	// zone is the time zone the profile's calendar files a puzzle's start
+	// in: the player's own. A field rather than time.Local at each use so a
+	// test can pin it.
+	zone *time.Location
+
 	// dataDir is where the files live, for the about screen to show. Nothing
 	// reads or writes through it; that is the store's job.
 	dataDir string
@@ -186,6 +192,7 @@ type Model struct {
 	result    resultScreen
 	list      listScreen
 	profile   profileScreen
+	calendar  calendarScreen
 	themes    themeScreen
 	settings  settingsScreen
 	daily     dailyScreen
@@ -394,6 +401,7 @@ func New(s store.Store, lib *theme.Library, opts Options) *Model {
 		// a backup row that cannot do anything is worse than no row.
 		menu:      newMenuScreen(opts.Transfer != nil),
 		dailySrc:  opts.DailySeeds,
+		zone:      time.Local,
 		dataDir:   opts.DataDir,
 		transfer:  opts.Transfer,
 		clipboard: opts.Clipboard,
@@ -1027,6 +1035,51 @@ func (m *Model) openProfile(s store.Settings) {
 	m.profile.reload(games, m.day, s.DisplayName, total)
 }
 
+// openCalendar raises the calendar fresh from the profile. The history is
+// the shared copy; the calendar only reads it.
+func (m *Model) openCalendar() {
+	games, err := m.history()
+	if err != nil {
+		m.err = err
+		return
+	}
+	m.calendar.reload(games, daily.DayIn(timeNow(), m.zone), m.zone)
+	m.screen = screenCalendar
+}
+
+// returnToCalendar comes back from a day's puzzle list, where a puzzle may
+// have been deleted, so the counts are read again.
+func (m *Model) returnToCalendar() {
+	if games, err := m.history(); err == nil {
+		m.calendar.refresh(games, daily.DayIn(timeNow(), m.zone), m.zone)
+	} else {
+		m.err = err
+	}
+	m.screen = screenCalendar
+}
+
+// openCalendarDay lists the selected day's puzzles. A day with nothing on
+// it opens nothing.
+func (m *Model) openCalendarDay() tea.Cmd {
+	if m.calendar.tally(m.calendar.cursor).Games == 0 {
+		return nil
+	}
+	m.list.openDay(m.store, m.calendar.cursor, m.zone)
+	m.screen = screenList
+	return nil
+}
+
+func (m *Model) updateCalendar(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	open, back := m.calendar.update(msg)
+	switch {
+	case back:
+		return m, m.back()
+	case open:
+		return m, m.openCalendarDay()
+	}
+	return m, nil
+}
+
 func (m *Model) Init() tea.Cmd {
 	// Batch drops the nils, so neither the splash timer nor the theme watch
 	// needs a condition here: each decides for itself whether it exists. The
@@ -1056,6 +1109,7 @@ func (m *Model) pushSize() {
 	}
 	m.roomResult.resize(m.width, m.height)
 	m.profile.resize(m.width, m.height)
+	m.calendar.resize(m.width, m.height)
 	m.howTo.resize(m.width, m.height)
 	m.about.resize(m.width, m.height)
 	m.list.resize(m.height)
@@ -1365,6 +1419,8 @@ func (m *Model) handleMotion(x, y int) (changed bool) {
 		moved = m.list.point(a.index)
 	case actDailyRow:
 		moved = m.daily.point(a.index)
+	case actCalendarDay:
+		moved = m.calendar.point(a.index)
 	case actBackupSave:
 		moved = m.backup.point(backupRowSave)
 	case actBackupLoad:
@@ -1569,6 +1625,27 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		}
 		// The same method the f key calls.
 		m.list.toggleFilters()
+		return nil
+
+	case actOpenCalendar:
+		if m.screen != screenProfile {
+			return nil
+		}
+		m.openCalendar()
+		return nil
+
+	case actCalendarDay:
+		if m.screen != screenCalendar {
+			return nil
+		}
+		m.calendar.point(a.index)
+		return m.openCalendarDay()
+
+	case actCalendarRange:
+		if m.screen != screenCalendar {
+			return nil
+		}
+		m.calendar.showRange(a.index)
 		return nil
 
 	case actJumpTop, actJumpBottom:
@@ -1925,6 +2002,17 @@ func (m *Model) back() tea.Cmd {
 		// An armed prompt must not be waiting when the list is next opened.
 		m.list.confirmDelete = false
 	}
+	// A day's puzzle list belongs to the calendar, and the calendar to the
+	// profile, so esc walks back the way the player came.
+	if m.screen == screenList && !m.list.day.IsZero() {
+		m.returnToCalendar()
+		return nil
+	}
+	if m.screen == screenCalendar {
+		m.openProfile(m.settingsOf())
+		m.screen = screenProfile
+		return nil
+	}
 	if m.screen == screenChallenge || m.screen == screenCustom {
 		m.openSocialScreen()
 		return nil
@@ -2095,9 +2183,19 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case screenBackup:
 		return m.updateBackup(msg)
-	// Both are read-only screens with no cursor, so their whole key handling is
-	// "get me out of here".
-	case screenProfile, screenAbout:
+	case screenProfile:
+		switch msg.String() {
+		case "esc", "q":
+			m.openMenu()
+		case "c":
+			m.openCalendar()
+		}
+		return m, nil
+	case screenCalendar:
+		return m.updateCalendar(msg)
+	// A read-only screen with no cursor, so its whole key handling is "get
+	// me out of here".
+	case screenAbout:
 		if key := msg.String(); key == "esc" || key == "q" {
 			m.openMenu()
 		}
@@ -2479,8 +2577,7 @@ func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	open, del, back := m.list.update(msg)
 	switch {
 	case back:
-		m.list.confirmDelete = false
-		m.openMenu()
+		return m, m.back()
 	case open:
 		return m, m.openSelected()
 	case del:
@@ -3001,6 +3098,8 @@ func (m *Model) screenTitle() string {
 		return "about"
 	case screenBackup:
 		return "backup"
+	case screenCalendar:
+		return "calendar"
 	default:
 		return brand.Name
 	}
@@ -3119,6 +3218,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.about.view(h), m.about.help(h)
 	case screenBackup:
 		return m.backup.view(h), m.backup.help(h)
+	case screenCalendar:
+		return m.calendar.view(h), m.calendar.help(h)
 	default:
 		return m.menu.view(h), m.menu.help(h)
 	}

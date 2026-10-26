@@ -285,5 +285,8 @@ func (m *profileScreen) renderDaily() string {
 }
 
 func (m *profileScreen) help(h *hitMap) string {
-	return renderHelp(h, helpItem{keys: "esc", label: "menu", act: action{kind: actBack}})
+	return renderHelp(h,
+		helpItem{keys: "c", label: "calendar", act: action{kind: actOpenCalendar}},
+		helpItem{keys: "esc", label: "menu", act: action{kind: actBack}},
+	)
 }

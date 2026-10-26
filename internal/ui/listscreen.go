@@ -5,11 +5,14 @@ import (
 	"image/color"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/stats"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/words"
 )
@@ -126,6 +129,11 @@ type listScreen struct {
 	// list a player comes back to is always the whole one.
 	filtersOpen bool
 	filter      listFilter
+
+	// day narrows the list to one calendar day; zero is every day. Only the
+	// calendar sets it, and esc then goes back to the calendar.
+	day  daily.Day
+	zone *time.Location
 }
 
 func (m *listScreen) resize(h int) {
@@ -133,7 +141,8 @@ func (m *listScreen) resize(h int) {
 	m.clampOffset()
 }
 
-// matches reports whether a puzzle passes the filter.
+// matches reports whether a puzzle passes the filter and, when the
+// calendar asked for one day, is on that day.
 func (m *listScreen) matches(s store.Summary) bool {
 	f := m.filter
 	if f.length != 0 && s.Length != f.length {
@@ -142,13 +151,17 @@ func (m *listScreen) matches(s store.Summary) bool {
 	if f.kind != kindAll && kindOf(s) != f.kind {
 		return false
 	}
-	switch f.status {
-	case statusPlaying:
-		return s.Status == game.InProgress
-	case statusWon:
-		return s.Status == game.Won
-	case statusLost:
-		return s.Status == game.Lost
+	switch {
+	case f.status == statusPlaying && s.Status != game.InProgress,
+		f.status == statusWon && s.Status != game.Won,
+		f.status == statusLost && s.Status != game.Lost:
+		return false
+	}
+	if !m.day.IsZero() {
+		d, ok := stats.PlayDay(s.Daily, s.StartedAt, m.zone)
+		if !ok || d != m.day {
+			return false
+		}
 	}
 	return true
 }
@@ -164,7 +177,7 @@ func (m *listScreen) apply() {
 }
 
 // filtered reports whether the rows are fewer than everything by choice.
-func (m *listScreen) filtered() bool { return m.filter != listFilter{} }
+func (m *listScreen) filtered() bool { return m.filter != listFilter{} || !m.day.IsZero() }
 
 // toggleFilters shows or hides the filter bar. Hiding it clears the filter.
 // The keys and the help bar's button both come here.
@@ -204,10 +217,14 @@ func (m *listScreen) cycle(field int) {
 // headerLines is how many lines the body spends above the rows: the filter
 // bar and the blank under it.
 func (m *listScreen) headerLines() int {
-	if m.filtersOpen {
-		return 2
+	n := 0
+	if !m.day.IsZero() {
+		n += 2 // the day and the blank under it
 	}
-	return 0
+	if m.filtersOpen {
+		n += 2
+	}
+	return n
 }
 
 // rows is the size of the visible window, after the lines above the rows.
@@ -225,9 +242,17 @@ func (m *listScreen) reload(s store.Store) {
 	m.all, m.err = s.List()
 	m.filtersOpen = false
 	m.filter = listFilter{}
+	m.day = daily.Day{}
 	m.apply()
 	m.cursor, m.offset = 0, 0
 	m.confirmDelete = false
+}
+
+// openDay shows one calendar day's puzzles, for the calendar.
+func (m *listScreen) openDay(s store.Store, day daily.Day, zone *time.Location) {
+	m.reload(s)
+	m.day, m.zone = day, zone
+	m.apply()
 }
 
 // refresh re-reads the puzzles while holding the filter and the cursor where
@@ -399,6 +424,11 @@ func (m *listScreen) view(h *hitMap) string {
 	// The filter bar, the counter and the delete prompt join the rows in one
 	// block, so they centre with the list rather than drifting against it.
 	var lines []string
+	if !m.day.IsZero() {
+		y, mon, d := m.day.Date()
+		lines = append(lines, st.text.Render(fmt.Sprintf("%s %d %s %d",
+			calendarWeekdays[m.day.Weekday()], d, calendarMonths[mon-1], y)), "")
+	}
 	if m.filtersOpen {
 		lines = append(lines, m.filterBar(h), "")
 	}
@@ -510,6 +540,9 @@ func (m *listScreen) help(h *hitMap) string {
 		)
 	}
 	back := helpItem{keys: "esc", label: "menu", act: action{kind: actBack}}
+	if !m.day.IsZero() {
+		back.label = "back"
+	}
 	if len(m.all) == 0 {
 		// Nothing saved: nothing to open, delete or filter.
 		return renderHelp(h, back)
