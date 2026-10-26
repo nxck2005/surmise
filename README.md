@@ -83,7 +83,8 @@ install gets the same board, with no account or server involved.
 
 **it keeps score.** win rate, average attempts, average solve time, current and
 best streak, guess distribution, all broken down by mode. a calendar shows a
-year of play, one square a day.
+year of play, one square a day, and trends compare your last 20 games with
+all of them.
 
 **wide assortment of themes, live preview.**  ember, catppuccin, dracula, gruvbox,
 nord and a lot more. write your own themes as well.
@@ -108,7 +109,7 @@ and the daily screen also shows how everyone else did.
 | <kbd>↑</kbd>/<kbd>↓</kbd> · <kbd>enter</kbd> | navigate menus |
 | <kbd>d</kbd> twice | delete the selected puzzle (in the puzzle list) |
 | <kbd>f</kbd>, then <kbd>m</kbd> / <kbd>t</kbd> / <kbd>s</kbd> | show the filters in the puzzle list, then change mode, kind or status (<kbd>f</kbd> again shows everything) |
-| <kbd>c</kbd> | the calendar (on the profile): arrows pick a day, <kbd>enter</kbd> lists its puzzles, <kbd>[</kbd> / <kbd>]</kbd> change the year |
+| <kbd>c</kbd> / <kbd>t</kbd> | the calendar / trends (on the profile). on the calendar, arrows pick a day, <kbd>enter</kbd> lists its puzzles and <kbd>[</kbd> / <kbd>]</kbd> change the year; on trends, <kbd>←</kbd> / <kbd>→</kbd> change the mode |
 | <kbd>r</kbd> | re-read the themes directory (in the theme picker) |
 | <kbd>q</kbd> / <kbd>ctrl+c</kbd> | quit (an in-progress puzzle is saved) |
 

@@ -17,6 +17,7 @@ type resultScreen struct {
 	g             *game.Game
 	notice        string
 	copyRequested bool
+	best          string // "your fastest win…" or empty; set by the root
 
 	// anim is the root's animation state, shared the way the board shares it.
 	// Nil draws the settled debrief, which is what every frame test compares.
@@ -27,6 +28,7 @@ func (m *resultScreen) open(g *game.Game, notice string) {
 	m.g = g
 	m.notice = notice
 	m.copyRequested = false
+	m.best = ""
 }
 
 func (m *resultScreen) view(_ *hitMap) string {
@@ -71,6 +73,11 @@ func (m *resultScreen) view(_ *hitMap) string {
 		}
 		sections = append(sections, "",
 			st.muted.Render("answer ")+word.Render(strings.ToUpper(g.Answer)))
+	}
+	if g.Status == game.Won && m.best != "" {
+		// A win has no answer line, so the note takes its place and a won
+		// debrief is no taller than a lost one.
+		sections = append(sections, "", st.accent.Render(m.best))
 	}
 	sections = append(sections, "", st.legendText())
 

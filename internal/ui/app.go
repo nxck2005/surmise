@@ -55,6 +55,7 @@ const (
 	screenAbout
 	screenBackup
 	screenCalendar
+	screenTrends
 	screenSplash
 )
 
@@ -193,6 +194,7 @@ type Model struct {
 	list      listScreen
 	profile   profileScreen
 	calendar  calendarScreen
+	trends    trendsScreen
 	themes    themeScreen
 	settings  settingsScreen
 	daily     dailyScreen
@@ -484,6 +486,26 @@ func (m *Model) openGame(g *game.Game, saved bool) {
 // openResult raises the debrief for the finished board. A save error is carried
 // with it: completion still has a useful result, but must not hide that the
 // durable copy failed.
+// bestNote is the result screen's line for a win that is its mode's
+// fastest or fewest-guess win, or "" for anything else. It reads the shared
+// history, which already holds g: the board saved it before the result.
+func (m *Model) bestNote(g *game.Game) string {
+	games, err := m.history()
+	if err != nil {
+		return ""
+	}
+	fastest, fewest := stats.IsBest(games, g)
+	switch {
+	case fastest && fewest:
+		return fmt.Sprintf("your fastest win and fewest guesses at %d letters", g.Length)
+	case fastest:
+		return fmt.Sprintf("your fastest win at %d letters", g.Length)
+	case fewest:
+		return fmt.Sprintf("your fewest guesses at %d letters", g.Length)
+	}
+	return ""
+}
+
 func (m *Model) openResult() {
 	if m.game != nil && m.game.g.Room != nil {
 		// A saved room round's result is the room result screen: the ranking
@@ -500,6 +522,7 @@ func (m *Model) openResult() {
 	}
 	m.result.anim = &m.anim
 	m.result.open(m.game.g, notice)
+	m.result.best = m.bestNote(m.game.g)
 	m.screen = screenResult
 
 	// The board hurried through a loss to get here; this is what it hurried
@@ -1069,6 +1092,17 @@ func (m *Model) openCalendarDay() tea.Cmd {
 	return nil
 }
 
+// openTrends raises the trends screen on the mode a new board would get.
+func (m *Model) openTrends() {
+	games, err := m.history()
+	if err != nil {
+		m.err = err
+		return
+	}
+	m.trends.reload(games, m.length)
+	m.screen = screenTrends
+}
+
 func (m *Model) updateCalendar(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	open, back := m.calendar.update(msg)
 	switch {
@@ -1110,6 +1144,7 @@ func (m *Model) pushSize() {
 	m.roomResult.resize(m.width, m.height)
 	m.profile.resize(m.width, m.height)
 	m.calendar.resize(m.width, m.height)
+	m.trends.resize(m.height)
 	m.howTo.resize(m.width, m.height)
 	m.about.resize(m.width, m.height)
 	m.list.resize(m.height)
@@ -1648,6 +1683,24 @@ func (m *Model) dispatch(a action) tea.Cmd {
 		m.calendar.showRange(a.index)
 		return nil
 
+	case actOpenTrends:
+		if m.screen != screenProfile {
+			return nil
+		}
+		m.openTrends()
+		return nil
+
+	case actTrendsPrev, actTrendsNext:
+		if m.screen != screenTrends {
+			return nil
+		}
+		if a.kind == actTrendsPrev {
+			m.trends.step(-1)
+		} else {
+			m.trends.step(1)
+		}
+		return nil
+
 	case actJumpTop, actJumpBottom:
 		// The ends of a scrolling list, on whichever list is showing. Both go
 		// through the same methods home and end do.
@@ -2008,7 +2061,7 @@ func (m *Model) back() tea.Cmd {
 		m.returnToCalendar()
 		return nil
 	}
-	if m.screen == screenCalendar {
+	if m.screen == screenCalendar || m.screen == screenTrends {
 		m.openProfile(m.settingsOf())
 		m.screen = screenProfile
 		return nil
@@ -2189,10 +2242,17 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.openMenu()
 		case "c":
 			m.openCalendar()
+		case "t":
+			m.openTrends()
 		}
 		return m, nil
 	case screenCalendar:
 		return m.updateCalendar(msg)
+	case screenTrends:
+		if m.trends.update(msg) {
+			return m, m.back()
+		}
+		return m, nil
 	// A read-only screen with no cursor, so its whole key handling is "get
 	// me out of here".
 	case screenAbout:
@@ -3100,6 +3160,8 @@ func (m *Model) screenTitle() string {
 		return "backup"
 	case screenCalendar:
 		return "calendar"
+	case screenTrends:
+		return "trends"
 	default:
 		return brand.Name
 	}
@@ -3220,6 +3282,8 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 		return m.backup.view(h), m.backup.help(h)
 	case screenCalendar:
 		return m.calendar.view(h), m.calendar.help(h)
+	case screenTrends:
+		return m.trends.view(h), m.trends.help(h)
 	default:
 		return m.menu.view(h), m.menu.help(h)
 	}
