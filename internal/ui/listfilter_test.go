@@ -279,3 +279,24 @@ func TestListHelpWhenNothingIsSaved(t *testing.T) {
 		t.Errorf("help with nothing saved = %q, want %q", got, want)
 	}
 }
+
+// The filter bar and the blank under it cost the list two rows, so a long
+// list with the bar open still fits a short terminal: an over-tall frame
+// loses its top, the panel's title and close box with it.
+func TestListFilterBarFitsAShortTerminal(t *testing.T) {
+	m := newModel(t)
+	for i := range 30 {
+		savedGame(t, m.store, fixedID(i+1), 5, game.Won, listAt, listAt)
+	}
+	openListByMenu(t, m)
+	press(t, m, "f")
+
+	const height = 24
+	frame := drawAt(t, m, height)
+	if n := strings.Count(frame, "\n") + 1; n > height {
+		t.Errorf("the frame is %d lines on a %d-line terminal:\n%s", n, height, plain(frame))
+	}
+	if !strings.Contains(plain(frame), "╭") {
+		t.Errorf("the panel's top rule is missing:\n%s", plain(frame))
+	}
+}
