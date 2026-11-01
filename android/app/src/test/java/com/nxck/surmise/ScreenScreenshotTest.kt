@@ -138,7 +138,7 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun sprintSetup() = shot("sprint-setup") {
-        SprintSetup(SprintOptions(listOf(60_000, 180_000, 300_000), 180_000), 5, { _, _ -> }, {})
+        SprintSetup(SprintOptions(listOf(10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000), 300_000), 5, { _, _ -> }, {})
     }
 
     @Test
