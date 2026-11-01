@@ -176,6 +176,13 @@ jobs:
           # One flat directory, since the checksums file and the upload both
           # want the archives side by side.
           merge-multiple: true
+          # The CI android job runs in this same workflow run and uploads its
+          # debug APK as "surmise-debug-apk". Only the release artifacts belong
+          # in dist: the debug APK is signed with the debug key, not the
+          # release key, and must not be published or checksummed. The release
+          # artifacts are "surmise_android" and "surmise_<os>_<arch>", which
+          # this pattern matches; the debug one has a hyphen after "surmise".
+          pattern: surmise_*
 
       # Has to happen here, not in the matrix: a matrix job cannot see the
       # other targets' archives.
