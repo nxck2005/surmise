@@ -45,6 +45,11 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @get:Rule val compose = createComposeRule()
 
+    // Dates on screen follow the device's zone; pin it so CI (UTC) and a
+    // developer's machine draw the same frame.
+    @org.junit.Before
+    fun utc() = java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+
     private fun shot(name: String, content: @Composable () -> Unit) {
         compose.setContent {
             val tokens = BundledTokens.load(LocalContext.current.assets, theme)
