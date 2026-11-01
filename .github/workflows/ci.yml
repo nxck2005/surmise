@@ -144,6 +144,14 @@ jobs:
           go run ./tools/genworker
           git diff --exit-code worker/src/gen worker/test/score-vectors.json
 
+      # The Android app's name comes from internal/brand through a generated
+      # resource. A rename that did not regenerate it would ship the app under
+      # the old name.
+      - name: android resources are current
+        run: |
+          go run ./tools/genandroid
+          git diff --exit-code android/app/src/main/res/values/brand.xml
+
       # Proves the vendored copy is upstream plus exactly the two patch files.
       # See third_party/bubbletea/PATCHES.md.
       - name: bubbletea copy is unmodified
@@ -180,3 +188,27 @@ jobs:
           done
           node scripts/smoke-api.mjs http://127.0.0.1:8787 --rooms || { cat "$RUNNER_TEMP/wrangler-dev.log"; exit 1; }
           kill "$(cat "$RUNNER_TEMP/wrangler-dev.pid")"
+
+  # The Android app: lint, unit tests, the screenshot comparison against the
+  # committed baselines, and a debug build that testers can install from the
+  # run's artifacts. The runner image carries the SDK; Gradle fetches any
+  # platform it lacks.
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+      # Also checks the wrapper jar against Gradle's published checksums.
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - run: ./gradlew check assembleDebug verifyRoborazziDebug
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: surmise-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
