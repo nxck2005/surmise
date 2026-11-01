@@ -85,7 +85,7 @@ fun SurmiseApp(model: AppModel) {
     } else {
         model.themeTokens["$name/$tiles"] ?: BundledTokens.forAppearance(context, model.themes.firstOrNull { it.name == name }?.dark ?: true)
     }
-    val motion = Motion(enabled = model.settings.motion != "off" && systemAnimates(context))
+    val motion = Motion(enabled = model.settings.motion != "off" && systemAnimates(context), calm = model.settings.motion == "restrained")
     val view = LocalView.current
     SideEffect {
         (view.context as? Activity)?.window?.let { w ->
