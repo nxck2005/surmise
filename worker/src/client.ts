@@ -8,8 +8,13 @@ export const CLIENT_HEADER = "X-Surmise-Client";
 // "surmise/0.9.0 (linux/amd64)" — name, version, then the platform in
 // parentheses. The version accepts the shapes a Go build stamps: a bare
 // semver, a leading v, and a pseudo-version with a date suffix.
+//
+// The platform is an OS/arch pair, and the arch is the device's ABI name on
+// Android: "arm64-v8a", "armeabi-v7a" or "x86_64". Hyphens and underscores
+// are therefore part of the grammar; refusing them turned every Android
+// online feature into a 400 before it reached its route.
 const CLIENT_PATTERN =
-  /^([a-z0-9-]{1,32})\/([0-9A-Za-z.+-]{1,64}) \(([a-z0-9]{1,16}\/[a-z0-9]{1,16})\)$/;
+  /^([a-z0-9-]{1,32})\/([0-9A-Za-z.+-]{1,64}) \(([a-z0-9_-]{1,32}\/[a-z0-9_-]{1,32})\)$/;
 
 export function parseClient(value: string | null): ClientInfo | null {
   if (value === null) return null;

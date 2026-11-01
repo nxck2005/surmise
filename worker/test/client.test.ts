@@ -10,6 +10,13 @@ test("parseClient accepts a real header", () => {
   assert.equal(CLIENT_HEADER, "X-Surmise-Client");
 });
 
+test("parseClient accepts the Android ABI names", () => {
+  for (const abi of ["arm64-v8a", "armeabi-v7a", "x86_64"]) {
+    assert.deepEqual(parseClient(`surmise/0.12.0 (android/${abi})`),
+      { name: "surmise", version: "0.12.0", platform: `android/${abi}` });
+  }
+});
+
 test("parseClient refuses anything else", () => {
   const refusals = [
     null,
@@ -18,6 +25,11 @@ test("parseClient refuses anything else", () => {
     "Surmise/0.9.0 (linux/amd64)",
     "surmise/0.9.0 (linux/amd64) extra",
     "surmise/0 9 (linux/amd64)",
+    // The platform grammar allows letters, digits, hyphens and underscores,
+    // but not dots, spaces or a second slash.
+    "surmise/0.12.0 (android/arm64.v8a)",
+    "surmise/0.12.0 (android/arm64 v8a)",
+    "surmise/0.12.0 (android/arm64/v8a)",
   ];
   for (const value of refusals) {
     assert.equal(parseClient(value), null, `accepted ${String(value)}`);
