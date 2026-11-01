@@ -1,0 +1,246 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "items": [
+        {
+          "author": "catppuccin",
+          "builtIn": true,
+          "dark": true,
+          "name": "catppuccin mocha",
+          "preview": {
+            "absent": "#313244",
+            "accent": "#f5c2e7",
+            "action": "#f5c2e7",
+            "canvas": "#1e1e2e",
+            "card": "#2a2b3c",
+            "correct": "#a6e3a1",
+            "ink": "#cdd6f4",
+            "present": "#f9e2af"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": false,
+          "name": "day",
+          "pair": "night",
+          "preview": {
+            "absent": "#d9dce3",
+            "accent": "#2f6bf0",
+            "action": "#ff8a3d",
+            "canvas": "#f2f2f7",
+            "card": "#ffffff",
+            "correct": "#2b8f52",
+            "ink": "#0b0d12",
+            "present": "#e2b53e"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": true,
+          "name": "deuteranopia",
+          "preview": {
+            "absent": "#242b36",
+            "accent": "#5ab0fc",
+            "action": "#5ab0fc",
+            "canvas": "#10141a",
+            "card": "#1e2229",
+            "correct": "#5ab0fc",
+            "ink": "#dce3ed",
+            "present": "#ffb454"
+          }
+        },
+        {
+          "author": "dracula theme",
+          "builtIn": true,
+          "dark": true,
+          "name": "dracula",
+          "preview": {
+            "absent": "#44475a",
+            "accent": "#bd93f9",
+            "action": "#bd93f9",
+            "canvas": "#282a36",
+            "card": "#373843",
+            "correct": "#50fa7b",
+            "ink": "#f8f8f2",
+            "present": "#f1fa8c"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": true,
+          "name": "ember dark",
+          "pair": "ember light",
+          "preview": {
+            "absent": "#34373d",
+            "accent": "#d97757",
+            "action": "#d97757",
+            "canvas": "#0b0c0e",
+            "card": "#18191c",
+            "correct": "#4f9d69",
+            "ink": "#c8ccd4",
+            "present": "#cf9f4a"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": false,
+          "name": "ember light",
+          "pair": "ember dark",
+          "preview": {
+            "absent": "#c8cad0",
+            "accent": "#b4552f",
+            "action": "#b4552f",
+            "canvas": "#f4f2ef",
+            "card": "#e6e5e2",
+            "correct": "#3f8a58",
+            "ink": "#2f3237",
+            "present": "#b3862f"
+          }
+        },
+        {
+          "author": "sainnhe",
+          "builtIn": true,
+          "dark": true,
+          "name": "everforest dark",
+          "preview": {
+            "absent": "#3d484d",
+            "accent": "#dbbc7f",
+            "action": "#dbbc7f",
+            "canvas": "#2d353b",
+            "card": "#393f43",
+            "correct": "#9db57a",
+            "ink": "#d3c6aa",
+            "present": "#dbbc7f"
+          }
+        },
+        {
+          "author": "morhetz",
+          "builtIn": true,
+          "dark": true,
+          "name": "gruvbox dark",
+          "preview": {
+            "absent": "#3c3836",
+            "accent": "#fabd2f",
+            "action": "#fabd2f",
+            "canvas": "#282828",
+            "card": "#363532",
+            "correct": "#b8bb26",
+            "ink": "#ebdbb2",
+            "present": "#d79921"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": true,
+          "name": "high contrast",
+          "preview": {
+            "absent": "#3a3a3c",
+            "accent": "#f5793a",
+            "action": "#f5793a",
+            "canvas": "#000000",
+            "card": "#121212",
+            "correct": "#f5793a",
+            "ink": "#ffffff",
+            "present": "#85c0f9"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": true,
+          "name": "matrix",
+          "preview": {
+            "absent": "#0b1f0b",
+            "accent": "#7dff9a",
+            "action": "#7dff9a",
+            "canvas": "#000000",
+            "card": "#001205",
+            "correct": "#00ff41",
+            "ink": "#00ff41",
+            "present": "#008f11"
+          }
+        },
+        {
+          "builtIn": true,
+          "dark": true,
+          "name": "night",
+          "pair": "day",
+          "preview": {
+            "absent": "#2a2f38",
+            "accent": "#4c8dff",
+            "action": "#ff8a3d",
+            "canvas": "#000000",
+            "card": "#16181e",
+            "correct": "#2f9e5e",
+            "ink": "#f2f4f8",
+            "present": "#e2b53e"
+          }
+        },
+        {
+          "author": "arctic ice studio",
+          "builtIn": true,
+          "dark": true,
+          "name": "nord",
+          "preview": {
+            "absent": "#434c5e",
+            "accent": "#88c0d0",
+            "action": "#88c0d0",
+            "canvas": "#2e3440",
+            "card": "#3b414d",
+            "correct": "#a3be8c",
+            "ink": "#eceff4",
+            "present": "#ebcb8b"
+          }
+        },
+        {
+          "author": "rosé pine",
+          "builtIn": true,
+          "dark": true,
+          "name": "rose pine",
+          "preview": {
+            "absent": "#26233a",
+            "accent": "#ebbcba",
+            "action": "#ebbcba",
+            "canvas": "#191724",
+            "card": "#272533",
+            "correct": "#31748f",
+            "ink": "#e0def4",
+            "present": "#f6c177"
+          }
+        },
+        {
+          "author": "ethan schoonover",
+          "builtIn": true,
+          "dark": true,
+          "name": "solarized dark",
+          "preview": {
+            "absent": "#073642",
+            "accent": "#b58900",
+            "action": "#b58900",
+            "canvas": "#002b36",
+            "card": "#113841",
+            "correct": "#728a08",
+            "ink": "#eee8d5",
+            "present": "#b58900"
+          }
+        },
+        {
+          "author": "enkia",
+          "builtIn": true,
+          "dark": true,
+          "name": "tokyo night",
+          "preview": {
+            "absent": "#292e42",
+            "accent": "#7aa2f7",
+            "action": "#7aa2f7",
+            "canvas": "#1a1b26",
+            "card": "#262734",
+            "correct": "#9ece6a",
+            "ink": "#c0caf5",
+            "present": "#d4a664"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "abi": "arm64-v8a",
+      "client": "test-client",
+      "dataDir": "REDACTED",
+      "version": "0.12.0",
+      "zone": "Asia/Kolkata"
+    }
+  }
+}

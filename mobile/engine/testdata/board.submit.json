@@ -1,0 +1,37 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "answer": "crane",
+      "canRestart": true,
+      "code": "988194",
+      "elapsedMs": 9000,
+      "id": "3f2a7c1e-8b4d-4c6a-9e2f-1d5b8a7c3e90",
+      "keys": {
+        "a": "correct",
+        "c": "correct",
+        "e": "correct",
+        "n": "correct",
+        "r": "correct"
+      },
+      "kind": "random",
+      "length": 5,
+      "maxAttempts": 6,
+      "rows": [
+        {
+          "guess": "crane",
+          "marks": [
+            "correct",
+            "correct",
+            "correct",
+            "correct",
+            "correct"
+          ]
+        }
+      ],
+      "running": false,
+      "status": "won",
+      "typing": ""
+    }
+  }
+}

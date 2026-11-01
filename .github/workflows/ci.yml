@@ -206,7 +206,68 @@ jobs:
           java-version: 21
       # Also checks the wrapper jar against Gradle's published checksums.
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: mobile/go.mod
+          cache-dependency-path: mobile/go.sum
+
+      # The engine module is outside go.work, so the Go jobs above never see
+      # it; it is tested here, beside the app it feeds.
+      - name: engine tests
+        working-directory: mobile
+        env:
+          GOWORK: "off"
+        run: |
+          go vet ./...
+          go test ./...
+
+      # Api.kt is generated from the engine's types. A Go change without the
+      # regenerated file would compile here and break on the phone.
+      - name: generated Kotlin is current
+        working-directory: mobile
+        env:
+          GOWORK: "off"
+        run: |
+          go run ./cmd/gen
+          git diff --exit-code -- ../android/core/src/main/java/com/nxck/surmise/core/gen/
+
+      # The NDK version is the one pinned in app/build.gradle.kts, which the
+      # script reads too.
+      - name: NDK
+        run: |
+          ndk=$(sed -n 's/^ *ndkVersion = "\(.*\)"/\1/p' app/build.gradle.kts)
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$ndk" >/dev/null
+          echo "NDK_DIR=$ANDROID_HOME/ndk/$ndk" >> "$GITHUB_ENV"
+      - name: bind the engine
+        working-directory: .
+        run: scripts/build-android-core.sh
+
       - run: ./gradlew check assembleDebug verifyRoborazziDebug
+
+      # Devices with 16 KB pages load only a library whose LOAD segments are
+      # 16 KB aligned, stored uncompressed on a 16 KB boundary in the APK.
+      - name: 16 KB pages
+        run: |
+          readelf="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          dir=$(mktemp -d)
+          unzip -q core/libs/core.aar 'jni/*' -d "$dir"
+          for abi in arm64-v8a x86_64; do
+            so="$dir/jni/$abi/libgojni.so"
+            aligns=$("$readelf" -lW "$so" | awk '$1 == "LOAD" { print $NF }')
+            if [ -z "$aligns" ]; then
+              echo "$abi: no LOAD segments"
+              exit 1
+            fi
+            for a in $aligns; do
+              if (( a < 0x4000 )); then
+                echo "$abi: a LOAD segment is aligned to $a, under 16 KB"
+                exit 1
+              fi
+            done
+            echo "$abi: every LOAD segment is 16 KB aligned"
+          done
+          tools=$(command ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$tools/zipalign" -c -P 16 -v 4 app/build/outputs/apk/debug/app-debug.apk | tail -1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: surmise-debug-apk
