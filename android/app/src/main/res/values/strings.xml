@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Player-facing copy. Lowercase, short and plain, as the TUI says it. -->
+<resources>
+    <!-- Tabs -->
+    <string name="tab_play">play</string>
+    <string name="tab_history">history</string>
+    <string name="tab_record">record</string>
+    <string name="tab_settings">settings</string>
+    <string name="tab_soon">this part is on its way</string>
+
+    <!-- Home -->
+    <string name="home_record">your record</string>
+    <string name="daily">daily</string>
+    <string name="daily_title">today\'s three</string>
+    <string name="daily_done">%1$d of %2$d done</string>
+    <string name="daily_played_today">%1$s played today</string>
+    <string name="daily_continue">continue %1$d letters</string>
+    <string name="daily_start">start %1$d letters</string>
+    <string name="daily_see">see today</string>
+    <string name="daily_note_new">not started</string>
+    <string name="daily_note_spent">deleted</string>
+    <string name="daily_note_lost">not this time</string>
+    <plurals name="daily_note_solved">
+        <item quantity="one">solved in %1$d</item>
+        <item quantity="other">solved in %1$d</item>
+    </plurals>
+    <plurals name="guesses_in">
+        <item quantity="one">%1$d guess in</item>
+        <item quantity="other">%1$d guesses in</item>
+    </plurals>
+    <string name="section_play">play</string>
+    <string name="letters_suffix">letters</string>
+    <string name="new_puzzle">new puzzle</string>
+
+    <!-- Board -->
+    <string name="back">back</string>
+    <string name="letters">%1$d letters</string>
+    <string name="board_daily">daily, %1$d letters</string>
+    <string name="board_custom">custom, %1$d letters</string>
+    <string name="board_challenge">challenge, %1$d letters</string>
+    <string name="board_sprint">sprint, %1$d letters</string>
+    <string name="board_room">room, %1$d letters</string>
+    <string name="key_enter">enter</string>
+    <string name="key_delete">delete</string>
+    <string name="see_result">see result</string>
+    <string name="play_again">play again</string>
+    <string name="code_prefix">#%1$s</string>
+
+    <!-- Result -->
+    <string name="solved_in">solved in %1$d</string>
+    <string name="not_this_time">not this time</string>
+    <string name="answer_was">the word was %1$s</string>
+    <string name="best_both">your fastest win and fewest guesses at %1$d letters</string>
+    <string name="best_fastest">your fastest win at %1$d letters</string>
+    <string name="best_fewest">your fewest guesses at %1$d letters</string>
+    <string name="stat_played">played</string>
+    <string name="stat_won">won</string>
+    <string name="stat_streak">streak</string>
+    <string name="guesses">guesses</string>
+    <string name="share">share</string>
+    <string name="review">review</string>
+    <string name="next_puzzle">next puzzle</string>
+    <string name="next_daily">daily</string>
+    <string name="next_again">again</string>
+    <string name="home">home</string>
+
+    <!-- Engine refusals, one line per code -->
+    <string name="err_too_short">needs %1$d letters</string>
+    <string name="err_not_a_word">not in word list</string>
+    <string name="err_finished">this one\'s over</string>
+    <string name="err_save_failed">couldn\'t save that guess</string>
+    <string name="err_new_puzzle_failed">couldn\'t make a new puzzle</string>
+    <string name="err_daily_spent">you deleted this one, so it can\'t be played again</string>
+    <string name="err_not_found">that puzzle is gone</string>
+    <string name="err_other">something went wrong (%1$s)</string>
+</resources>
