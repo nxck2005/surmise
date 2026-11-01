@@ -1,8 +1,9 @@
 version: 2
 
 updates:
-  # Actions only. The Go dependencies are a small, deliberately chosen set
-  # pinned to Charm v2; automated bumps there would be noise, not signal.
+  # Actions and the Android build, not Go. The Go dependencies are a small,
+  # deliberately chosen set pinned to Charm v2; automated bumps there would be
+  # noise, not signal.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -12,5 +13,17 @@ updates:
     # conflicts (as actions/checkout#3 did behind actions/setup-go#2).
     groups:
       actions:
+        patterns:
+          - "*"
+
+  # The Android project's plugins and libraries, from the version catalog. One
+  # PR for all of them: the Compose BOM, AGP and Kotlin move together, and
+  # separate PRs edit adjacent lines of the same catalog.
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+    groups:
+      android:
         patterns:
           - "*"
