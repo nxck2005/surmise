@@ -1,60 +1,124 @@
 package com.nxck.surmise.design
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 
-// A placeholder for the design system. P4b replaces Tokens with SurmiseTokens,
-// decoded from the engine's theme JSON, and adds the fonts, shapes and shared
-// components. These few values are the night theme's, so the skeleton already
-// looks like the app; they are the only colour literals allowed outside the
-// generated tokens, and they go when P4b lands.
-
+/** How much the app moves. Off is the system's "remove animations" or the player's choice. */
 @Immutable
-data class Tokens(
-    val canvas: Color,
-    val ink: Color,
-    val inkMuted: Color,
-)
+data class Motion(val enabled: Boolean = true)
 
-@Immutable
-data class Type(
-    val title: TextStyle,
-    val caption: TextStyle,
-)
+private val LocalTokens = staticCompositionLocalOf<SurmiseTokens> { error("no SurmiseTheme above this composable") }
+private val LocalType = staticCompositionLocalOf { DefaultType }
+private val LocalMotion = staticCompositionLocalOf { Motion() }
+internal val LocalHapticsOn = staticCompositionLocalOf { true }
 
-private val night = Tokens(
-    canvas = Color(0xFF000000),
-    ink = Color(0xFFF2F4F8),
-    inkMuted = Color(0xFF7C8496),
-)
+/** How long a theme change cross-fades. */
+const val THEME_FADE_MS = 250
 
-private fun typeFor(t: Tokens) = Type(
-    title = TextStyle(color = t.ink, fontSize = 28.sp, fontWeight = FontWeight.Medium),
-    caption = TextStyle(color = t.inkMuted, fontSize = 15.sp),
-)
-
-private val LocalTokens = staticCompositionLocalOf { night }
-private val LocalType = staticCompositionLocalOf { typeFor(night) }
-
+/**
+ * The root of every screen. [tokens] come from the engine (or [BundledTokens]
+ * in previews and tests); swapping them cross-fades every colour, so the
+ * theme picker's live preview needs nothing of its own.
+ */
 @Composable
-fun SurmiseTheme(content: @Composable () -> Unit) {
+fun SurmiseTheme(
+    tokens: SurmiseTokens,
+    motion: Motion = Motion(),
+    haptics: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val shown = if (motion.enabled) animateTokens(tokens) else tokens
     CompositionLocalProvider(
-        LocalTokens provides night,
-        LocalType provides typeFor(night),
+        LocalTokens provides shown,
+        LocalType provides DefaultType,
+        LocalMotion provides motion,
+        LocalHapticsOn provides haptics,
         content = content,
     )
 }
 
+/** [SurmiseTheme] over the bundled night or day tokens, by the system appearance. */
+@Composable
+fun SurmiseTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val tokens = remember(dark) { BundledTokens.forAppearance(context, dark) }
+    SurmiseTheme(tokens = tokens, content = content)
+}
+
 object SurmiseTheme {
-    val tokens: Tokens
+    val tokens: SurmiseTokens
         @Composable get() = LocalTokens.current
 
-    val type: Type
+    val type: SurmiseType
         @Composable get() = LocalType.current
+
+    val motion: Motion
+        @Composable get() = LocalMotion.current
 }
+
+/** Text in a type style and a token colour. */
+@Composable
+fun SurmiseText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    align: TextAlign? = null,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    BasicText(
+        text = text,
+        modifier = modifier,
+        style = if (align != null) style.copy(color = color, textAlign = align) else style.copy(color = color),
+        maxLines = maxLines,
+    )
+}
+
+@Composable
+private fun fade(target: Color): State<Color> = animateColorAsState(target, tween(THEME_FADE_MS), label = "theme")
+
+@Composable
+private fun fade(target: TileColors) = TileColors(fade(target.fill).value, fade(target.letter).value)
+
+@Composable
+private fun animateTokens(t: SurmiseTokens): SurmiseTokens = t.copy(
+    canvas = fade(t.canvas).value,
+    card = fade(t.card).value,
+    sheet = fade(t.sheet).value,
+    highlight = fade(t.highlight).value,
+    ink = fade(t.ink).value,
+    inkDim = fade(t.inkDim).value,
+    inkMuted = fade(t.inkMuted).value,
+    accent = fade(t.accent).value,
+    accentText = fade(t.accentText).value,
+    action = fade(t.action).value,
+    onAction = fade(t.onAction).value,
+    danger = fade(t.danger).value,
+    chartHighlight = fade(t.chartHighlight).value,
+    chartNeutral = fade(t.chartNeutral).value,
+    keyFace = fade(t.keyFace).value,
+    keySpecial = fade(t.keySpecial).value,
+    keySpent = fade(t.keySpent).value,
+    keyText = fade(t.keyText).value,
+    keySpentText = fade(t.keySpentText).value,
+    tileEmpty = fade(t.tileEmpty).value,
+    tileTyped = fade(t.tileTyped).value,
+    cursor = fade(t.cursor).value,
+    tiles = TilePalette(fade(t.tiles.correct), fade(t.tiles.present), fade(t.tiles.absent)),
+    glowFrom = fade(t.glowFrom).value,
+    glowTo = fade(t.glowTo).value,
+    tabTint = fade(t.tabTint).value,
+)

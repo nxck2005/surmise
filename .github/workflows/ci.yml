@@ -150,7 +150,7 @@ jobs:
       - name: android resources are current
         run: |
           go run ./tools/genandroid
-          git diff --exit-code android/app/src/main/res/values/brand.xml
+          git diff --exit-code android/app/src/main/res/values/brand.xml android/design/src/main/assets/tokens
 
       # Proves the vendored copy is upstream plus exactly the two patch files.
       # See third_party/bubbletea/PATCHES.md.
