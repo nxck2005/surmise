@@ -50,7 +50,7 @@ fun SprintSetup(options: SprintOptions, startLength: Int, onStart: (length: Int,
                 Segmented(listOf(4, 5, 6), length, { length = it }) { stringResource(R.string.letters, it) }
                 if (options.durationsMs.isNotEmpty()) {
                     SurmiseText(stringResource(R.string.sprint_clock), type.body, tokens.ink, Modifier.padding(top = 8.dp))
-                    Segmented(options.durationsMs, duration, { duration = it }) { stringResource(R.string.minutes, it / 60_000) }
+                    Segmented(options.durationsMs, duration, { duration = it }) { clockLabel(it) }
                 }
             }
         }
@@ -61,6 +61,11 @@ fun SprintSetup(options: SprintOptions, startLength: Int, onStart: (length: Int,
         )
     }
 }
+
+/** A clock choice: whole minutes as "2 min", anything shorter as "30s". */
+@Composable
+private fun clockLabel(ms: Long): String =
+    if (ms >= 60_000) stringResource(R.string.minutes, (ms / 60_000).toInt()) else stringResource(R.string.seconds, (ms / 1000).toInt())
 
 /** The run's countdown for the top bar. At zero it asks the engine, which ends the run. */
 @Composable

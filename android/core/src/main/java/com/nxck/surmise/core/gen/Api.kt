@@ -184,6 +184,7 @@ data class HistoryItem(
     @SerialName("attempts") val attempts: Int = 0,
     @SerialName("updatedAt") val updatedAt: String = "",
     @SerialName("daily") val daily: String = "",
+    @SerialName("day") val day: String = "",
 )
 
 @Serializable

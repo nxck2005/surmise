@@ -155,6 +155,16 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     }
 
     /** Switches tab, reading what the record tab shows when it opens. */
+    /** The history's calendar day, picked on the year; "" is every day. */
+    var historyDay by mutableStateOf("")
+
+    /** Shows the history for one calendar day, from the year. */
+    fun showDay(day: String) {
+        historyDay = day
+        stack = listOf(Route.Tabs)
+        select(Tab.History)
+    }
+
     fun select(t: Tab) {
         tab = t
         if (t == Tab.Record) refreshRecord()
@@ -469,6 +479,16 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         }
     }
 
+    /**
+     * Back on the board. A sprint still running stops and shows its summary,
+     * as esc does in the terminal; the summary's own buttons, or back again,
+     * leave it.
+     */
+    fun leaveBoard() {
+        val b = board
+        if (b is SprintModel && !b.run.over) b.end() else closeBoard()
+    }
+
     /** Leaves the board for the play tab, whatever it was opened from. */
     fun goHome() {
         val b = board
@@ -483,7 +503,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
 
     fun back() {
         when (top) {
-            Route.Board -> closeBoard()
+            Route.Board -> leaveBoard()
             Route.Room -> awayFromRoom()
             Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms, Route.RoomResult -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)

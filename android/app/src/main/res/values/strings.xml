@@ -60,6 +60,7 @@
     <string name="history_in_play">in play %1$d/%2$d</string>
     <string name="history_empty">nothing played yet</string>
     <string name="history_none_match">nothing matches these filters</string>
+    <string name="history_day">%1$s  ×</string>
     <string name="delete_title">delete #%1$s?</string>
     <string name="delete_body">it goes from your history and your stats</string>
     <string name="delete_daily_body">it goes from your history and your stats, and this daily can\'t be played again</string>
@@ -112,6 +113,7 @@
     <string name="time">time</string>
     <string name="year_title">your year</string>
     <string name="year_day_none">nothing played</string>
+    <string name="year_day_open">see that day\'s puzzles</string>
     <plurals name="year_played">
         <item quantity="one">%1$d played</item>
         <item quantity="other">%1$d played</item>
@@ -200,6 +202,7 @@
     <string name="sprint_length">length</string>
     <string name="sprint_clock">clock</string>
     <string name="minutes">%1$d min</string>
+    <string name="seconds">%1$ds</string>
     <string name="sprint_go">start</string>
     <plurals name="sprint_solved">
         <item quantity="one">%1$d solved</item>
