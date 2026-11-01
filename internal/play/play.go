@@ -8,8 +8,10 @@
 // lessons about the same save file. Nothing here imports Charm or
 // internal/ui, and a test holds it to that.
 //
-// Time is injected (Clock) and nothing here starts a goroutine, so every rule
-// can be tested with a clock that only moves when the test says.
+// Time is injected (Clock), so every rule can be tested with a clock that
+// only moves when the test says. Only the network waits in the background
+// (online.go): its goroutines touch no state, and hand their answers back
+// through the host's Post, which runs them in turn with every other call.
 package play
 
 import (
@@ -57,6 +59,10 @@ type App struct {
 	// draw makes a random puzzle. It is game.New outside the tests, which
 	// replace it because random ids cannot be made to collide on demand.
 	draw func(int) (*game.Game, error)
+
+	// net is the online half: the client, consent's memory for the run and
+	// the room session (online.go, rooms.go).
+	net netState
 }
 
 // New makes an App over a store. A nil clock is the system clock.
@@ -64,7 +70,7 @@ func New(s store.Store, c Clock) *App {
 	if c == nil {
 		c = SystemClock{}
 	}
-	return &App{store: s, clock: c, daily: daily.Local(), draw: game.New}
+	return &App{store: s, clock: c, daily: daily.Local(), draw: game.New, net: newNetState()}
 }
 
 // Today is the daily's day now: a UTC date, the same for every player

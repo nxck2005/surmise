@@ -137,7 +137,12 @@ func (b *Board) Submit() error {
 		b.sessionStart = time.Time{}
 	}
 	b.persisted = true
-	return saveFailed(b.app.store.Save(b.g))
+	err := saveFailed(b.app.store.Save(b.g))
+	// The finishing guess is the one moment a daily's result is sent.
+	if b.g.Status.Done() {
+		b.app.postDaily(b.g)
+	}
+	return err
 }
 
 // bank records a finished session on the puzzle and in the lifetime counter.
