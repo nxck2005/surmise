@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ backup and device-transfer rules. The same two exclusions as
+  backup_rules.xml, for the same reasons; see that file.
+
+  settings.json holds the network consent, and rooms.json holds this device's
+  seat keys. Neither may move to another device by itself.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="surmise/settings.json" />
+        <exclude domain="file" path="surmise/rooms.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="surmise/settings.json" />
+        <exclude domain="file" path="surmise/rooms.json" />
+    </device-transfer>
+</data-extraction-rules>
