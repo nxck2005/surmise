@@ -24,10 +24,34 @@ fun refusalText(context: Context, e: Throwable, length: Int = 0): String {
         "challenge_spent" -> context.getString(R.string.err_challenge_spent)
         "bad_challenge" -> context.getString(R.string.err_bad_challenge)
         "sprint_over" -> context.getString(R.string.err_sprint_over)
+        "offline" -> context.getString(R.string.err_offline)
+        "too_many_rooms" -> context.getString(R.string.err_too_many_rooms)
+        "bad_room_code" -> context.getString(R.string.err_bad_room_code)
+        "no_room" -> context.getString(R.string.err_no_room)
         "restart_daily", "restart_custom", "restart_challenge", "restart_room", "restart_sprint" ->
             context.getString(R.string.err_restart)
         else -> context.getString(R.string.err_other, code)
     }
+}
+
+/** The line for a room's note, or null for one that needs no line. */
+fun noteText(context: Context, code: String): String? = when (code) {
+    "no_room" -> context.getString(R.string.note_no_room)
+    "full" -> context.getString(R.string.note_full)
+    "started" -> context.getString(R.string.note_started)
+    "bad_key" -> context.getString(R.string.note_bad_key)
+    "left" -> context.getString(R.string.note_left)
+    "unreachable" -> context.getString(R.string.note_unreachable)
+    "rooms_off" -> context.getString(R.string.note_rooms_off)
+    "save_failed" -> context.getString(R.string.note_save_failed)
+    "round_running" -> context.getString(R.string.note_round_running)
+    "room_ended" -> context.getString(R.string.note_room_ended)
+    "not_playing" -> context.getString(R.string.note_not_playing)
+    "reconnecting" -> context.getString(R.string.note_reconnecting)
+    "room_closed" -> context.getString(R.string.note_room_closed)
+    "refresh_failed" -> context.getString(R.string.note_refresh_failed)
+    "updated" -> context.getString(R.string.note_updated)
+    else -> null
 }
 
 /** A refusal the player can fix by typing: it shakes the row. */

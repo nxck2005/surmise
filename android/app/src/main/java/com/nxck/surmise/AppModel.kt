@@ -8,6 +8,7 @@ import com.nxck.surmise.core.CoreHandle
 import com.nxck.surmise.core.gen.AppTokens
 import com.nxck.surmise.core.gen.BoardView
 import com.nxck.surmise.core.gen.ChallengeCode
+import com.nxck.surmise.core.gen.CountRequest
 import com.nxck.surmise.core.gen.CustomRequest
 import com.nxck.surmise.core.gen.CalendarView
 import com.nxck.surmise.core.gen.DailyOpenRequest
@@ -32,6 +33,7 @@ import com.nxck.surmise.core.gen.TrendsView
 import com.nxck.surmise.design.SurmiseTokens
 import com.nxck.surmise.home.Way
 import com.nxck.surmise.modes.ChallengeState
+import com.nxck.surmise.rooms.RoomsModel
 import com.nxck.surmise.sprint.SprintModel
 import com.nxck.surmise.settings.Appearance
 import com.nxck.surmise.settings.Prefs
@@ -49,6 +51,8 @@ sealed interface Route {
     data object Challenge : Route
     data object Custom : Route
     data object About : Route
+    data object Rooms : Route
+    data object Room : Route
     data object Board : Route
 }
 
@@ -61,6 +65,8 @@ val Route.depth: Int
         Route.HowTo -> 1
         Route.Sprint, Route.Challenge, Route.Custom -> 1
         Route.About -> 1
+        Route.Rooms -> 1
+        Route.Room -> 2
         Route.Board -> 2
     }
 
@@ -106,11 +112,15 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
 
     val top: Route get() = stack.last()
 
+    /** The room session; its screen is [Route.Room]. */
+    val rooms = RoomsModel(core.client, scope, onGone = { if (top == Route.Room) pop() })
+
     init {
         scope.launch {
             core.events.collect { e ->
                 when (e.kind) {
                     "online" -> refreshOnline()
+                    "room" -> rooms.refresh()
                 }
             }
         }
@@ -123,6 +133,17 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
             runCatching { daily = client.dailyView(DayRequest()) }
             runCatching { history = client.historyList().items }
             runCatching { online = client.onlineMenuCount() }
+        }
+    }
+
+    /**
+     * The once-a-run reads: the server's status, and whether a round of ours
+     * is still running, which home then offers to rejoin.
+     */
+    fun start() {
+        scope.launch {
+            runCatching { online = client.onlineStatus() }
+            rooms.probe()
         }
     }
 
@@ -238,7 +259,14 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     fun showDaily() {
         if (top != Route.Daily) stack = stack + Route.Daily
         refreshHome()
+        val day = daily?.day ?: return
+        if (!online.consent || !online.daily) return
+        scope.launch { for (n in 4..6) runCatching { online = client.onlineDailyCount(CountRequest(day, n)) } }
     }
+
+    /** Everyone's finished boards of today's daily, by length. */
+    val dailyCounts: Map<Int, Int>
+        get() = online.counts.filter { it.day == daily?.day }.associate { it.length to it.played }
 
     fun openDaily(length: Int) = open { client.dailyOpen(DailyOpenRequest(length = length)) }
 
@@ -295,8 +323,35 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
                 customNote = null
                 show(Route.Custom)
             }
-            Way.Rooms -> Unit
+            Way.Rooms -> {
+                rooms.clearNotes()
+                rooms.refreshList()
+                show(Route.Rooms)
+            }
         }
+    }
+
+    fun makeRoom(mode: String, length: Int, autoStart: Boolean) = rooms.make(mode, length, autoStart) { show(Route.Room) }
+
+    fun joinRoom(code: String) = rooms.join(code) { show(Route.Room) }
+
+    /** Opens the room a round of ours is still running in. */
+    fun showRoom() {
+        rooms.clearNotes()
+        show(Route.Room)
+    }
+
+    /** Steps away from the room, keeping the seat. */
+    fun awayFromRoom() {
+        rooms.close()
+        if (top == Route.Room) pop()
+        rooms.refreshList()
+    }
+
+    /** Leaves the open room for good. */
+    fun leaveRoom() {
+        rooms.leave(rooms.room.code)
+        if (top == Route.Room) pop()
     }
 
     fun startSprint(length: Int, durationMs: Long) {
@@ -375,7 +430,8 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     fun back() {
         when (top) {
             Route.Board -> closeBoard()
-            Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom -> pop()
+            Route.Room -> awayFromRoom()
+            Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
         }
     }

@@ -12,7 +12,12 @@ import com.nxck.surmise.core.gen.HistoryItem
 import com.nxck.surmise.core.gen.ModeView
 import com.nxck.surmise.core.gen.OpenerView
 import com.nxck.surmise.core.gen.ProfileView
+import com.nxck.surmise.core.gen.RankView
 import com.nxck.surmise.core.gen.ResultView
+import com.nxck.surmise.core.gen.RoomEntryView
+import com.nxck.surmise.core.gen.RoomPlayerView
+import com.nxck.surmise.core.gen.RoomResultView
+import com.nxck.surmise.core.gen.RoomView
 import com.nxck.surmise.core.gen.Row
 import com.nxck.surmise.core.gen.Settings
 import com.nxck.surmise.core.gen.ThemeInfo
@@ -159,4 +164,47 @@ val settingsFixture = SettingsState(
     tiles = "",
     haptics = true,
     themes = themesFixture,
+)
+
+private fun roomPlayer(seat: Int, name: String, vararg rows: String, ready: Boolean = false, you: Boolean = false, solved: Boolean = false) =
+    RoomPlayerView(
+        seat = seat, name = name, connected = true, ready = ready, inRound = rows.isNotEmpty(), guesses = rows.size,
+        done = solved, solved = solved, rows = marks(*rows), you = you,
+    )
+
+val roomLobby = RoomView(
+    active = true, screen = "lobby", code = "KVR7QD", mode = "live", length = 5, autoStart = true,
+    seat = 2, host = 1, connected = true, phase = "lobby",
+    players = listOf(
+        roomPlayer(1, "sam", ready = true),
+        roomPlayer(2, "nick", you = true),
+        roomPlayer(3, "", ready = true),
+    ),
+)
+
+val roomWatch = roomLobby.copy(
+    screen = "watch", phase = "playing", round = 2, endsAtMs = 1_000_000 + 154_000,
+    players = listOf(
+        roomPlayer(1, "sam", "aacac", "capca", "ccccc", solved = true),
+        roomPlayer(2, "nick", you = true),
+        roomPlayer(3, "jo", "apaaa", "acpaa"),
+    ),
+)
+
+val roomResult = roomLobby.copy(
+    screen = "result", phase = "results", round = 2,
+    results = RoomResultView(
+        id = "room-KVR7QD-2-2", code = "KVR7QD", mode = "live", round = 2, seat = 2, length = 5, word = "tweet",
+        ranking = listOf(
+            RankView(1, "sam", true, 3, 52_000, marks("aacac", "capca", "ccccc")),
+            RankView(2, "nick", true, 4, 81_000, marks("apaaa", "aacac", "capcc", "ccccc"), you = true),
+            RankView(3, "jo", false, 6, 0, marks("apaaa", "acpaa", "aacac", "capca", "cacac", "caccc")),
+        ),
+        canRematch = true,
+    ),
+)
+
+val roomEntries = listOf(
+    RoomEntryView("KVR7QD", "live", 1_793_500_000_000, open = true),
+    RoomEntryView("M3TPWX", "async", 1_793_300_000_000),
 )

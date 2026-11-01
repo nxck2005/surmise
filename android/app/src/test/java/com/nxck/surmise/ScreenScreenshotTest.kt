@@ -35,6 +35,10 @@ import com.nxck.surmise.settings.HowToScreen
 import com.nxck.surmise.settings.SettingsActions
 import com.nxck.surmise.settings.SettingsScreen
 import org.junit.Rule
+import com.nxck.surmise.rooms.RoomActions
+import com.nxck.surmise.rooms.RoomLines
+import com.nxck.surmise.rooms.RoomScreen
+import com.nxck.surmise.rooms.RoomsScreen
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
@@ -147,4 +151,16 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun custom() = shot("custom") { CustomScreen(5, null, { _, _, _, _ -> }, { _, _, _ -> }, {}) }
+
+    @Test
+    fun rooms() = shot("rooms") { RoomsScreen(roomEntries, RoomLines(), 5, { _, _, _ -> }, {}, {}, {}) }
+
+    @Test
+    fun roomLobby() = shot("room-lobby") { RoomScreen(roomLobby, RoomLines(), RoomActions(), now = { 0 }) }
+
+    @Test
+    fun roomWatch() = shot("room-watch") { RoomScreen(roomWatch, RoomLines(), RoomActions(), now = { 1_000_000 }) }
+
+    @Test
+    fun roomResult() = shot("room-result") { RoomScreen(roomResult, RoomLines(), RoomActions(), now = { 0 }) }
 }
