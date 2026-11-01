@@ -6,15 +6,19 @@ import androidx.compose.runtime.setValue
 import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.core.CoreHandle
 import com.nxck.surmise.core.gen.BoardView
+import com.nxck.surmise.core.gen.CalendarView
 import com.nxck.surmise.core.gen.DailyOpenRequest
 import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.core.gen.DayRequest
 import com.nxck.surmise.core.gen.DeleteRequest
 import com.nxck.surmise.core.gen.HistoryItem
+import com.nxck.surmise.core.gen.LengthRequest
 import com.nxck.surmise.core.gen.NewBoardRequest
 import com.nxck.surmise.core.gen.OnlineView
+import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResumeRequest
 import com.nxck.surmise.core.gen.Settings
+import com.nxck.surmise.core.gen.TrendsView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -22,6 +26,7 @@ import kotlinx.coroutines.launch
 sealed interface Route {
     data object Tabs : Route
     data object Daily : Route
+    data object Year : Route
     data object Board : Route
 }
 
@@ -30,6 +35,7 @@ val Route.depth: Int
     get() = when (this) {
         Route.Tabs -> 0
         Route.Daily -> 1
+        Route.Year -> 1
         Route.Board -> 2
     }
 
@@ -49,6 +55,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     var stack by mutableStateOf(listOf<Route>(Route.Tabs))
         private set
     var tab by mutableStateOf(Tab.Play)
+        private set
 
     var settings by mutableStateOf(Settings())
         private set
@@ -57,6 +64,12 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     var history by mutableStateOf(emptyList<HistoryItem>())
         private set
     var online by mutableStateOf(OnlineView())
+        private set
+    var profile by mutableStateOf<ProfileView?>(null)
+        private set
+    var calendar by mutableStateOf<CalendarView?>(null)
+        private set
+    var trends by mutableStateOf(emptyMap<Int, TrendsView>())
         private set
 
     /** The open board, while the board screen is up. */
@@ -86,6 +99,28 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
             runCatching { history = client.historyList().items }
             runCatching { online = client.onlineMenuCount() }
         }
+    }
+
+    /** Switches tab, reading what the record tab shows when it opens. */
+    fun select(t: Tab) {
+        tab = t
+        if (t == Tab.Record) refreshRecord()
+    }
+
+    /** Reads the profile, the calendar and each length's trends. */
+    fun refreshRecord() {
+        scope.launch {
+            runCatching { profile = client.recordProfile() }
+            runCatching { calendar = client.recordCalendar() }
+            val t = mutableMapOf<Int, TrendsView>()
+            for (n in 4..6) runCatching { t[n] = client.recordTrends(LengthRequest(n)) }
+            trends = t
+        }
+    }
+
+    /** Shows the year: the calendar and the trends. */
+    fun showYear() {
+        if (top != Route.Year) stack = stack + Route.Year
     }
 
     private suspend fun refreshOnline() {
@@ -167,7 +202,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
             b?.leave()
             board = null
             stack = listOf(Route.Tabs)
-            tab = Tab.Play
+            select(Tab.Play)
             refreshHome()
         }
     }
@@ -175,8 +210,8 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     fun back() {
         when (top) {
             Route.Board -> closeBoard()
-            Route.Daily -> pop()
-            Route.Tabs -> if (tab != Tab.Play) tab = Tab.Play
+            Route.Daily, Route.Year -> pop()
+            Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
         }
     }
 
@@ -186,6 +221,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     private fun pop() {
         if (stack.size > 1) stack = stack.dropLast(1)
         refreshHome()
+        if (tab == Tab.Record) refreshRecord()
     }
 
     /** The app went to the background: bank the running clock. */

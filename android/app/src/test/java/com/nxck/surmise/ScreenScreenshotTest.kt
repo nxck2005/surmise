@@ -22,6 +22,8 @@ import com.nxck.surmise.design.Sheet
 import com.nxck.surmise.design.SurmiseTheme
 import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
+import com.nxck.surmise.record.RecordScreen
+import com.nxck.surmise.record.YearScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -97,4 +99,10 @@ class ScreenScreenshotTest(private val theme: String) {
             }
         }
     }
+
+    @Test
+    fun record() = shot("record") { RecordScreen(profile, calendarFixture, onYear = {}) }
+
+    @Test
+    fun year() = shot("year") { YearScreen(calendarFixture, trendsFixture, onBack = {}) }
 }

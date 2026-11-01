@@ -1,14 +1,20 @@
 package com.nxck.surmise
 
+import com.nxck.surmise.core.gen.BestView
 import com.nxck.surmise.core.gen.BoardView
+import com.nxck.surmise.core.gen.CalendarView
 import com.nxck.surmise.core.gen.CoreClient
 import com.nxck.surmise.core.gen.DailyRow
 import com.nxck.surmise.core.gen.DailyView
+import com.nxck.surmise.core.gen.DayView
+import com.nxck.surmise.core.gen.FormView
 import com.nxck.surmise.core.gen.HistoryItem
 import com.nxck.surmise.core.gen.ModeView
+import com.nxck.surmise.core.gen.OpenerView
 import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResultView
 import com.nxck.surmise.core.gen.Row
+import com.nxck.surmise.core.gen.TrendsView
 import com.nxck.surmise.core.gen.Trio
 import com.nxck.surmise.core.gen.coreJson
 import com.nxck.surmise.home.HomeState
@@ -57,9 +63,46 @@ val profile = ProfileView(
     displayName = "nick",
     played = 41,
     won = 36,
+    winRate = 0.878,
+    avgAttempts = 3.9,
+    avgTimeMs = 94_000,
     currentStreak = 6,
+    maxStreak = 11,
     distribution = listOf(1, 5, 12, 10, 6, 2),
-    modes = listOf(ModeView(length = 5, played = 41, won = 36, winRate = 0.87)),
+    modes = listOf(
+        ModeView(length = 4, played = 9, won = 8, winRate = 0.889, avgAttempts = 3.4, avgTimeMs = 61_000),
+        ModeView(length = 5, played = 26, won = 23, winRate = 0.885, avgAttempts = 3.9, avgTimeMs = 98_000),
+        ModeView(length = 6, played = 6, won = 5, winRate = 0.833, avgAttempts = 4.6, avgTimeMs = 132_000),
+    ),
+    playtimeMs = 45_600_000,
+)
+
+/** A year of play: a few games most days, more at weekends, a gap in august. */
+val calendarFixture: CalendarView = run {
+    val today = java.time.LocalDate.of(2026, 11, 1)
+    val days = (0L until 300L).mapNotNull { back ->
+        val d = today.minusDays(back)
+        val n = ((back * 7 + back / 3) % 6).toInt() - 1 + if (d.dayOfWeek.value >= 6) 2 else 0
+        if (n <= 0 || d.monthValue == 8) null else DayView(day = d.toString(), games = n, won = n - (back % 2).toInt().coerceAtMost(n))
+    }.reversed()
+    CalendarView(today = today.toString(), days = days)
+}
+
+val trendsFixture = mapOf(
+    5 to TrendsView(
+        length = 5,
+        recentWindow = 20,
+        recent = FormView(games = 20, won = 19, winRate = 0.95, avgAttempts = 3.6, avgTimeMs = 81_000),
+        allTime = FormView(games = 26, won = 23, winRate = 0.885, avgAttempts = 3.9, avgTimeMs = 98_000),
+        fastest = BestView(id = "r-5-3", attempts = 3, elapsedMs = 34_000),
+        fewest = BestView(id = "r-5-8", attempts = 2, elapsedMs = 71_000),
+        openers = listOf(
+            OpenerView("crane", 12, 11, 0.917, 3.5),
+            OpenerView("slate", 8, 7, 0.875, 3.9),
+            OpenerView("audio", 4, 3, 0.75, 4.3),
+            OpenerView("tears", 2, 2, 1.0, 3.0),
+        ),
+    ),
 )
 
 val dailyToday = DailyView(

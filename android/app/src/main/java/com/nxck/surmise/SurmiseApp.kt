@@ -41,6 +41,8 @@ import com.nxck.surmise.design.rememberGlassState
 import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.home.homeState
+import com.nxck.surmise.record.RecordScreen
+import com.nxck.surmise.record.YearScreen
 
 /** How long a pushed screen takes to slide in or out. */
 private const val PUSH_MS = 320
@@ -81,6 +83,12 @@ fun SurmiseApp(model: AppModel) {
                     onOpen = model::openDaily,
                     onShare = { share(context, it) },
                 )
+                Route.Year -> YearScreen(
+                    calendar = model.calendar,
+                    trends = model.trends,
+                    onBack = model::back,
+                    startLength = model.settings.length.takeIf { it in 4..6 } ?: 5,
+                )
                 Route.Board -> model.board?.let { b ->
                     BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
                 }
@@ -114,7 +122,7 @@ private fun Tabs(model: AppModel) {
                         onDaily = model::openDaily,
                         onDailyScreen = model::showDaily,
                         onPlay = model::playLength,
-                        onRecord = { model.tab = Tab.Record },
+                        onRecord = { model.select(Tab.Record) },
                     ),
                 )
                 Tab.History -> HistoryScreen(
@@ -122,13 +130,14 @@ private fun Tabs(model: AppModel) {
                     onOpen = { model.resume(it.id) },
                     onDelete = { model.delete(it.id) },
                 )
+                Tab.Record -> RecordScreen(model.profile, model.calendar, onYear = model::showYear)
                 else -> Soon()
             }
         }
         TabBar(
             items = items,
             selected = model.tab.ordinal,
-            onSelect = { model.tab = Tab.entries[it] },
+            onSelect = { model.select(Tab.entries[it]) },
             glass = glass,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
