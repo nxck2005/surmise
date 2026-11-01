@@ -60,6 +60,15 @@ profile.cov
 /android/local.properties
 /android/core/libs/
 
+# Android signing material. The key is kept offline and in the repository's
+# secrets, never in the tree.
+*.jks
+*.keystore
+keystore.properties
+/android/*.jks
+/android/*.keystore
+/android/keystore.properties
+
 # Local scratch
 notes/
 CLAUDE.md
