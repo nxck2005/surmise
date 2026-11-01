@@ -174,7 +174,7 @@ fun SurmiseApp(model: AppModel) {
                 Route.Board -> when (val b = model.board) {
                     is SprintModel -> BoardScreen(
                         b,
-                        onBack = { model.closeBoard() },
+                        onBack = model::leaveBoard,
                         onHome = model::goHome,
                         onShare = { share(context, it) },
                         title = stringResource(R.string.sprint),

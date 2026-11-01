@@ -469,6 +469,16 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         }
     }
 
+    /**
+     * Back on the board. A sprint still running stops and shows its summary,
+     * as esc does in the terminal; the summary's own buttons, or back again,
+     * leave it.
+     */
+    fun leaveBoard() {
+        val b = board
+        if (b is SprintModel && !b.run.over) b.end() else closeBoard()
+    }
+
     /** Leaves the board for the play tab, whatever it was opened from. */
     fun goHome() {
         val b = board
@@ -483,7 +493,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
 
     fun back() {
         when (top) {
-            Route.Board -> closeBoard()
+            Route.Board -> leaveBoard()
             Route.Room -> awayFromRoom()
             Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms, Route.RoomResult -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)

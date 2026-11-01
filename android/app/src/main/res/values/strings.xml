@@ -200,6 +200,7 @@
     <string name="sprint_length">length</string>
     <string name="sprint_clock">clock</string>
     <string name="minutes">%1$d min</string>
+    <string name="seconds">%1$ds</string>
     <string name="sprint_go">start</string>
     <plurals name="sprint_solved">
         <item quantity="one">%1$d solved</item>
