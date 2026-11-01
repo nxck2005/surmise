@@ -114,9 +114,14 @@ type Theme struct {
 	Author string
 
 	palette map[string]color.Color
+	ansi    map[string]bool // palette keys given as an ANSI number, directly or by name
 	Glyphs  Glyphs
 	Metrics Metrics
 	Styles  map[string]Override
+
+	// App is what only the phone reads: the [app] and [app.colors] sections.
+	// The terminal ignores it; see app.go.
+	App AppSpec
 }
 
 // Color returns a palette entry. Derived entries are resolved here rather than
@@ -131,6 +136,29 @@ func (t *Theme) Color(key string) color.Color {
 		return t.palette[from]
 	}
 	return t.palette[Text]
+}
+
+// ANSIOnly reports whether any base palette colour is an ANSI number. Such a
+// theme means "use your terminal's colours", which a phone does not have, so
+// the app does not list it.
+func (t *Theme) ANSIOnly() bool {
+	for _, k := range baseKeys {
+		if t.isANSI(k) {
+			return true
+		}
+	}
+	return false
+}
+
+// isANSI follows a derived key to its base the way Color does.
+func (t *Theme) isANSI(key string) bool {
+	if _, ok := t.palette[key]; ok {
+		return t.ansi[key]
+	}
+	if from, ok := derivedKeys[key]; ok {
+		return t.ansi[from]
+	}
+	return t.ansi[Text]
 }
 
 // Override returns the tweak for an element, or the zero value.
@@ -195,6 +223,14 @@ func (t *Theme) clone() *Theme {
 	out.Styles = make(map[string]Override, len(t.Styles))
 	for k, v := range t.Styles {
 		out.Styles[k] = v
+	}
+	out.ansi = make(map[string]bool, len(t.ansi))
+	for k, v := range t.ansi {
+		out.ansi[k] = v
+	}
+	out.App.Colors = make(map[string]color.Color, len(t.App.Colors))
+	for k, v := range t.App.Colors {
+		out.App.Colors[k] = v
 	}
 	return &out
 }

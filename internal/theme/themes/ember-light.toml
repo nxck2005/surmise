@@ -27,3 +27,7 @@ key_correct_text = "#ffffff"
 key_present_text = "#2f3237"
 key_absent_text  = "#7d818a"
 key_unused_text  = "#2f3237"
+
+# Only the phone app reads what follows; the terminal ignores it.
+[app]
+pair = "ember dark"

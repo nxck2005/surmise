@@ -19,3 +19,9 @@ key_spent = "#00212b"
 absent_text     = "#93a1a1"
 key_absent_text = "#40616b"
 key_unused_text = "#eee8d5"
+
+# Only the phone app reads what follows; the terminal ignores it. On a phone
+# the tiles are large blocks of colour, so the right-place tile is a shade
+# darker to keep it apart from the wrong-place one by lightness, not hue alone.
+[app.colors]
+correct = "#728a08"

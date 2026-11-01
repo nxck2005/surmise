@@ -164,7 +164,12 @@ func (t *Theme) set(key, value string) error {
 			return err
 		}
 		t.palette[key] = c
+		t.ansi[key] = t.valueIsANSI(value)
 		return nil
+	}
+
+	if rest, ok := strings.CutPrefix(key, "app."); ok {
+		return t.setApp(rest, value)
 	}
 
 	if rest, ok := strings.CutPrefix(key, "glyphs."); ok {
@@ -218,6 +223,15 @@ func (t *Theme) parseColor(value string) (color.Color, error) {
 		return lipgloss.Color(value), nil
 	}
 	return nil, fmt.Errorf("unknown colour %q: want #rrggbb, 0-255, or a palette name", value)
+}
+
+// valueIsANSI reports whether a palette value is an ANSI number, or the name of
+// an entry that is one. Called only once parseColor has accepted the value.
+func (t *Theme) valueIsANSI(value string) bool {
+	if isPaletteKey(value) {
+		return t.isANSI(value)
+	}
+	return !strings.HasPrefix(value, "#")
 }
 
 func (t *Theme) setGlyph(key, value string) error {

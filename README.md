@@ -174,7 +174,7 @@ surmise -themes          # list what's installed, and where the directory is
 surmise -theme dracula   # play with a theme without changing your saved choice
 ```
 
-bundled: `tokyo-night` (the default), `deuteranopia`, `ember-dark`, `ember-light`,
+bundled: `tokyo-night` (the default), `night`, `day`, `deuteranopia`, `ember-dark`, `ember-light`,
 `catppuccin-mocha`, `dracula`, `everforest-dark`, `gruvbox-dark`,
 `high-contrast`, `matrix`, `nord`, `rose-pine`, `solarized-dark`, `terminal`.
 
