@@ -64,6 +64,17 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.12.0 → v0.12.2: the Android app goes online
+
+On v0.12.0 and v0.12.1 the Android app could not reach the server, even with
+the network setting on. The daily counts never showed, and making or joining a
+room said "can't reach the server". v0.12.1 fixed the server's side (it refused
+the app's client header), and v0.12.2 fixes the app's side: it now asks
+Android for internet access, which it never did.
+
+Install `surmise_0.12.2_android.apk` over the old one. Nothing is lost, and
+the network setting stays as you left it. The terminal build is unchanged.
+
 ## v0.11.0 → v0.12.0: the Android app
 
 The game is now also a native Android app. It has the same rules, the same

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!--
       Auto Backup carries the puzzle records, but not settings.json (which
       holds the network consent) or rooms.json (which holds this device's seat
