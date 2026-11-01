@@ -201,6 +201,8 @@ data class RoomActions(
     val onLeave: () -> Unit = {},
     /** Steps away and keeps the seat: back, and done on the results. */
     val onAway: () -> Unit = {},
+    /** Opens a saved round's board, from its result. */
+    val onReview: () -> Unit = {},
 )
 
 /** The open room, as its screen says: connecting, the lobby, watching or the results. */
@@ -211,7 +213,7 @@ fun RoomScreen(room: RoomView, lines: RoomLines, actions: RoomActions, now: () -
         when (room.screen) {
             "lobby" -> Lobby(room, actions, now)
             "watch" -> Watch(room, now)
-            "result" -> room.results?.let { Results(room, it, actions) }
+            "result" -> room.results?.let { Results(it, actions, saved = false) }
             else -> Connecting(room)
         }
         if (room.reconnecting && room.screen != "") {
@@ -393,8 +395,22 @@ private fun Boards(boards: List<Triple<String, List<List<String>>, Boolean>>, le
     }
 }
 
+/**
+ * A saved room round, opened from the history: the word and the ranking it
+ * carries, with refresh while an any-time round can still grow. Back is
+ * [RoomActions.onAway]; review opens the round's board.
+ */
 @Composable
-private fun Results(room: RoomView, r: RoomResultView, actions: RoomActions) {
+fun RoomResultScreen(r: RoomResultView, lines: RoomLines, actions: RoomActions) {
+    Page(stringResource(R.string.room_title, r.code), actions.onAway) {
+        Results(r, actions, saved = true)
+        Lines(lines)
+    }
+}
+
+/** A round's word and ranking. A [saved] round is not the open room: no rematch, and review instead of step away. */
+@Composable
+private fun Results(r: RoomResultView, actions: RoomActions, saved: Boolean) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
     SurmiseText(stringResource(R.string.room_round, r.round), type.caption, tokens.inkMuted, Modifier.padding(start = 20.dp))
@@ -416,13 +432,17 @@ private fun Results(room: RoomView, r: RoomResultView, actions: RoomActions) {
         }
     }
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (room.mode == "live" && r.canRematch) {
+        if (!saved && r.mode == "live" && r.canRematch) {
             CapsuleButton(stringResource(R.string.room_rematch), actions.onRematch, Modifier.fillMaxWidth())
         }
         if (r.canRefresh) {
             CapsuleButton(stringResource(R.string.room_refresh), actions.onRefresh, Modifier.fillMaxWidth(), style = CapsuleStyle.Secondary)
         }
-        CapsuleButton(stringResource(R.string.room_step_away), actions.onAway, Modifier.fillMaxWidth(), style = CapsuleStyle.Secondary)
+        if (saved) {
+            CapsuleButton(stringResource(R.string.review), actions.onReview, Modifier.fillMaxWidth(), style = CapsuleStyle.Secondary)
+        } else {
+            CapsuleButton(stringResource(R.string.room_step_away), actions.onAway, Modifier.fillMaxWidth(), style = CapsuleStyle.Secondary)
+        }
     }
 }
 

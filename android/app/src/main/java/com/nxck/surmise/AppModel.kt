@@ -16,6 +16,7 @@ import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.core.gen.DayRequest
 import com.nxck.surmise.core.gen.DeleteRequest
 import com.nxck.surmise.core.gen.HistoryItem
+import com.nxck.surmise.core.gen.IDRequest
 import com.nxck.surmise.core.gen.ImportReport
 import com.nxck.surmise.core.gen.Info
 import com.nxck.surmise.core.gen.LengthRequest
@@ -23,6 +24,7 @@ import com.nxck.surmise.core.gen.NewBoardRequest
 import com.nxck.surmise.core.gen.OnlineView
 import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResumeRequest
+import com.nxck.surmise.core.gen.RoomResultView
 import com.nxck.surmise.core.gen.Settings
 import com.nxck.surmise.core.gen.SprintOptions
 import com.nxck.surmise.core.gen.SprintRequest
@@ -53,6 +55,7 @@ sealed interface Route {
     data object About : Route
     data object Rooms : Route
     data object Room : Route
+    data object RoomResult : Route
     data object Board : Route
 }
 
@@ -66,6 +69,7 @@ val Route.depth: Int
         Route.Sprint, Route.Challenge, Route.Custom -> 1
         Route.About -> 1
         Route.Rooms -> 1
+        Route.RoomResult -> 1
         Route.Room -> 2
         Route.Board -> 2
     }
@@ -120,7 +124,10 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
             core.events.collect { e ->
                 when (e.kind) {
                     "online" -> refreshOnline()
-                    "room" -> rooms.refresh()
+                    "room" -> {
+                        rooms.refresh()
+                        if (top == Route.RoomResult) readRoomResult()
+                    }
                 }
             }
         }
@@ -280,6 +287,53 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
 
     fun resume(id: String) = open { client.boardResume(ResumeRequest(id)) }
 
+    /** A saved room round's result, while its screen is up. */
+    var roomResult by mutableStateOf<RoomResultView?>(null)
+        private set
+
+    /** The last refusal on the saved round's screen (offline, say). */
+    var roomResultError by mutableStateOf<Throwable?>(null)
+        private set
+
+    /**
+     * Opens a saved puzzle from the history. A finished room round opens on
+     * its result, the word and the ranking, as in the terminal; the rest, and
+     * a round whose result cannot be read, open on the board.
+     */
+    fun openSaved(item: HistoryItem) {
+        if (item.kind != "room" || item.status == "in_progress") return resume(item.id)
+        scope.launch {
+            runCatching { client.roomsResult(IDRequest(item.id)) }
+                .onSuccess {
+                    roomResult = it
+                    roomResultError = null
+                    rooms.clearNotes()
+                    show(Route.RoomResult)
+                }
+                .onFailure { resume(item.id) }
+        }
+    }
+
+    /** Asks for the saved any-time round's newer ranking; a room event brings it. */
+    fun refreshRoomResult() {
+        val id = roomResult?.id ?: return
+        scope.launch {
+            roomResultError = null
+            rooms.clearNotes()
+            runCatching { roomResult = client.roomsRefresh(IDRequest(id)) }.onFailure { roomResultError = it }
+        }
+    }
+
+    /** Opens the saved round's board, from its result. */
+    fun reviewRoomResult() {
+        roomResult?.id?.let(::resume)
+    }
+
+    private fun readRoomResult() {
+        val id = roomResult?.id ?: return
+        scope.launch { runCatching { roomResult = client.roomsResult(IDRequest(id)) } }
+    }
+
     private fun open(onFail: (Throwable) -> Unit = { homeNote = it }, opener: suspend () -> BoardView) {
         scope.launch {
             homeNote = null
@@ -431,7 +485,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         when (top) {
             Route.Board -> closeBoard()
             Route.Room -> awayFromRoom()
-            Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms -> pop()
+            Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms, Route.RoomResult -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
         }
     }
