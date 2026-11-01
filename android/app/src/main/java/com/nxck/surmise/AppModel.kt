@@ -148,6 +148,16 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     }
 
     /** Switches tab, reading what the record tab shows when it opens. */
+    /** The history's calendar day, picked on the year; "" is every day. */
+    var historyDay by mutableStateOf("")
+
+    /** Shows the history for one calendar day, from the year. */
+    fun showDay(day: String) {
+        historyDay = day
+        stack = listOf(Route.Tabs)
+        select(Tab.History)
+    }
+
     fun select(t: Tab) {
         tab = t
         if (t == Tab.Record) refreshRecord()

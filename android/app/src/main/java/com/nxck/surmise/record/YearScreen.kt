@@ -62,6 +62,8 @@ fun YearScreen(
     trends: Map<Int, TrendsView>,
     onBack: () -> Unit,
     startLength: Int = 5,
+    /** Shows the history for a day that has puzzles. */
+    onDay: (String) -> Unit = {},
 ) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
@@ -77,7 +79,7 @@ fun YearScreen(
             BackButton(onBack)
         }
         SurmiseText(stringResource(R.string.year_title), type.display, tokens.ink, Modifier.padding(start = 20.dp, top = 20.dp))
-        if (calendar != null) YearCard(calendar, Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp))
+        if (calendar != null) YearCard(calendar, onDay, Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp))
 
         var length by rememberSaveable { mutableIntStateOf(startLength) }
         SurmiseText(stringResource(R.string.trends_title), type.section, tokens.ink, Modifier.padding(start = 20.dp, top = 24.dp, bottom = 10.dp))
@@ -105,7 +107,7 @@ fun YearScreen(
 
 /** The grid of weeks, a column each, with the tapped day's line under it. */
 @Composable
-private fun YearCard(c: CalendarView, modifier: Modifier) {
+private fun YearCard(c: CalendarView, onDay: (String) -> Unit, modifier: Modifier) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
     val today = runCatching { LocalDate.parse(c.today) }.getOrNull() ?: return
@@ -151,6 +153,14 @@ private fun YearCard(c: CalendarView, modifier: Modifier) {
                     if (d == null || d.games == 0) stringResource(R.string.year_day_none) else dayLine(d),
                     type.caption,
                     tokens.inkDim,
+                )
+            }
+            if ((byDay[picked]?.games ?: 0) > 0) {
+                SurmiseText(
+                    stringResource(R.string.year_day_open),
+                    type.caption,
+                    tokens.accentText,
+                    Modifier.padding(top = 6.dp).pressable(onClick = { onDay(picked) }).padding(vertical = 4.dp),
                 )
             }
             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {

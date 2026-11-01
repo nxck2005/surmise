@@ -66,6 +66,8 @@ func saveGame(t *testing.T, e *Engine, id, answer string, guesses ...string) {
 			t.Fatal(err)
 		}
 	}
+	// The wall clock would move the puzzle's calendar day under the goldens.
+	g.StartedAt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 	if err := e.st.Save(g); err != nil {
 		t.Fatal(err)
 	}

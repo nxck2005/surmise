@@ -42,16 +42,23 @@ import com.nxck.surmise.design.SurmiseText
 import com.nxck.surmise.design.SurmiseTheme
 import com.nxck.surmise.design.TabBarHeight
 import com.nxck.surmise.design.pressable
+import com.nxck.surmise.record.dayText
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** The history's filter: 0 is any length, "" any kind or status. The TUI's three fields. */
-data class HistoryFilter(val length: Int = 0, val kind: String = "", val status: String = "") {
+/**
+ * The history's filter: 0 is any length, "" any kind, status or day. The
+ * TUI's three fields, plus the calendar's day (YYYY-MM-DD, as the engine
+ * files each puzzle).
+ */
+data class HistoryFilter(val length: Int = 0, val kind: String = "", val status: String = "", val day: String = "") {
     fun matches(i: HistoryItem): Boolean =
         (length == 0 || i.length == length) &&
             (kind == "" || i.kind == kind) &&
-            (status == "" || i.status == status)
+            (status == "" || i.status == status) &&
+            (day == "" || i.day == day)
 }
 
 private val Kinds = listOf("random", "daily", "challenge", "custom", "room", "sprint")
@@ -67,13 +74,16 @@ fun HistoryScreen(
     onOpen: (HistoryItem) -> Unit,
     onDelete: (HistoryItem) -> Unit,
     modifier: Modifier = Modifier,
+    /** The calendar day picked on the year, or "" for every day. */
+    day: String = "",
+    onClearDay: () -> Unit = {},
 ) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
     var length by rememberSaveable { mutableStateOf(0) }
     var kind by rememberSaveable { mutableStateOf("") }
     var status by rememberSaveable { mutableStateOf("") }
-    val filter = HistoryFilter(length, kind, status)
+    val filter = HistoryFilter(length, kind, status, day)
     val shown = items.filter(filter::matches)
     var asking by remember { mutableStateOf<HistoryItem?>(null) }
 
@@ -87,6 +97,7 @@ fun HistoryScreen(
             }
             item {
                 Column(Modifier.padding(top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (day != "") DayChip(day, onClearDay)
                     Chips(listOf(0, 4, 5, 6), length, { length = it }) {
                         if (it == 0) stringResource(R.string.filter_any_length) else stringResource(R.string.letters, it)
                     }
@@ -166,6 +177,24 @@ private fun <T> Chips(values: List<T>, selected: T, onSelect: (T) -> Unit, label
                 SurmiseText(label(v), SurmiseTheme.type.caption, if (on) tokens.canvas else tokens.inkDim, maxLines = 1)
             }
         }
+    }
+}
+
+/** The calendar's day, on: a tap clears it and shows every day again. */
+@Composable
+private fun DayChip(day: String, onClear: () -> Unit) {
+    val tokens = SurmiseTheme.tokens
+    val date = runCatching { LocalDate.parse(day) }.getOrNull()
+    Box(
+        Modifier
+            .padding(horizontal = 16.dp)
+            .height(32.dp)
+            .pressable(onClick = onClear)
+            .background(tokens.ink, CapsuleShape)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        SurmiseText(stringResource(R.string.history_day, date?.let(::dayText) ?: day), SurmiseTheme.type.caption, tokens.canvas, maxLines = 1)
     }
 }
 

@@ -21,5 +21,12 @@ class HistoryFilterTest {
     }
 
     @Test
+    fun aDayKeepsOnlyItsOwn() {
+        val items = historyItems.mapIndexed { i, it -> it.copy(day = if (i < 2) "2026-11-01" else "2026-10-30") }
+        assertEquals(listOf("r-5-1", "d-4"), items.filter(HistoryFilter(day = "2026-11-01")::matches).map { it.id })
+        assertEquals(listOf("c-6"), items.filter(HistoryFilter(day = "2026-10-30", length = 6)::matches).map { it.id })
+    }
+
+    @Test
     fun aBadTimeIsBlankNotACrash() = assertEquals("", shortDate("yesterday"))
 }
