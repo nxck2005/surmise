@@ -16,9 +16,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 
-/** How much the app moves. Off is the system's "remove animations" or the player's choice. */
+/**
+ * How much the app moves. Off is the system's "remove animations" or the
+ * player's choice. [calm] is the "restrained" setting: the board's own
+ * effects (the flip, its stagger, the hops and the shake) take half the time
+ * and travel half as far, as in the terminal. The chrome moves the same.
+ */
 @Immutable
-data class Motion(val enabled: Boolean = true)
+data class Motion(val enabled: Boolean = true, val calm: Boolean = false) {
+    /** A board effect's duration at this level. */
+    fun ms(full: Int): Int = if (calm) full / 2 else full
+
+    /** A board effect's travel at this level. */
+    fun reach(full: Float): Float = if (calm) full / 2 else full
+}
 
 private val LocalTokens = staticCompositionLocalOf<SurmiseTokens> { error("no SurmiseTheme above this composable") }
 private val LocalType = staticCompositionLocalOf { DefaultType }

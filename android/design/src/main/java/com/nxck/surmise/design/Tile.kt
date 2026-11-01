@@ -61,7 +61,7 @@ val TileGap = 6.dp
 /**
  * One board tile. When [state] turns from unscored to scored the tile flips
  * on its horizontal axis and shows its mark at the half-way point, after
- * [flipDelayMs] (a row passes `index * FLIP_STAGGER_MS`); [onFlipped] runs
+ * [flipDelayMs] (a row passes `index * motion.ms(FLIP_STAGGER_MS)`); [onFlipped] runs
  * when it lands. A newly typed letter hops. With motion off the mark shows at
  * once and [onFlipped] still runs, so a caller waiting on it never stalls.
  */
@@ -75,7 +75,8 @@ fun Tile(
     onFlipped: () -> Unit = {},
 ) {
     val tokens = SurmiseTheme.tokens
-    val moving = SurmiseTheme.motion.enabled
+    val motion = SurmiseTheme.motion
+    val moving = motion.enabled
     val done by rememberUpdatedState(onFlipped)
 
     // The face on show lags [state] while a flip is under way.
@@ -89,10 +90,10 @@ fun Tile(
             flips && moving -> {
                 // The delay rides on the animation, so it runs on the frame
                 // clock like the flip itself.
-                turn.animateTo(90f, tween(FLIP_MS / 2, delayMillis = flipDelayMs, easing = FastOutLinearInEasing))
+                turn.animateTo(90f, tween(motion.ms(FLIP_MS) / 2, delayMillis = flipDelayMs, easing = FastOutLinearInEasing))
                 face = state
                 turn.snapTo(-90f)
-                turn.animateTo(0f, tween(FLIP_MS / 2, easing = LinearOutSlowInEasing))
+                turn.animateTo(0f, tween(motion.ms(FLIP_MS) / 2, easing = LinearOutSlowInEasing))
                 done()
             }
             flips -> {
@@ -104,9 +105,9 @@ fun Tile(
                 face = state
                 if (typed && moving) {
                     hop.animateTo(1f, keyframes {
-                        durationMillis = HOP_MS
-                        1.08f at HOP_MS * 4 / 10
-                        1f at HOP_MS
+                        durationMillis = motion.ms(HOP_MS)
+                        1f + motion.reach(0.08f) at motion.ms(HOP_MS) * 4 / 10
+                        1f at motion.ms(HOP_MS)
                     })
                 }
             }

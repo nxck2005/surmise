@@ -103,6 +103,27 @@ class BehaviourTest {
         assertEquals(1, flipped)
     }
 
+    /** Calm motion flips in half the time: landed before a full flip would be half-way. */
+    @Test
+    fun calmFlipsInHalfTheTime() {
+        var state by mutableStateOf(TileState.Typed)
+        var flipped = 0
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            SurmiseTheme(tokens = BundledTokens.night(LocalContext.current), motion = Motion(calm = true)) {
+                Tile('a', state, onFlipped = { flipped++ })
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        state = TileState.Correct
+        Snapshot.sendApplyNotifications()
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy((FLIP_MS / 2 - 50).toLong())
+        assertEquals(0, flipped)
+        compose.mainClock.advanceTimeBy(100)
+        assertEquals(1, flipped)
+    }
+
     /** A frame from the middle of a row's flip, to see the turn and the stagger. */
     @Test
     fun flipMidway() {
