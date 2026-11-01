@@ -99,6 +99,39 @@
     <string name="next_again">again</string>
     <string name="home">home</string>
 
+    <!-- Record -->
+    <string name="record_playtime">%1$s played</string>
+    <string name="record_streak">win streak</string>
+    <string name="record_best">best %1$d</string>
+    <string name="record_two_weeks">last two weeks</string>
+    <string name="record_year_link">your year</string>
+    <string name="record_by_length">by length</string>
+    <string name="record_guesses">how many guesses your wins took</string>
+    <string name="record_empty">play a few and your record shows up here</string>
+    <string name="stat_avg_guesses">avg guesses</string>
+    <string name="stat_avg_time">avg time</string>
+    <string name="time">time</string>
+    <string name="year_title">your year</string>
+    <string name="year_day_none">nothing played</string>
+    <plurals name="year_played">
+        <item quantity="one">%1$d played</item>
+        <item quantity="other">%1$d played</item>
+    </plurals>
+    <plurals name="guesses_count">
+        <item quantity="one">%1$d guess</item>
+        <item quantity="other">%1$d guesses</item>
+    </plurals>
+    <string name="year_won">%1$d won</string>
+    <string name="year_less">less</string>
+    <string name="year_more">more</string>
+    <string name="trends_title">trends</string>
+    <string name="trends_none">no %1$d-letter games yet</string>
+    <string name="trends_recent">last %1$d</string>
+    <string name="trends_all_time">all time</string>
+    <string name="trends_fastest">fastest win</string>
+    <string name="trends_fewest">fewest guesses</string>
+    <string name="trends_openers">your openers</string>
+
     <!-- Engine refusals, one line per code -->
     <string name="err_too_short">needs %1$d letters</string>
     <string name="err_not_a_word">not in word list</string>
