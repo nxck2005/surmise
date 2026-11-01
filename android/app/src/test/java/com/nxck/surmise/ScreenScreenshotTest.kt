@@ -37,6 +37,7 @@ import com.nxck.surmise.settings.SettingsScreen
 import org.junit.Rule
 import com.nxck.surmise.rooms.RoomActions
 import com.nxck.surmise.rooms.RoomLines
+import com.nxck.surmise.rooms.RoomResultScreen
 import com.nxck.surmise.rooms.RoomScreen
 import com.nxck.surmise.rooms.RoomsScreen
 import org.junit.Test
@@ -163,4 +164,9 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun roomResult() = shot("room-result") { RoomScreen(roomResult, RoomLines(), RoomActions(), now = { 0 }) }
+
+    @Test
+    fun roomResultSaved() = shot("room-result-saved") {
+        RoomResultScreen(roomResult.results!!.copy(mode = "async", canRematch = false, canRefresh = true), RoomLines(), RoomActions())
+    }
 }
