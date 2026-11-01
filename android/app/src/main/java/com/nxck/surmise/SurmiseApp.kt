@@ -56,6 +56,11 @@ import com.nxck.surmise.home.homeState
 import com.nxck.surmise.modes.ChallengeScreen
 import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.sprint.SprintClock
+import com.nxck.surmise.rooms.RoomActions
+import com.nxck.surmise.rooms.RoomLines
+import com.nxck.surmise.rooms.RoomScreen
+import com.nxck.surmise.rooms.RoomsScreen
+import com.nxck.surmise.rooms.RoundClock
 import com.nxck.surmise.sprint.SprintModel
 import com.nxck.surmise.sprint.SprintSetup
 import com.nxck.surmise.sprint.SprintSummary
@@ -95,6 +100,7 @@ fun SurmiseApp(model: AppModel) {
         LaunchedEffect(Unit) {
             model.refreshHome()
             model.refreshSettings()
+            model.start()
         }
         BackHandler(enabled = model.handlesBack) { model.back() }
         AnimatedContent(
@@ -121,6 +127,7 @@ fun SurmiseApp(model: AppModel) {
                     onBack = model::back,
                     onOpen = model::openDaily,
                     onShare = { share(context, it) },
+                    counts = if (model.online.consent) model.dailyCounts else emptyMap(),
                 )
                 Route.Year -> YearScreen(
                     calendar = model.calendar,
@@ -146,6 +153,16 @@ fun SurmiseApp(model: AppModel) {
                     onReady = model::startCustom,
                     onBack = model::back,
                 )
+                Route.Rooms -> RoomsScreen(
+                    list = model.rooms.list,
+                    lines = RoomLines(model.rooms.error, model.rooms.note),
+                    startLength = model.startLength,
+                    onMake = model::makeRoom,
+                    onJoin = model::joinRoom,
+                    onLeave = model.rooms::leave,
+                    onBack = model::back,
+                )
+                Route.Room -> Room(model)
                 Route.Board -> when (val b = model.board) {
                     is SprintModel -> BoardScreen(
                         b,
@@ -163,6 +180,44 @@ fun SurmiseApp(model: AppModel) {
             }
         }
     }
+}
+
+/** The open room: our board while our round is on, else the room's own screen. */
+@Composable
+private fun Room(model: AppModel) {
+    val context = LocalContext.current
+    val rooms = model.rooms
+    val room = rooms.room
+    val b = rooms.board
+    if (room.screen == "board" && b != null) {
+        val solved = room.players.count { it.solved }
+        BoardScreen(
+            b,
+            onBack = model::awayFromRoom,
+            onHome = {
+                rooms.close()
+                model.goHome()
+            },
+            onShare = { share(context, it) },
+            title = stringResource(R.string.room_title, room.code),
+            subtitle = if (room.players.size > 1) stringResource(R.string.room_solved_of, solved, room.players.size) else null,
+            trailing = if (room.mode == "live") ({ RoundClock(room.endsAtMs) }) else null,
+        )
+        return
+    }
+    RoomScreen(
+        room,
+        RoomLines(rooms.error, rooms.note),
+        RoomActions(
+            onReady = rooms::ready,
+            onStart = rooms::start,
+            onRematch = rooms::rematch,
+            onRefresh = rooms::refreshResult,
+            onShare = { share(context, it) },
+            onLeave = model::leaveRoom,
+            onAway = model::awayFromRoom,
+        ),
+    )
 }
 
 @Composable
@@ -185,6 +240,8 @@ private fun Tabs(model: AppModel) {
                         history = model.history,
                         playedToday = if (model.online.consent) model.online.menuCount else 0,
                         note = model.homeNote,
+                        rooms = model.online.rooms && model.online.consent,
+                        running = model.rooms.room.takeIf { it.active && it.probe }?.code.orEmpty(),
                     ),
                     actions = HomeActions(
                         onDaily = model::openDaily,
@@ -192,6 +249,7 @@ private fun Tabs(model: AppModel) {
                         onPlay = model::playLength,
                         onRecord = { model.select(Tab.Record) },
                         onWay = model::showWay,
+                        onRoom = model::showRoom,
                     ),
                 )
                 Tab.History -> HistoryScreen(

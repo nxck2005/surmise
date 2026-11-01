@@ -62,6 +62,8 @@ data class HomeState(
     val note: Throwable? = null,
     /** Whether rooms are on offer (online, and the server has them). */
     val rooms: Boolean = false,
+    /** A room whose round of ours is still running, found at startup, or "". */
+    val running: String = "",
 )
 
 /** What home's taps do. */
@@ -71,6 +73,7 @@ data class HomeActions(
     val onPlay: (length: Int) -> Unit,
     val onRecord: () -> Unit,
     val onWay: (Way) -> Unit = {},
+    val onRoom: () -> Unit = {},
 )
 
 /** The other ways to play, in home's sideways row. */
@@ -88,6 +91,7 @@ fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modi
             .padding(bottom = TabBarHeight + 48.dp),
     ) {
         Header(state, actions.onRecord)
+        if (state.running.isNotEmpty()) RunningCard(state.running, actions.onRoom)
         DailyCard(state, actions.onDaily, actions.onDailyScreen, Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp))
         if (state.note != null) {
             SurmiseText(
@@ -106,6 +110,19 @@ fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modi
         SurmiseText(stringResource(R.string.section_more), type.section, tokens.ink, Modifier.padding(start = 20.dp, top = 22.dp, bottom = 10.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(Way.entries.filter { it != Way.Rooms || state.rooms }) { w -> WayCard(w) { actions.onWay(w) } }
+        }
+    }
+}
+
+/** A round of ours still running in a room, and the way back in. */
+@Composable
+private fun RunningCard(code: String, onClick: () -> Unit) {
+    val tokens = SurmiseTheme.tokens
+    Card(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 18.dp).pressable(onClick = onClick), padding = PaddingValues(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(SurmiseIcons.Rooms, tokens.accentText, size = 22.dp)
+            SurmiseText(stringResource(R.string.room_still_running, code), SurmiseTheme.type.body, tokens.ink, Modifier.weight(1f).padding(start = 12.dp))
+            SurmiseText(stringResource(R.string.room_rejoin), SurmiseTheme.type.caption, tokens.accentText)
         }
     }
 }
@@ -278,7 +295,15 @@ private fun PlayCard(length: Int, inPlay: HistoryItem?, onClick: () -> Unit, mod
 }
 
 /** Home's state from today's date and the model's reads. */
-fun homeState(name: String, daily: DailyView?, history: List<HistoryItem>, playedToday: Int, note: Throwable?): HomeState =
+fun homeState(
+    name: String,
+    daily: DailyView?,
+    history: List<HistoryItem>,
+    playedToday: Int,
+    note: Throwable?,
+    rooms: Boolean = false,
+    running: String = "",
+): HomeState =
     HomeState(
         date = homeDate(),
         name = name,
@@ -288,4 +313,6 @@ fun homeState(name: String, daily: DailyView?, history: List<HistoryItem>, playe
         }.toMap(),
         playedToday = playedToday,
         note = note,
+        rooms = rooms,
+        running = running,
     )

@@ -56,6 +56,8 @@ fun DailyScreen(
     onOpen: (length: Int) -> Unit,
     onShare: (String) -> Unit,
     now: () -> Long = System::currentTimeMillis,
+    /** Everyone's finished boards today, by length, when online. */
+    counts: Map<Int, Int> = emptyMap(),
 ) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
@@ -86,7 +88,7 @@ fun DailyScreen(
             Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            for (row in daily.rows) ModeRow(row) { onOpen(row.length) }
+            for (row in daily.rows) ModeRow(row, counts[row.length] ?: 0) { onOpen(row.length) }
         }
         if (playedToday > 0) {
             SurmiseText(
@@ -158,7 +160,7 @@ private fun TrioCard(d: DailyView, onShare: (String) -> Unit, modifier: Modifier
 }
 
 @Composable
-private fun ModeRow(row: DailyRow, onOpen: () -> Unit) {
+private fun ModeRow(row: DailyRow, played: Int, onOpen: () -> Unit) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
     Card(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
@@ -182,6 +184,9 @@ private fun ModeRow(row: DailyRow, onOpen: () -> Unit) {
                     else -> stringResource(R.string.daily_note_new) to tokens.inkMuted
                 }
                 SurmiseText(note, type.caption, color, Modifier.padding(top = 2.dp))
+                if (played > 0) {
+                    SurmiseText(stringResource(R.string.daily_count, countText(played)), type.footnote, tokens.inkMuted, Modifier.padding(top = 2.dp))
+                }
             }
             when (row.state) {
                 "playing" -> CapsuleButton(stringResource(R.string.daily_action_continue), onOpen)

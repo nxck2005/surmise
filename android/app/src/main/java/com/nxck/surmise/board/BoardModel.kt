@@ -76,7 +76,7 @@ open class BoardModel(
      * keyboard's marks back until it lands, so a key never gives a tile away.
      */
     var revealing by mutableIntStateOf(-1)
-        private set
+        protected set
 
     var result by mutableStateOf<ResultView?>(null)
         private set
