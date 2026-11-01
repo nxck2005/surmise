@@ -58,6 +58,7 @@ import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.sprint.SprintClock
 import com.nxck.surmise.rooms.RoomActions
 import com.nxck.surmise.rooms.RoomLines
+import com.nxck.surmise.rooms.RoomResultScreen
 import com.nxck.surmise.rooms.RoomScreen
 import com.nxck.surmise.rooms.RoomsScreen
 import com.nxck.surmise.rooms.RoundClock
@@ -85,7 +86,7 @@ fun SurmiseApp(model: AppModel) {
     } else {
         model.themeTokens["$name/$tiles"] ?: BundledTokens.forAppearance(context, model.themes.firstOrNull { it.name == name }?.dark ?: true)
     }
-    val motion = Motion(enabled = model.settings.motion != "off" && systemAnimates(context))
+    val motion = Motion(enabled = model.settings.motion != "off" && systemAnimates(context), calm = model.settings.motion == "restrained")
     val view = LocalView.current
     SideEffect {
         (view.context as? Activity)?.window?.let { w ->
@@ -164,6 +165,13 @@ fun SurmiseApp(model: AppModel) {
                     onBack = model::back,
                 )
                 Route.Room -> Room(model)
+                Route.RoomResult -> model.roomResult?.let { r ->
+                    RoomResultScreen(
+                        r,
+                        RoomLines(model.roomResultError, model.rooms.note),
+                        RoomActions(onRefresh = model::refreshRoomResult, onAway = model::back, onReview = model::reviewRoomResult),
+                    )
+                }
                 Route.Board -> when (val b = model.board) {
                     is SprintModel -> BoardScreen(
                         b,
@@ -255,7 +263,7 @@ private fun Tabs(model: AppModel) {
                 )
                 Tab.History -> HistoryScreen(
                     items = model.history,
-                    onOpen = { model.resume(it.id) },
+                    onOpen = model::openSaved,
                     day = model.historyDay,
                     onClearDay = { model.historyDay = "" },
                     onDelete = { model.delete(it.id) },

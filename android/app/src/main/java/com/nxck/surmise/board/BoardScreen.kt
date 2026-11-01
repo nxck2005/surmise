@@ -86,7 +86,8 @@ fun BoardScreen(
     val v = model.view
     val context = LocalContext.current
     val haptics = rememberHaptics()
-    val moving = SurmiseTheme.motion.enabled
+    val motion = SurmiseTheme.motion
+    val moving = motion.enabled
     val tokens = SurmiseTheme.tokens
 
     // The keys show what the board showed before the row now turning, so a
@@ -99,12 +100,13 @@ fun BoardScreen(
         if (model.shakes == 0) return@LaunchedEffect
         haptics.reject()
         if (moving) {
+            val step = motion.ms(360) / 5
             shake.animateTo(0f, keyframes {
-                durationMillis = 360
-                -8f at 72
-                8f at 144
-                -6f at 216
-                6f at 288
+                durationMillis = step * 5
+                -motion.reach(8f) at step
+                motion.reach(8f) at step * 2
+                -motion.reach(6f) at step * 3
+                motion.reach(6f) at step * 4
             })
         }
     }
@@ -259,7 +261,7 @@ private fun Grid(
                             letter = letter,
                             state = state,
                             size = size,
-                            flipDelayMs = if (r == revealing) c * FLIP_STAGGER_MS else 0,
+                            flipDelayMs = if (r == revealing) c * SurmiseTheme.motion.ms(FLIP_STAGGER_MS) else 0,
                             onFlipped = { if (r == revealing) onLanded() },
                             modifier = if (r == current && c < v.typing.length) {
                                 Modifier.clickable(
@@ -281,13 +283,14 @@ private fun Grid(
 @Composable
 private fun HopBox(hop: Boolean, index: Int, last: Boolean, moving: Boolean, onDone: () -> Unit, content: @Composable () -> Unit) {
     val y = remember { Animatable(0f) }
+    val motion = SurmiseTheme.motion
     LaunchedEffect(hop) {
         if (!hop) return@LaunchedEffect
         if (moving) {
             y.animateTo(0f, keyframes {
-                durationMillis = HOP_MS
-                delayMillis = index * HOP_STAGGER_MS
-                -10f at HOP_MS * 4 / 10
+                durationMillis = motion.ms(HOP_MS)
+                delayMillis = index * motion.ms(HOP_STAGGER_MS)
+                -motion.reach(10f) at motion.ms(HOP_MS) * 4 / 10
             })
         }
         if (last) onDone()
