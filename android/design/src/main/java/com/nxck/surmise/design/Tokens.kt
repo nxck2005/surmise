@@ -183,7 +183,7 @@ private data class TokensDto(
 private fun TileDto.toColors() = TileColors(hex(fill), hex(letter))
 
 /** Parses the engine's `#rrggbb`. Anything else is a contract break, so it throws. */
-internal fun hex(s: String): Color {
+fun hex(s: String): Color {
     require(s.length == 7 && s[0] == '#') { "want #rrggbb, got \"$s\"" }
     val rgb = s.substring(1).toLong(16)
     return Color(0xFF000000 or rgb)
