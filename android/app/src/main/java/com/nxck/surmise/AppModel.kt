@@ -20,8 +20,17 @@ import kotlinx.coroutines.launch
 /** A screen pushed over the tabs. The tabs are the root and never popped. */
 sealed interface Route {
     data object Tabs : Route
+    data object Daily : Route
     data object Board : Route
 }
+
+/** How deep a route sits, so a change of route knows whether it pushes or pops. */
+val Route.depth: Int
+    get() = when (this) {
+        Route.Tabs -> 0
+        Route.Daily -> 1
+        Route.Board -> 2
+    }
 
 enum class Tab { Play, History, Record, Settings }
 
@@ -93,6 +102,12 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
         }
     }
 
+    /** Shows the daily screen. */
+    fun showDaily() {
+        if (top != Route.Daily) stack = stack + Route.Daily
+        refreshHome()
+    }
+
     fun openDaily(length: Int) = open { client.dailyOpen(DailyOpenRequest(length = length)) }
 
     fun resume(id: String) = open { client.boardResume(ResumeRequest(id)) }
@@ -114,21 +129,44 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
         board = boardModel(v)
     }
 
-    private fun boardModel(v: BoardView) = BoardModel(client, scope, v, onHome = ::closeBoard, onReplace = ::replaceBoard)
+    private fun boardModel(v: BoardView) = BoardModel(
+        client,
+        scope,
+        v,
+        onLeave = { next -> closeBoard(then = if (next == "daily") Route.Daily else null) },
+        onReplace = ::replaceBoard,
+    )
 
-    /** Leaves the board screen: banks the clock and saves, then goes home. */
-    fun closeBoard() {
-        val b = board ?: return pop()
+    /**
+     * Leaves the board screen: banks the clock and saves, then goes back, or
+     * on to [then] (the daily screen, after a daily's result).
+     */
+    fun closeBoard(then: Route? = null) {
+        val b = board
         scope.launch {
-            b.leave()
+            b?.leave()
             board = null
             pop()
+            if (then != null && top != then) stack = stack + then
+        }
+    }
+
+    /** Leaves the board for the play tab, whatever it was opened from. */
+    fun goHome() {
+        val b = board
+        scope.launch {
+            b?.leave()
+            board = null
+            stack = listOf(Route.Tabs)
+            tab = Tab.Play
+            refreshHome()
         }
     }
 
     fun back() {
         when (top) {
             Route.Board -> closeBoard()
+            Route.Daily -> pop()
             Route.Tabs -> if (tab != Tab.Play) tab = Tab.Play
         }
     }
@@ -138,7 +176,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
 
     private fun pop() {
         if (stack.size > 1) stack = stack.dropLast(1)
-        if (top == Route.Tabs) refreshHome()
+        refreshHome()
     }
 
     /** The app went to the background: bank the running clock. */

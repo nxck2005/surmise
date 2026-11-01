@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.board.BoardScreen
+import com.nxck.surmise.daily.DailyScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
 import com.nxck.surmise.design.SettleEasing
@@ -57,7 +58,7 @@ fun SurmiseApp(model: AppModel) {
         AnimatedContent(
             targetState = model.top,
             transitionSpec = {
-                val pushing = targetState != Route.Tabs
+                val pushing = targetState.depth > initialState.depth
                 val spec = tween<androidx.compose.ui.unit.IntOffset>(if (motion.enabled) PUSH_MS else 0, easing = SettleEasing)
                 val fade = tween<Float>(if (motion.enabled) PUSH_MS else 0)
                 if (pushing) {
@@ -71,8 +72,16 @@ fun SurmiseApp(model: AppModel) {
         ) { route ->
             when (route) {
                 Route.Tabs -> Tabs(model)
+                Route.Daily -> DailyScreen(
+                    daily = model.daily,
+                    date = homeDate(),
+                    playedToday = if (model.online.consent) model.online.menuCount else 0,
+                    onBack = model::back,
+                    onOpen = model::openDaily,
+                    onShare = { share(context, it) },
+                )
                 Route.Board -> model.board?.let { b ->
-                    BoardScreen(b, onBack = model::closeBoard, onShare = { share(context, it) })
+                    BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
                 }
             }
         }
@@ -102,6 +111,7 @@ private fun Tabs(model: AppModel) {
                     ),
                     actions = HomeActions(
                         onDaily = model::openDaily,
+                        onDailyScreen = model::showDaily,
                         onPlay = model::playLength,
                         onRecord = { model.tab = Tab.Record },
                     ),

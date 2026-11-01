@@ -28,6 +28,17 @@
         <item quantity="one">%1$d guess in</item>
         <item quantity="other">%1$d guesses in</item>
     </plurals>
+    <string name="daily_played_all">%1$s dailies played today, across all three</string>
+    <string name="daily_next_hm">next daily in %1$dh %2$dm</string>
+    <string name="daily_next_m">next daily in %1$dm</string>
+    <string name="daily_solved_time">solved in %1$d, %2$s</string>
+    <string name="daily_action_continue">continue</string>
+    <string name="daily_action_play">play</string>
+    <string name="trio_hint">finish all three to share them as one result</string>
+    <plurals name="trio_summary">
+        <item quantity="one">%1$d guess, %2$s</item>
+        <item quantity="other">%1$d guesses, %2$s</item>
+    </plurals>
     <string name="section_play">play</string>
     <string name="letters_suffix">letters</string>
     <string name="new_puzzle">new puzzle</string>

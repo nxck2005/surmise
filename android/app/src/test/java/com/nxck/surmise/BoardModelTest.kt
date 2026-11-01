@@ -85,8 +85,8 @@ class BoardModelTest {
     }
 
     @Test
-    fun nextOnADailyGoesHome() = runTest(UnconfinedTestDispatcher()) {
-        var home = false
+    fun nextOnADailyGoesToTheDailyScreen() = runTest(UnconfinedTestDispatcher()) {
+        var left: String? = null
         val daily = boardWon.copy(kind = "daily")
         val m = BoardModel(
             fakeClient(
@@ -95,10 +95,10 @@ class BoardModelTest {
                     "result.view" to ok(ResultView.serializer(), resultWon.copy(board = daily, next = "daily")),
                 ),
             ),
-            this, boardInPlay, { home = true }, {},
+            this, boardInPlay, { left = it }, {},
         )
         m.submit()
         m.next()
-        assertTrue(home)
+        assertEquals("daily", left)
     }
 }
