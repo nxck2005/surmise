@@ -47,6 +47,13 @@ data class AppTokens(
 )
 
 @Serializable
+data class BestView(
+    @SerialName("id") val id: String = "",
+    @SerialName("attempts") val attempts: Int = 0,
+    @SerialName("elapsedMs") val elapsedMs: Long = 0L,
+)
+
+@Serializable
 data class BoardView(
     @SerialName("id") val id: String = "",
     @SerialName("code") val code: String = "",
@@ -66,8 +73,100 @@ data class BoardView(
 )
 
 @Serializable
+data class CalendarView(
+    @SerialName("today") val today: String = "",
+    @SerialName("days") val days: List<DayView> = emptyList(),
+)
+
+@Serializable
+data class ChallengeCode(
+    @SerialName("code") val code: String = "",
+)
+
+@Serializable
+data class CountRequest(
+    @SerialName("day") val day: String = "",
+    @SerialName("length") val length: Int = 0,
+)
+
+@Serializable
+data class CountView(
+    @SerialName("day") val day: String = "",
+    @SerialName("length") val length: Int = 0,
+    @SerialName("played") val played: Int = 0,
+    @SerialName("solved") val solved: Int = 0,
+    @SerialName("distribution") val distribution: List<Int> = emptyList(),
+)
+
+@Serializable
+data class CustomRequest(
+    @SerialName("word") val word: String = "",
+    @SerialName("length") val length: Int = 0,
+    @SerialName("anyWord") val anyWord: Boolean = false,
+)
+
+@Serializable
+data class DailyOpenRequest(
+    @SerialName("day") val day: String = "",
+    @SerialName("length") val length: Int = 0,
+)
+
+@Serializable
+data class DailyRow(
+    @SerialName("length") val length: Int = 0,
+    @SerialName("id") val id: String = "",
+    @SerialName("code") val code: String = "",
+    @SerialName("state") val state: String = "",
+    @SerialName("attempts") val attempts: Int = 0,
+    @SerialName("maxAttempts") val maxAttempts: Int = 0,
+    @SerialName("elapsedMs") val elapsedMs: Long = 0L,
+    @SerialName("marks") val marks: List<List<String>> = emptyList(),
+)
+
+@Serializable
+data class DailyStatsView(
+    @SerialName("played") val played: Int = 0,
+    @SerialName("won") val won: Int = 0,
+    @SerialName("winRate") val winRate: Double = 0.0,
+    @SerialName("currentStreak") val currentStreak: Int = 0,
+    @SerialName("maxStreak") val maxStreak: Int = 0,
+)
+
+@Serializable
+data class DailyView(
+    @SerialName("day") val day: String = "",
+    @SerialName("resetsAtMs") val resetsAtMs: Long = 0L,
+    @SerialName("rows") val rows: List<DailyRow> = emptyList(),
+    @SerialName("trio") val trio: Trio = Trio(),
+    @SerialName("share") val share: String = "",
+)
+
+@Serializable
+data class DayRequest(
+    @SerialName("day") val day: String = "",
+)
+
+@Serializable
+data class DayView(
+    @SerialName("day") val day: String = "",
+    @SerialName("games") val games: Int = 0,
+    @SerialName("won") val won: Int = 0,
+    @SerialName("lost") val lost: Int = 0,
+    @SerialName("inPlay") val inPlay: Int = 0,
+)
+
+@Serializable
 data class DeleteRequest(
     @SerialName("id") val id: String = "",
+)
+
+@Serializable
+data class FormView(
+    @SerialName("games") val games: Int = 0,
+    @SerialName("won") val won: Int = 0,
+    @SerialName("winRate") val winRate: Double = 0.0,
+    @SerialName("avgAttempts") val avgAttempts: Double = 0.0,
+    @SerialName("avgTimeMs") val avgTimeMs: Long = 0L,
 )
 
 @Serializable
@@ -85,6 +184,11 @@ data class HistoryItem(
     @SerialName("attempts") val attempts: Int = 0,
     @SerialName("updatedAt") val updatedAt: String = "",
     @SerialName("daily") val daily: String = "",
+)
+
+@Serializable
+data class IDRequest(
+    @SerialName("id") val id: String = "",
 )
 
 @Serializable
@@ -106,13 +210,179 @@ data class Info(
 )
 
 @Serializable
+data class LengthRequest(
+    @SerialName("length") val length: Int = 0,
+)
+
+@Serializable
+data class MakeRoomRequest(
+    @SerialName("mode") val mode: String = "",
+    @SerialName("length") val length: Int = 0,
+    @SerialName("autoStart") val autoStart: Boolean = false,
+)
+
+@Serializable
+data class ModeView(
+    @SerialName("length") val length: Int = 0,
+    @SerialName("played") val played: Int = 0,
+    @SerialName("won") val won: Int = 0,
+    @SerialName("winRate") val winRate: Double = 0.0,
+    @SerialName("avgAttempts") val avgAttempts: Double = 0.0,
+    @SerialName("avgTimeMs") val avgTimeMs: Long = 0L,
+    @SerialName("daily") val daily: DailyStatsView? = null,
+)
+
+@Serializable
 data class NewBoardRequest(
     @SerialName("length") val length: Int = 0,
 )
 
 @Serializable
+data class Note(
+    @SerialName("code") val code: String = "",
+    @SerialName("room") val room: String = "",
+    @SerialName("seq") val seq: Int = 0,
+)
+
+@Serializable
+data class OnlineView(
+    @SerialName("consent") val consent: Boolean = false,
+    @SerialName("gone") val gone: Boolean = false,
+    @SerialName("goneMessage") val goneMessage: String = "",
+    @SerialName("daily") val daily: Boolean = false,
+    @SerialName("rooms") val rooms: Boolean = false,
+    @SerialName("message") val message: String = "",
+    @SerialName("menuCount") val menuCount: Int = 0,
+    @SerialName("counts") val counts: List<CountView> = emptyList(),
+)
+
+@Serializable
+data class OpenerView(
+    @SerialName("word") val word: String = "",
+    @SerialName("games") val games: Int = 0,
+    @SerialName("won") val won: Int = 0,
+    @SerialName("winRate") val winRate: Double = 0.0,
+    @SerialName("avgAttempts") val avgAttempts: Double = 0.0,
+)
+
+@Serializable
+data class ProfileView(
+    @SerialName("displayName") val displayName: String = "",
+    @SerialName("played") val played: Int = 0,
+    @SerialName("won") val won: Int = 0,
+    @SerialName("lost") val lost: Int = 0,
+    @SerialName("inPlay") val inPlay: Int = 0,
+    @SerialName("winRate") val winRate: Double = 0.0,
+    @SerialName("avgAttempts") val avgAttempts: Double = 0.0,
+    @SerialName("avgTimeMs") val avgTimeMs: Long = 0L,
+    @SerialName("currentStreak") val currentStreak: Int = 0,
+    @SerialName("maxStreak") val maxStreak: Int = 0,
+    @SerialName("distribution") val distribution: List<Int> = emptyList(),
+    @SerialName("modes") val modes: List<ModeView> = emptyList(),
+    @SerialName("playtimeMs") val playtimeMs: Long = 0L,
+)
+
+@Serializable
+data class RankView(
+    @SerialName("seat") val seat: Int = 0,
+    @SerialName("name") val name: String = "",
+    @SerialName("solved") val solved: Boolean = false,
+    @SerialName("guesses") val guesses: Int = 0,
+    @SerialName("elapsedMs") val elapsedMs: Long = 0L,
+    @SerialName("rows") val rows: List<List<String>> = emptyList(),
+    @SerialName("you") val you: Boolean = false,
+)
+
+@Serializable
+data class ReadyRequest(
+    @SerialName("ready") val ready: Boolean = false,
+)
+
+@Serializable
+data class ResultView(
+    @SerialName("board") val board: BoardView = BoardView(),
+    @SerialName("attempts") val attempts: String = "",
+    @SerialName("share") val share: String = "",
+    @SerialName("fastest") val fastest: Boolean = false,
+    @SerialName("fewest") val fewest: Boolean = false,
+    @SerialName("next") val next: String = "",
+)
+
+@Serializable
 data class ResumeRequest(
     @SerialName("id") val id: String = "",
+)
+
+@Serializable
+data class RoomCode(
+    @SerialName("code") val code: String = "",
+)
+
+@Serializable
+data class RoomEntryView(
+    @SerialName("code") val code: String = "",
+    @SerialName("mode") val mode: String = "",
+    @SerialName("joinedAtMs") val joinedAtMs: Long = 0L,
+    @SerialName("open") val open: Boolean = false,
+)
+
+@Serializable
+data class RoomPlayerView(
+    @SerialName("seat") val seat: Int = 0,
+    @SerialName("name") val name: String = "",
+    @SerialName("connected") val connected: Boolean = false,
+    @SerialName("ready") val ready: Boolean = false,
+    @SerialName("inRound") val inRound: Boolean = false,
+    @SerialName("guesses") val guesses: Int = 0,
+    @SerialName("done") val done: Boolean = false,
+    @SerialName("solved") val solved: Boolean = false,
+    @SerialName("rows") val rows: List<List<String>> = emptyList(),
+    @SerialName("you") val you: Boolean = false,
+)
+
+@Serializable
+data class RoomResultView(
+    @SerialName("id") val id: String = "",
+    @SerialName("code") val code: String = "",
+    @SerialName("mode") val mode: String = "",
+    @SerialName("round") val round: Int = 0,
+    @SerialName("seat") val seat: Int = 0,
+    @SerialName("length") val length: Int = 0,
+    @SerialName("word") val word: String = "",
+    @SerialName("ranking") val ranking: List<RankView> = emptyList(),
+    @SerialName("canRefresh") val canRefresh: Boolean = false,
+    @SerialName("canRematch") val canRematch: Boolean = false,
+)
+
+@Serializable
+data class RoomView(
+    @SerialName("active") val active: Boolean = false,
+    @SerialName("screen") val screen: String = "",
+    @SerialName("code") val code: String = "",
+    @SerialName("mode") val mode: String = "",
+    @SerialName("length") val length: Int = 0,
+    @SerialName("autoStart") val autoStart: Boolean = false,
+    @SerialName("seat") val seat: Int = 0,
+    @SerialName("host") val host: Int = 0,
+    @SerialName("isHost") val isHost: Boolean = false,
+    @SerialName("connected") val connected: Boolean = false,
+    @SerialName("reconnecting") val reconnecting: Boolean = false,
+    @SerialName("phase") val phase: String = "",
+    @SerialName("round") val round: Int = 0,
+    @SerialName("goAtMs") val goAtMs: Long = 0L,
+    @SerialName("endsAtMs") val endsAtMs: Long = 0L,
+    @SerialName("expiresAtMs") val expiresAtMs: Long = 0L,
+    @SerialName("players") val players: List<RoomPlayerView> = emptyList(),
+    @SerialName("board") val board: BoardView? = null,
+    @SerialName("pending") val pending: Boolean = false,
+    @SerialName("results") val results: RoomResultView? = null,
+    @SerialName("probe") val probe: Boolean = false,
+    @SerialName("note") val note: Note = Note(),
+)
+
+@Serializable
+data class RoomsList(
+    @SerialName("items") val items: List<RoomEntryView> = emptyList(),
 )
 
 @Serializable
@@ -138,6 +408,33 @@ data class SettingsPatch(
     @SerialName("rememberLast") val rememberLast: Boolean? = null,
     @SerialName("motion") val motion: String? = null,
     @SerialName("network") val network: Boolean? = null,
+)
+
+@Serializable
+data class SprintOptions(
+    @SerialName("durationsMs") val durationsMs: List<Long> = emptyList(),
+    @SerialName("defaultMs") val defaultMs: Long = 0L,
+)
+
+@Serializable
+data class SprintRequest(
+    @SerialName("length") val length: Int = 0,
+    @SerialName("durationMs") val durationMs: Long = 0L,
+)
+
+@Serializable
+data class SprintView(
+    @SerialName("board") val board: BoardView = BoardView(),
+    @SerialName("length") val length: Int = 0,
+    @SerialName("durationMs") val durationMs: Long = 0L,
+    @SerialName("leftMs") val leftMs: Long = 0L,
+    @SerialName("over") val over: Boolean = false,
+    @SerialName("dealt") val dealt: Int = 0,
+    @SerialName("solved") val solved: Int = 0,
+    @SerialName("missed") val missed: Int = 0,
+    @SerialName("avgGuesses") val avgGuesses: Double = 0.0,
+    @SerialName("accuracy") val accuracy: Int = 0,
+    @SerialName("solveTimeMs") val solveTimeMs: Long = 0L,
 )
 
 @Serializable
@@ -187,8 +484,28 @@ data class TokensRequest(
 )
 
 @Serializable
+data class TrendsView(
+    @SerialName("length") val length: Int = 0,
+    @SerialName("recentWindow") val recentWindow: Int = 0,
+    @SerialName("recent") val recent: FormView = FormView(),
+    @SerialName("allTime") val allTime: FormView = FormView(),
+    @SerialName("fastest") val fastest: BestView? = null,
+    @SerialName("fewest") val fewest: BestView? = null,
+    @SerialName("openers") val openers: List<OpenerView> = emptyList(),
+)
+
+@Serializable
 data class TrimRequest(
     @SerialName("index") val index: Int = 0,
+)
+
+@Serializable
+data class Trio(
+    @SerialName("done") val done: Int = 0,
+    @SerialName("of") val of: Int = 0,
+    @SerialName("guesses") val guesses: Int = 0,
+    @SerialName("elapsedMs") val elapsedMs: Long = 0L,
+    @SerialName("complete") val complete: Boolean = false,
 )
 
 @Serializable
@@ -274,6 +591,30 @@ class CoreClient(private val raw: suspend (method: String, json: String) -> Stri
     suspend fun boardView(): BoardView =
         call("board.view", "{}", BoardView.serializer())
 
+    /** challenge.new */
+    suspend fun challengeNew(request: LengthRequest): ChallengeCode =
+        call("challenge.new", json.encodeToString(LengthRequest.serializer(), request), ChallengeCode.serializer())
+
+    /** challenge.open */
+    suspend fun challengeOpen(request: ChallengeCode): BoardView =
+        call("challenge.open", json.encodeToString(ChallengeCode.serializer(), request), BoardView.serializer())
+
+    /** custom.check */
+    suspend fun customCheck(request: CustomRequest): Unit =
+        call("custom.check", json.encodeToString(CustomRequest.serializer(), request), null)
+
+    /** custom.start */
+    suspend fun customStart(request: CustomRequest): BoardView =
+        call("custom.start", json.encodeToString(CustomRequest.serializer(), request), BoardView.serializer())
+
+    /** daily.open */
+    suspend fun dailyOpen(request: DailyOpenRequest): BoardView =
+        call("daily.open", json.encodeToString(DailyOpenRequest.serializer(), request), BoardView.serializer())
+
+    /** daily.view */
+    suspend fun dailyView(request: DayRequest): DailyView =
+        call("daily.view", json.encodeToString(DayRequest.serializer(), request), DailyView.serializer())
+
     /** history.delete */
     suspend fun historyDelete(request: DeleteRequest): Unit =
         call("history.delete", json.encodeToString(DeleteRequest.serializer(), request), null)
@@ -282,6 +623,98 @@ class CoreClient(private val raw: suspend (method: String, json: String) -> Stri
     suspend fun historyList(): History =
         call("history.list", "{}", History.serializer())
 
+    /** online.dailyCount */
+    suspend fun onlineDailyCount(request: CountRequest): OnlineView =
+        call("online.dailyCount", json.encodeToString(CountRequest.serializer(), request), OnlineView.serializer())
+
+    /** online.menuCount */
+    suspend fun onlineMenuCount(): OnlineView =
+        call("online.menuCount", "{}", OnlineView.serializer())
+
+    /** online.status */
+    suspend fun onlineStatus(): OnlineView =
+        call("online.status", "{}", OnlineView.serializer())
+
+    /** online.view */
+    suspend fun onlineView(): OnlineView =
+        call("online.view", "{}", OnlineView.serializer())
+
+    /** record.calendar */
+    suspend fun recordCalendar(): CalendarView =
+        call("record.calendar", "{}", CalendarView.serializer())
+
+    /** record.profile */
+    suspend fun recordProfile(): ProfileView =
+        call("record.profile", "{}", ProfileView.serializer())
+
+    /** record.trends */
+    suspend fun recordTrends(request: LengthRequest): TrendsView =
+        call("record.trends", json.encodeToString(LengthRequest.serializer(), request), TrendsView.serializer())
+
+    /** result.view */
+    suspend fun resultView(): ResultView =
+        call("result.view", "{}", ResultView.serializer())
+
+    /** rooms.close */
+    suspend fun roomsClose(): RoomView =
+        call("rooms.close", "{}", RoomView.serializer())
+
+    /** rooms.delete */
+    suspend fun roomsDelete(): RoomView =
+        call("rooms.delete", "{}", RoomView.serializer())
+
+    /** rooms.join */
+    suspend fun roomsJoin(request: RoomCode): RoomView =
+        call("rooms.join", json.encodeToString(RoomCode.serializer(), request), RoomView.serializer())
+
+    /** rooms.leave */
+    suspend fun roomsLeave(request: RoomCode): RoomView =
+        call("rooms.leave", json.encodeToString(RoomCode.serializer(), request), RoomView.serializer())
+
+    /** rooms.list */
+    suspend fun roomsList(): RoomsList =
+        call("rooms.list", "{}", RoomsList.serializer())
+
+    /** rooms.make */
+    suspend fun roomsMake(request: MakeRoomRequest): RoomView =
+        call("rooms.make", json.encodeToString(MakeRoomRequest.serializer(), request), RoomView.serializer())
+
+    /** rooms.probe */
+    suspend fun roomsProbe(): RoomView =
+        call("rooms.probe", "{}", RoomView.serializer())
+
+    /** rooms.ready */
+    suspend fun roomsReady(request: ReadyRequest): RoomView =
+        call("rooms.ready", json.encodeToString(ReadyRequest.serializer(), request), RoomView.serializer())
+
+    /** rooms.refresh */
+    suspend fun roomsRefresh(request: IDRequest): RoomResultView =
+        call("rooms.refresh", json.encodeToString(IDRequest.serializer(), request), RoomResultView.serializer())
+
+    /** rooms.rematch */
+    suspend fun roomsRematch(): RoomView =
+        call("rooms.rematch", "{}", RoomView.serializer())
+
+    /** rooms.result */
+    suspend fun roomsResult(request: IDRequest): RoomResultView =
+        call("rooms.result", json.encodeToString(IDRequest.serializer(), request), RoomResultView.serializer())
+
+    /** rooms.start */
+    suspend fun roomsStart(): RoomView =
+        call("rooms.start", "{}", RoomView.serializer())
+
+    /** rooms.submit */
+    suspend fun roomsSubmit(): RoomView =
+        call("rooms.submit", "{}", RoomView.serializer())
+
+    /** rooms.type */
+    suspend fun roomsType(request: TypeRequest): RoomView =
+        call("rooms.type", json.encodeToString(TypeRequest.serializer(), request), RoomView.serializer())
+
+    /** rooms.view */
+    suspend fun roomsView(): RoomView =
+        call("rooms.view", "{}", RoomView.serializer())
+
     /** settings.get */
     suspend fun settingsGet(): Settings =
         call("settings.get", "{}", Settings.serializer())
@@ -289,6 +722,42 @@ class CoreClient(private val raw: suspend (method: String, json: String) -> Stri
     /** settings.update */
     suspend fun settingsUpdate(request: SettingsPatch): Settings =
         call("settings.update", json.encodeToString(SettingsPatch.serializer(), request), Settings.serializer())
+
+    /** sprint.delete */
+    suspend fun sprintDelete(): SprintView =
+        call("sprint.delete", "{}", SprintView.serializer())
+
+    /** sprint.end */
+    suspend fun sprintEnd(): SprintView =
+        call("sprint.end", "{}", SprintView.serializer())
+
+    /** sprint.next */
+    suspend fun sprintNext(): SprintView =
+        call("sprint.next", "{}", SprintView.serializer())
+
+    /** sprint.options */
+    suspend fun sprintOptions(): SprintOptions =
+        call("sprint.options", "{}", SprintOptions.serializer())
+
+    /** sprint.start */
+    suspend fun sprintStart(request: SprintRequest): SprintView =
+        call("sprint.start", json.encodeToString(SprintRequest.serializer(), request), SprintView.serializer())
+
+    /** sprint.submit */
+    suspend fun sprintSubmit(): SprintView =
+        call("sprint.submit", "{}", SprintView.serializer())
+
+    /** sprint.trim */
+    suspend fun sprintTrim(request: TrimRequest): SprintView =
+        call("sprint.trim", json.encodeToString(TrimRequest.serializer(), request), SprintView.serializer())
+
+    /** sprint.type */
+    suspend fun sprintType(request: TypeRequest): SprintView =
+        call("sprint.type", json.encodeToString(TypeRequest.serializer(), request), SprintView.serializer())
+
+    /** sprint.view */
+    suspend fun sprintView(): SprintView =
+        call("sprint.view", "{}", SprintView.serializer())
 
     /** themes.list */
     suspend fun themesList(): Themes =

@@ -43,6 +43,13 @@ func init() {
 // the old board keeps it open: its last guess is not on disk yet, and the
 // player should hear so before it is dropped.
 func (e *Engine) open(next func() (*play.Board, error)) (play.BoardView, error) {
+	if e.sprint != nil {
+		// A run in progress ends; its open board leaves with it.
+		if err := e.sprint.End(); err != nil {
+			return play.BoardView{}, err
+		}
+		e.sprint, e.board = nil, nil
+	}
 	if e.board != nil {
 		if err := e.board.Leave(); err != nil {
 			return play.BoardView{}, err
@@ -88,11 +95,17 @@ func (e *Engine) boardView(Empty) (play.BoardView, error) {
 
 func (e *Engine) boardType(r TypeRequest) (play.BoardView, error) {
 	return e.withBoard(func(b *play.Board) error {
-		if c, n := utf8.DecodeRuneInString(r.Letter); n == len(r.Letter) && n > 0 {
+		if c, ok := oneLetter(r.Letter); ok {
 			b.Type(c)
 		}
 		return nil
 	})
+}
+
+// oneLetter is the rune of a request that holds exactly one.
+func oneLetter(s string) (rune, bool) {
+	c, n := utf8.DecodeRuneInString(s)
+	return c, n == len(s) && n > 0
 }
 
 func (e *Engine) boardDelete(Empty) (play.BoardView, error) {

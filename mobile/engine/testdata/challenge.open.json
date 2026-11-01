@@ -1,0 +1,22 @@
+{
+  "request": {
+    "code": "4500-820C-20A1-G73J"
+  },
+  "response": {
+    "ok": {
+      "canRestart": false,
+      "challengeCode": "4500-820C-20A1-G73J",
+      "code": "033253",
+      "elapsedMs": 0,
+      "id": "1ec76f89-8da7-826a-9732-908286fd820c",
+      "keys": {},
+      "kind": "challenge",
+      "length": 5,
+      "maxAttempts": 6,
+      "rows": [],
+      "running": false,
+      "status": "in_progress",
+      "typing": ""
+    }
+  }
+}

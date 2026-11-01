@@ -1,0 +1,23 @@
+{
+  "request": {
+    "day": "",
+    "length": 5
+  },
+  "response": {
+    "ok": {
+      "canRestart": false,
+      "code": "072492",
+      "daily": "2026-11-01",
+      "elapsedMs": 0,
+      "id": "31ac7e05-0564-8e1a-bc6f-4defeb2be3f0",
+      "keys": {},
+      "kind": "daily",
+      "length": 5,
+      "maxAttempts": 6,
+      "rows": [],
+      "running": false,
+      "status": "in_progress",
+      "typing": ""
+    }
+  }
+}

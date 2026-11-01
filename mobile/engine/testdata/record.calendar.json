@@ -1,0 +1,17 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "days": [
+        {
+          "day": "REDACTED",
+          "games": 1,
+          "inPlay": 0,
+          "lost": 0,
+          "won": 1
+        }
+      ],
+      "today": "2026-11-01"
+    }
+  }
+}

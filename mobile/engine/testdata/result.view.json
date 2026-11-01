@@ -1,0 +1,44 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "attempts": "1/6",
+      "board": {
+        "answer": "crane",
+        "canRestart": true,
+        "code": "988194",
+        "elapsedMs": 42000,
+        "id": "3f2a7c1e-8b4d-4c6a-9e2f-1d5b8a7c3e90",
+        "keys": {
+          "a": "correct",
+          "c": "correct",
+          "e": "correct",
+          "n": "correct",
+          "r": "correct"
+        },
+        "kind": "random",
+        "length": 5,
+        "maxAttempts": 6,
+        "rows": [
+          {
+            "guess": "crane",
+            "marks": [
+              "correct",
+              "correct",
+              "correct",
+              "correct",
+              "correct"
+            ]
+          }
+        ],
+        "running": false,
+        "status": "won",
+        "typing": ""
+      },
+      "fastest": false,
+      "fewest": false,
+      "next": "random",
+      "share": "surmise #988194 1/6\n5 letters · 42s\n■■■■■\n■ correct  □ present  · absent"
+    }
+  }
+}

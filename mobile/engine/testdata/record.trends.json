@@ -1,0 +1,40 @@
+{
+  "request": {
+    "length": 5
+  },
+  "response": {
+    "ok": {
+      "allTime": {
+        "avgAttempts": 2,
+        "avgTimeMs": 0,
+        "games": 1,
+        "winRate": 1,
+        "won": 1
+      },
+      "fastest": null,
+      "fewest": {
+        "attempts": 2,
+        "elapsedMs": 0,
+        "id": "3f2a7c1e-8b4d-4c6a-9e2f-1d5b8a7c3e90"
+      },
+      "length": 5,
+      "openers": [
+        {
+          "avgAttempts": 2,
+          "games": 1,
+          "winRate": 1,
+          "won": 1,
+          "word": "slate"
+        }
+      ],
+      "recent": {
+        "avgAttempts": 2,
+        "avgTimeMs": 0,
+        "games": 1,
+        "winRate": 1,
+        "won": 1
+      },
+      "recentWindow": 20
+    }
+  }
+}

@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/play"
 	"github.com/nxck2005/surmise/internal/store"
 )
@@ -39,9 +40,15 @@ type Engine struct {
 	// board is the one open board, or nil. Opening another leaves this one
 	// first, so its time is banked and its last guess saved.
 	board *play.Board
+	// sprint is the timed run in progress, or nil. Its board is board.
+	sprint *play.Sprint
 
 	// emit sends an event to the app. Nil sends nothing.
 	emit func(kind string, payload []byte)
+
+	// posts carries the network's answers to the one worker that applies
+	// them (startHost); nil with no network.
+	posts chan func()
 }
 
 // Config is what Open needs from the platform.
@@ -55,6 +62,10 @@ type Config struct {
 
 	// Clock is the time source. Nil is the wall clock; the tests stop it.
 	Clock play.Clock
+
+	// Online is the server. Nil keeps the engine offline whatever the
+	// player's consent says.
+	Online online.Client
 }
 
 // Open opens an install. The zone is loaded here, from the embedded zone
@@ -72,10 +83,14 @@ func Open(c Config) (*Engine, error) {
 	if clock == nil {
 		clock = play.SystemClock{}
 	}
-	return &Engine{
+	e := &Engine{
 		dir: c.DataDir, zone: loc, version: c.Version, abi: c.ABI, client: c.Client,
 		st: st, app: play.New(st, clock), clock: clock, emit: c.Emit,
-	}, nil
+	}
+	if c.Online != nil {
+		e.startHost(c.Online)
+	}
+	return e, nil
 }
 
 // SetZone changes the device zone, on ACTION_TIMEZONE_CHANGED. An unknown name
@@ -91,10 +106,12 @@ func (e *Engine) SetZone(name string) error {
 	return nil
 }
 
-// Close leaves the open board, banking its time and saving it.
+// Close leaves the open board, banking its time and saving it, and steps
+// away from any open room without leaving it.
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.app.CloseRoom()
 	if e.board == nil {
 		return nil
 	}

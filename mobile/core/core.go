@@ -29,9 +29,10 @@ type Engine struct {
 // version the app's version name and abi the device's primary ABI; l may be
 // nil.
 func Open(dataDir, zone, version, abi string, l Listener) (*Engine, error) {
+	client := online.ClientName(brand.Name, version, "android", abi)
 	c := engine.Config{
-		DataDir: dataDir, Zone: zone, Version: version, ABI: abi,
-		Client: online.ClientName(brand.Name, version, "android", abi),
+		DataDir: dataDir, Zone: zone, Version: version, ABI: abi, Client: client,
+		Online: online.New(brand.API, client),
 	}
 	if l != nil {
 		c.Emit = l.OnEvent

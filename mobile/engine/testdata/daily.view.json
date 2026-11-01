@@ -1,0 +1,50 @@
+{
+  "request": {
+    "day": ""
+  },
+  "response": {
+    "ok": {
+      "day": "2026-11-01",
+      "resetsAtMs": 1793577600000,
+      "rows": [
+        {
+          "attempts": 0,
+          "code": "580395",
+          "elapsedMs": 0,
+          "id": "a76fc967-f49e-85ad-8bdd-bd72a2f0ed79",
+          "length": 4,
+          "marks": [],
+          "maxAttempts": 5,
+          "state": "new"
+        },
+        {
+          "attempts": 0,
+          "code": "072492",
+          "elapsedMs": 0,
+          "id": "31ac7e05-0564-8e1a-bc6f-4defeb2be3f0",
+          "length": 5,
+          "marks": [],
+          "maxAttempts": 6,
+          "state": "new"
+        },
+        {
+          "attempts": 0,
+          "code": "246447",
+          "elapsedMs": 0,
+          "id": "55856e6a-e3b7-8e58-b313-fbbb9b910556",
+          "length": 6,
+          "marks": [],
+          "maxAttempts": 7,
+          "state": "new"
+        }
+      ],
+      "trio": {
+        "complete": false,
+        "done": 0,
+        "elapsedMs": 0,
+        "guesses": 0,
+        "of": 3
+      }
+    }
+  }
+}

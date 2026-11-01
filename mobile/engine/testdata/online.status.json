@@ -1,0 +1,15 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "consent": false,
+      "counts": [],
+      "daily": false,
+      "gone": false,
+      "goneMessage": "",
+      "menuCount": -1,
+      "message": "",
+      "rooms": false
+    }
+  }
+}

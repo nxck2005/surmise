@@ -1,0 +1,33 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "avgAttempts": 2,
+      "avgTimeMs": 0,
+      "currentStreak": 1,
+      "displayName": "",
+      "distribution": [
+        0,
+        1
+      ],
+      "inPlay": 0,
+      "lost": 0,
+      "maxStreak": 1,
+      "modes": [
+        {
+          "avgAttempts": 2,
+          "avgTimeMs": 0,
+          "daily": null,
+          "length": 5,
+          "played": 1,
+          "winRate": 1,
+          "won": 1
+        }
+      ],
+      "played": 1,
+      "playtimeMs": 0,
+      "winRate": 1,
+      "won": 1
+    }
+  }
+}
