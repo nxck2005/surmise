@@ -21,8 +21,14 @@ class PlaceholderScreenshotTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun placeholder() {
-        compose.setContent { SurmiseTheme { Placeholder() } }
+    fun placeholderNight() {
+        compose.setContent { SurmiseTheme(dark = true) { Placeholder() } }
+        compose.onRoot().captureRoboImage()
+    }
+
+    @Test
+    fun placeholderDay() {
+        compose.setContent { SurmiseTheme(dark = false) { Placeholder() } }
         compose.onRoot().captureRoboImage()
     }
 }

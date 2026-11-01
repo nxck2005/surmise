@@ -1,0 +1,45 @@
+{
+  "name": "day",
+  "pair": "night",
+  "fonts": "geist",
+  "dark": false,
+  "canvas": "#f2f2f7",
+  "card": "#ffffff",
+  "sheet": "#ffffff",
+  "highlight": "#ffffff",
+  "ink": "#0b0d12",
+  "inkDim": "#5b6270",
+  "inkMuted": "#5f6673",
+  "accent": "#2f6bf0",
+  "accentText": "#1f5fe0",
+  "action": "#ff8a3d",
+  "onAction": "#060709",
+  "danger": "#c62f3a",
+  "chartHighlight": "#2f6bf0",
+  "chartNeutral": "#d9dce3",
+  "keyFace": "#ffffff",
+  "keySpecial": "#d1d4db",
+  "keySpent": "#c9ccd3",
+  "keyText": "#0b0d12",
+  "keySpentText": "#5f6673",
+  "tileEmpty": "#d4d5da",
+  "tileTyped": "#a9abb3",
+  "cursor": "#1f5fe0",
+  "tiles": {
+    "correct": {
+      "fill": "#2b8f52",
+      "letter": "#ffffff"
+    },
+    "present": {
+      "fill": "#e2b53e",
+      "letter": "#060709"
+    },
+    "absent": {
+      "fill": "#d9dce3",
+      "letter": "#2f3237"
+    }
+  },
+  "glowFrom": "#377bff",
+  "glowTo": "#ff8a3d",
+  "tabTint": "#ffffff"
+}
