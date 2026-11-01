@@ -49,6 +49,13 @@ var (
 	// tombstone is the record of how the day went; rebuilding the puzzle would
 	// write over it at the first guess.
 	ErrDailySpent = &Error{Code: "daily_spent"}
+	// ErrChallengeSpent is a challenge that was played here and deleted.
+	ErrChallengeSpent = &Error{Code: "challenge_spent"}
+	// ErrBadChallenge is a code that does not parse; Err says why.
+	ErrBadChallenge = &Error{Code: "bad_challenge"}
+	// ErrSprintOver is input on a run whose clock has run out.
+	ErrSprintOver = &Error{Code: "sprint_over"}
+
 	// ErrNotDone is a result asked of a puzzle still in play.
 	ErrNotDone = &Error{Code: "not_done"}
 
