@@ -45,6 +45,13 @@ var (
 	ErrRestartRoom      = &Error{Code: "restart_room"}
 	ErrRestartSprint    = &Error{Code: "restart_sprint"}
 
+	// ErrDailySpent is a daily that was played and then deleted. Its
+	// tombstone is the record of how the day went; rebuilding the puzzle would
+	// write over it at the first guess.
+	ErrDailySpent = &Error{Code: "daily_spent"}
+	// ErrNotDone is a result asked of a puzzle still in play.
+	ErrNotDone = &Error{Code: "not_done"}
+
 	// ErrSaveFailed wraps a store error. The move it followed still happened:
 	// a guess the store could not write is still on the board.
 	ErrSaveFailed = &Error{Code: "save_failed"}

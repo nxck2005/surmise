@@ -15,6 +15,7 @@ package play
 import (
 	"time"
 
+	"github.com/nxck2005/surmise/internal/daily"
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/store"
 )
@@ -50,6 +51,9 @@ type App struct {
 	histWrites uint64
 	histOK     bool
 
+	// daily is where a day's seed comes from. daily.Local outside the tests.
+	daily daily.Source
+
 	// draw makes a random puzzle. It is game.New outside the tests, which
 	// replace it because random ids cannot be made to collide on demand.
 	draw func(int) (*game.Game, error)
@@ -60,8 +64,12 @@ func New(s store.Store, c Clock) *App {
 	if c == nil {
 		c = SystemClock{}
 	}
-	return &App{store: s, clock: c, draw: game.New}
+	return &App{store: s, clock: c, daily: daily.Local(), draw: game.New}
 }
+
+// Today is the daily's day now: a UTC date, the same for every player
+// whatever their zone.
+func (a *App) Today() daily.Day { return daily.DayOf(a.clock.Now()) }
 
 // Store is the store the App was made with.
 func (a *App) Store() store.Store { return a.store }
