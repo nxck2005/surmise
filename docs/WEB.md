@@ -96,7 +96,8 @@ same sequences a terminal would.
 
 It loads on a phone and the on-screen keyboard types, but a 6-letter board plus
 the keyboard wants about 60 columns by 24 rows. Below that it is cramped. This
-is a known limitation, not a bug being worked on.
+is a known limitation, not a bug being worked on. For a phone, use the native
+[Android app](ANDROID.md) instead.
 
 ## Building it yourself
 
