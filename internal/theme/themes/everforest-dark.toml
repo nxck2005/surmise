@@ -15,3 +15,9 @@ absent    = "#3d484d"
 slot      = "#56635f"
 key_face  = "#56635f"
 key_spent = "#232a2e"
+
+# Only the phone app reads what follows; the terminal ignores it. On a phone
+# the tiles are large blocks of colour, so the right-place tile is a shade
+# darker to keep it apart from the wrong-place one by lightness, not hue alone.
+[app.colors]
+correct = "#9db57a"

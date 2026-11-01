@@ -96,10 +96,16 @@ func TestDefaultMatchesItsBundledFile(t *testing.T) {
 
 	// Parse would overlay the file onto Default() and hide exactly the drift
 	// this test is looking for, so read the declarations out of the text.
+	// The [app] sections are the phone's and have no Default() to match.
 	declared := map[string]string{}
+	app := false
 	for line := range strings.Lines(string(raw)) {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "[") {
+		if strings.HasPrefix(line, "[") {
+			app = strings.HasPrefix(line, "[app")
+			continue
+		}
+		if line == "" || strings.HasPrefix(line, "#") || app {
 			continue
 		}
 		key, value, ok := strings.Cut(line, "=")

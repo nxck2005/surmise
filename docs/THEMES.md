@@ -236,7 +236,8 @@ designed the colours and how their licence notice stays attached to them — see
 
 ## The bundled themes
 
-`tokyo night` (the default), `ember dark`, `ember light`, `dracula`, `nord`,
+`tokyo night` (the default), `night` and `day` (the phone app's own look),
+`ember dark`, `ember light`, `dracula`, `nord`,
 `gruvbox dark`, `catppuccin mocha`, `rose pine`, `solarized dark`,
 `everforest dark`, `high contrast` (a colour-blind-friendly orange/blue scheme),
 `deuteranopia` (a blue/amber scheme designed for red-green colour blindness),
@@ -244,6 +245,70 @@ designed the colours and how their licence notice stays attached to them — see
 your terminal's own palette) and `matrix`. They live in
 `internal/theme/themes/*.toml` and are written in exactly this format — every
 one of them is a worked example.
+
+## On the phone
+
+The Android app reads the same theme files. Every theme above works there as
+it is: the app works out the colours it needs from your `[colors]` palette. If
+you want to choose them yourself, add two optional sections. The terminal
+ignores both of them, so a theme with them still looks the same in the
+terminal. An older version of surmise prints an "unknown key" warning for
+each line, and still uses the rest of the theme.
+
+```toml
+[app]
+pair  = "day"     # the light (or dark) partner; the two show as one theme
+fonts = "geist"   # the font set; "geist" is the only one for now
+
+[app.colors]      # every key is optional
+card   = "#16181e"
+action = "#ff8a3d"
+```
+
+Colours under `[app.colors]` take `#rrggbb`, `#rgb` or a palette name like
+`"accent"`. ANSI numbers are refused there: a phone has no terminal palette
+for them to mean. For the same reason, a theme that uses an ANSI number for
+any `[colors]` key (like `terminal`) is not listed in the app.
+
+| key | what it colours | when you leave it out |
+|---|---|---|
+| `canvas` | the ground under everything | `bg` |
+| `card` | cards | `bg`, 7% of the way to `text` |
+| `sheet` | sheets and dialogs | `bg`, 10% of the way to `text` |
+| `highlight` | the thin line at the top of a card | `bg`, 16% of the way to `text` |
+| `ink` | text | `text` |
+| `ink_dim` | supporting text | halfway from `text` to `muted` |
+| `ink_muted` | captions, dates, codes | `muted` |
+| `accent` | selection, charts, links | `accent` |
+| `accent_text` | the accent used as text | the app `accent` |
+| `action` | buttons and switches | the app `accent` |
+| `on_action` | text on a button | `bg` or `text`, whichever stands out more |
+| `danger` | errors, delete | `error` |
+| `chart_highlight` | the bar that matters | the app `accent` |
+| `chart_neutral` | every other bar | `bg`, 25% of the way to `text` |
+| `key_face` | a key you have not used | `key_face` |
+| `key_special` | enter and delete | `bg`, 60% of the way to `key_face` |
+| `key_spent` | a key for a letter not in the word | `key_spent` |
+| `key_text` | the letter on a key | `key_unused_text` |
+| `key_spent_text` | the letter on a spent key | `key_absent_text` |
+| `tile_empty` | an empty tile's outline | `slot` |
+| `tile_typed` | a typed tile's outline | `muted` |
+| `cursor` | the outline on the next empty tile | the app `accent` |
+| `correct`, `present`, `absent` | the three tiles | the palette's own |
+| `correct_letter`, `present_letter`, `absent_letter` | the letters on them | `correct_text`, `present_text`, `absent_text` |
+| `glow_from`, `glow_to` | the glow on the daily card | the app `accent`, then `present` |
+| `tab_tint` | the tab bar | the app `card` |
+
+Text has to stay readable, so the app checks the colours it works out: if
+`ink`, `ink_dim`, `ink_muted`, `accent_text` or `on_action` is too faint on
+its ground (less than 4.5:1), or a key or tile letter is less than 3:1, it is
+moved toward black or white until it is readable. A colour you set yourself
+is never changed. The bundled themes are tested to be readable as they are.
+
+The app's colour-blind and high-contrast tile settings replace the tiles of
+every theme, so they work the same whatever theme you pick. Spacing, sizes
+and motion are not part of a theme on the phone, so no theme can move
+anything there.
 
 ## Accessibility
 

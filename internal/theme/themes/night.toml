@@ -1,0 +1,67 @@
+name = "night"
+
+# The phone app's own look, brought to the terminal: a true black ground, cool
+# grey ink, a blue accent for anything selected and a warm orange for anything
+# you can press. The tiles keep the familiar green, yellow and grey. Its light
+# partner is "day".
+
+[colors]
+bg        = "#000000"
+text      = "#f2f4f8"
+accent    = "#7aa8ff"
+muted     = "#7c8496"
+error     = "#ff6b6b"
+
+correct   = "#2f9e5e"
+present   = "#e2b53e"
+absent    = "#2a2f38"
+
+slot      = "#3a3f4a"
+key_face  = "#4a505c"
+key_spent = "#0f1217"
+
+correct_text     = "#ffffff"
+present_text     = "#060709"
+absent_text      = "#d5d9e0"
+key_correct_text = "#ffffff"
+key_present_text = "#060709"
+key_absent_text  = "#7c8496"
+key_unused_text  = "#f2f4f8"
+
+# Only the phone app reads what follows; the terminal ignores it.
+[app]
+pair  = "day"
+fonts = "geist"
+
+[app.colors]
+canvas          = "#000000"
+card            = "#16181e"
+sheet           = "#1a1c22"
+highlight       = "#23252b"
+ink             = "#f2f4f8"
+ink_dim         = "#a1a8b6"
+ink_muted       = "#7f8799"
+accent          = "#4c8dff"
+accent_text     = "#7aa8ff"
+action          = "#ff8a3d"
+on_action       = "#060709"
+danger          = "#ff6b6b"
+chart_highlight = "#4c8dff"
+chart_neutral   = "#2a303b"
+key_face        = "#34373f"
+key_special     = "#22252b"
+key_spent       = "#0f1217"
+key_text        = "#f2f4f8"
+key_spent_text  = "#7c8496"
+tile_empty      = "#2a2d33"
+tile_typed      = "#52565e"
+cursor          = "#7aa8ff"
+correct         = "#2f9e5e"
+correct_letter  = "#ffffff"
+present         = "#e2b53e"
+present_letter  = "#060709"
+absent          = "#2a2f38"
+absent_letter   = "#d5d9e0"
+glow_from       = "#377bff"
+glow_to         = "#ff8a3d"
+tab_tint        = "#202228"
