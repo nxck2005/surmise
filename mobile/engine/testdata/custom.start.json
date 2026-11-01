@@ -1,0 +1,23 @@
+{
+  "request": {
+    "anyWord": false,
+    "length": 5,
+    "word": "crane"
+  },
+  "response": {
+    "ok": {
+      "canRestart": false,
+      "code": "REDACTED",
+      "elapsedMs": 0,
+      "id": "REDACTED",
+      "keys": {},
+      "kind": "custom",
+      "length": 5,
+      "maxAttempts": 6,
+      "rows": [],
+      "running": false,
+      "status": "in_progress",
+      "typing": ""
+    }
+  }
+}

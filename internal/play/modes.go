@@ -245,7 +245,8 @@ type SprintView struct {
 	Board      BoardView `json:"board"`
 	Length     int       `json:"length"`
 	DurationMS int64     `json:"durationMs"`
-	// LeftMS is the time on the clock, never below zero.
+	// LeftMS is the time on the clock: zero once the run is over, however
+	// it ended.
 	LeftMS int64 `json:"leftMs"`
 	Over   bool  `json:"over"`
 
@@ -273,6 +274,9 @@ func (s *Sprint) View() SprintView {
 		Solved:      s.solved,
 		Missed:      s.missed,
 		SolveTimeMS: s.solveTime.Milliseconds(),
+	}
+	if over {
+		v.LeftMS = 0
 	}
 	if s.solved > 0 {
 		v.AvgGuesses = float64(s.attempts) / float64(s.solved)

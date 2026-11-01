@@ -1,0 +1,11 @@
+{
+  "request": {
+    "code": "ABC234"
+  },
+  "response": {
+    "err": {
+      "code": "offline",
+      "detail": "offline"
+    }
+  }
+}

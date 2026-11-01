@@ -1,0 +1,9 @@
+{
+  "request": {},
+  "response": {
+    "err": {
+      "code": "REDACTED",
+      "detail": "too_short"
+    }
+  }
+}

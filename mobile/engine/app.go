@@ -175,12 +175,16 @@ func (e *Engine) settingsUpdate(p SettingsPatch) (Settings, error) {
 		if p.Motion != nil {
 			s.Motion = *p.Motion
 		}
-		if p.Network != nil {
-			s.Network = *p.Network
-		}
 	})
 	if err != nil {
 		return Settings{}, err
+	}
+	// Consent goes through play, which asks for the status on a yes and
+	// closes any open room on a no.
+	if p.Network != nil {
+		if err := e.app.SetNetwork(*p.Network); err != nil {
+			return Settings{}, err
+		}
 	}
 	return settingsOf(e.app.Settings()), nil
 }

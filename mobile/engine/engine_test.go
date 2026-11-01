@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nxck2005/surmise/internal/game"
+	"github.com/nxck2005/surmise/internal/online"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files under testdata")
@@ -94,6 +96,8 @@ type goldenCase struct {
 	setup  func(*testing.T, *Engine, *fakeClock)
 	req    string
 	redact []string
+	// err says the golden is a refusal: its envelope is the err member.
+	err bool
 }
 
 var goldenCases = []goldenCase{
@@ -131,6 +135,72 @@ var goldenCases = []goldenCase{
 	{method: "settings.update", req: `{"displayName":"nick","network":true,"length":6}`},
 	{method: "themes.list", req: `{}`},
 	{method: "themes.tokens", req: `{"name":"night","tiles":""}`},
+
+	{method: "daily.view", req: `{"day":""}`,
+		setup: func(t *testing.T, e *Engine, _ *fakeClock) { call(t, e, "daily.open", `{"length":4}`) }},
+	{method: "daily.open", req: `{"day":"","length":5}`},
+	{method: "result.view", req: `{}`,
+		setup: func(t *testing.T, e *Engine, c *fakeClock) {
+			openFixed(t, e, "c")
+			c.advance(42 * time.Second)
+			typeRest(e, "rane")
+			call(t, e, "board.submit", `{}`)
+		}},
+	{method: "challenge.new", req: `{"length":5}`, redact: []string{"code"}},
+	{method: "challenge.open", req: `{"code":"` + challengeCode + `"}`},
+	{method: "custom.check", req: `{"word":"qzxvw","length":5,"anyWord":false}`, err: true},
+	{method: "custom.start", req: `{"word":"crane","length":5,"anyWord":false}`, redact: []string{"id", "code"}},
+	{method: "sprint.options", req: `{}`},
+	{method: "sprint.start", req: `{"length":5,"durationMs":30000}`, redact: sprintRedact},
+	{method: "sprint.view", req: `{}`, redact: sprintRedact, setup: startSprint(10 * time.Second)},
+	{method: "sprint.type", req: `{"letter":"a"}`, redact: sprintRedact, setup: startSprint(0)},
+	{method: "sprint.delete", req: `{}`, redact: sprintRedact, setup: startSprint(0)},
+	{method: "sprint.trim", req: `{"index":0}`, redact: sprintRedact, setup: startSprint(0)},
+	{method: "sprint.submit", req: `{}`, redact: sprintRedact, err: true, setup: startSprint(0)},
+	{method: "sprint.next", req: `{}`, redact: sprintRedact, setup: startSprint(0)},
+	{method: "sprint.end", req: `{}`, redact: sprintRedact, setup: startSprint(5 * time.Second)},
+	{method: "record.profile", req: `{}`,
+		setup: func(t *testing.T, e *Engine, _ *fakeClock) { saveGame(t, e, fixedID, "crane", "slate", "crane") }},
+	{method: "record.calendar", req: `{}`, redact: []string{"day"},
+		setup: func(t *testing.T, e *Engine, _ *fakeClock) { saveGame(t, e, fixedID, "crane", "slate", "crane") }},
+	{method: "record.trends", req: `{"length":5}`,
+		setup: func(t *testing.T, e *Engine, _ *fakeClock) { saveGame(t, e, fixedID, "crane", "slate", "crane") }},
+
+	{method: "online.view", req: `{}`},
+	{method: "online.status", req: `{}`},
+	{method: "online.menuCount", req: `{}`},
+	{method: "online.dailyCount", req: `{"day":"","length":5}`},
+	{method: "rooms.list", req: `{}`},
+	{method: "rooms.probe", req: `{}`},
+	{method: "rooms.make", req: `{"mode":"live","length":5,"autoStart":false}`, err: true},
+	{method: "rooms.join", req: `{"code":"ABC234"}`, err: true},
+	{method: "rooms.view", req: `{}`},
+	{method: "rooms.type", req: `{"letter":"a"}`},
+	{method: "rooms.delete", req: `{}`},
+	{method: "rooms.submit", req: `{}`, err: true},
+	{method: "rooms.ready", req: `{"ready":true}`},
+	{method: "rooms.start", req: `{}`},
+	{method: "rooms.rematch", req: `{}`},
+	{method: "rooms.leave", req: `{"code":"ABC234"}`},
+	{method: "rooms.close", req: `{}`},
+	{method: "rooms.result", req: `{"id":"` + fixedID + `"}`, err: true},
+	{method: "rooms.refresh", req: `{"id":"` + fixedID + `"}`, err: true},
+}
+
+// challengeCode is one of internal/challenge's frozen vectors (answer faint).
+const challengeCode = "4500-820C-20A1-G73J"
+
+// A sprint's boards are random: their ids and marks are not pinned.
+var sprintRedact = []string{"id", "code", "rows", "keys"}
+
+// startSprint starts a 30-second run and lets the clock run d.
+func startSprint(d time.Duration) func(*testing.T, *Engine, *fakeClock) {
+	return func(t *testing.T, e *Engine, c *fakeClock) {
+		if _, code := call(t, e, "sprint.start", `{"length":5,"durationMs":30000}`); code != "" {
+			t.Fatal(code)
+		}
+		c.advance(d)
+	}
 }
 
 func typeRest(e *Engine, s string) {
@@ -185,7 +255,7 @@ func TestGoldens(t *testing.T) {
 				t.Fatal(err)
 			}
 			if m, ok := resp.(map[string]any); ok {
-				if _, isErr := m["err"]; isErr {
+				if _, isErr := m["err"]; isErr != gc.err {
 					t.Fatalf("%s answered an error: %s", gc.method, raw)
 				}
 			}
@@ -469,5 +539,47 @@ func TestZone(t *testing.T) {
 	}
 	if _, err := Open(Config{DataDir: t.TempDir(), Zone: "Not/AZone"}); err == nil {
 		t.Error("Open accepted an unknown zone")
+	}
+}
+
+// statusClient answers the status and nothing else.
+type statusClient struct{ online.Client }
+
+func (statusClient) Status(context.Context) (online.Status, error) {
+	return online.Status{Features: online.Features{Daily: true, Rooms: false}, Message: "hi"}, nil
+}
+
+// Consent goes through play: saying yes asks for the status, whose answer
+// comes back through the post queue as an "online" event.
+func TestConsentAsksForTheStatus(t *testing.T) {
+	events := make(chan string, 4)
+	e, err := Open(Config{
+		DataDir: t.TempDir(), Zone: "UTC", Client: "test-client", Online: statusClient{},
+		Emit: func(kind string, _ []byte) { events <- kind },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, code := call(t, e, "settings.update", `{"network":true}`); code != "" {
+		t.Fatal(code)
+	}
+	select {
+	case kind := <-events:
+		if kind != "online" {
+			t.Errorf("event %q, want online", kind)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no event after consent")
+	}
+	ok, _ := call(t, e, "online.view", `{}`)
+	var v struct {
+		Consent, Daily, Rooms bool
+		Message               string
+	}
+	if err := json.Unmarshal(ok, &v); err != nil {
+		t.Fatal(err)
+	}
+	if !v.Consent || !v.Daily || v.Rooms || v.Message != "hi" {
+		t.Errorf("online view after the status: %+v", v)
 	}
 }

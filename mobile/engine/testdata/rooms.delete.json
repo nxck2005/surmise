@@ -1,0 +1,32 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "active": false,
+      "autoStart": false,
+      "board": null,
+      "code": "",
+      "connected": false,
+      "endsAtMs": 0,
+      "expiresAtMs": 0,
+      "goAtMs": 0,
+      "host": 0,
+      "isHost": false,
+      "length": 0,
+      "mode": "",
+      "note": {
+        "code": "",
+        "seq": 0
+      },
+      "pending": false,
+      "phase": "",
+      "players": [],
+      "probe": false,
+      "reconnecting": false,
+      "results": null,
+      "round": 0,
+      "screen": "",
+      "seat": 0
+    }
+  }
+}

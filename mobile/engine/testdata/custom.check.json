@@ -1,0 +1,13 @@
+{
+  "request": {
+    "anyWord": false,
+    "length": 5,
+    "word": "qzxvw"
+  },
+  "response": {
+    "err": {
+      "code": "not_a_word",
+      "detail": "not_a_word"
+    }
+  }
+}

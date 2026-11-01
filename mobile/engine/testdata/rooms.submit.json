@@ -1,0 +1,9 @@
+{
+  "request": {},
+  "response": {
+    "err": {
+      "code": "no_room",
+      "detail": "no_room"
+    }
+  }
+}
