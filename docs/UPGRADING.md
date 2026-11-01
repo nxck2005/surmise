@@ -64,6 +64,23 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.12.2 → v0.12.3: Android catches up with the terminal
+
+Four places where the app did less than the terminal, and one wrong label:
+
+- **A room round in the history opens on its ranking**: the word, everyone's
+  place and time, and "check for new results" while an any-time round can
+  still grow. "review" shows your board.
+- **Calm motion is calmer.** The board's flips, hops and shake take half the
+  time and move half as far as on full, as restrained does in the terminal.
+- **Back in a sprint shows the summary.** Before, it ended the run and left
+  without one.
+- **The year's calendar links to a day's puzzles**: "see that day's puzzles"
+  opens the history for that day, and the day's chip clears it.
+- The 10, 15 and 30 second sprint clocks no longer read "0 min".
+
+Nothing is lost and no setting moves. The terminal build is unchanged.
+
 ## v0.12.0 → v0.12.2: the Android app goes online
 
 On v0.12.0 and v0.12.1 the Android app could not reach the server, even with
