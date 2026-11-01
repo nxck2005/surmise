@@ -67,10 +67,11 @@ fun ChallengeScreen(
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Segmented(listOf(4, 5, 6), length, { length = it }) { stringResource(R.string.letters, it) }
                 if (state.made.isNotEmpty() && state.madeLength == length) {
+                    val shareText = stringResource(R.string.challenge_share, state.made)
                     SurmiseText(state.made, type.title, tokens.ink, Modifier.fillMaxWidth(), align = TextAlign.Center)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CapsuleButton(stringResource(R.string.challenge_play_it), { onOpen(state.made) }, Modifier.weight(1f), style = CapsuleStyle.Secondary)
-                        CapsuleButton(stringResource(R.string.share), { onShare(context.getString(R.string.challenge_share, state.made)) }, Modifier.weight(1f))
+                        CapsuleButton(stringResource(R.string.share), { onShare(shareText) }, Modifier.weight(1f))
                     }
                 } else {
                     CapsuleButton(stringResource(R.string.challenge_make_code), { onMake(length) }, Modifier.fillMaxWidth())
