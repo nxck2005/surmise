@@ -15,6 +15,7 @@ import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.board.BoardScreen
 import com.nxck.surmise.board.ResultBody
 import com.nxck.surmise.daily.DailyScreen
+import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
 import com.nxck.surmise.design.Sheet
@@ -79,6 +80,9 @@ class ScreenScreenshotTest(private val theme: String) {
         )
         DailyScreen(done, "sunday, november 1", 0, {}, {}, {}, now = { 1_000L })
     }
+
+    @Test
+    fun history() = shot("history") { HistoryScreen(historyItems, {}, {}) }
 
     @Test
     fun result() = shot("result") {

@@ -9,6 +9,7 @@ import com.nxck.surmise.core.gen.BoardView
 import com.nxck.surmise.core.gen.DailyOpenRequest
 import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.core.gen.DayRequest
+import com.nxck.surmise.core.gen.DeleteRequest
 import com.nxck.surmise.core.gen.HistoryItem
 import com.nxck.surmise.core.gen.NewBoardRequest
 import com.nxck.surmise.core.gen.OnlineView
@@ -109,6 +110,14 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     }
 
     fun openDaily(length: Int) = open { client.dailyOpen(DailyOpenRequest(length = length)) }
+
+    /** Deletes a saved puzzle. A deleted daily stays spent: it cannot be played again. */
+    fun delete(id: String) {
+        scope.launch {
+            runCatching { client.historyDelete(DeleteRequest(id)) }
+            refreshHome()
+        }
+    }
 
     fun resume(id: String) = open { client.boardResume(ResumeRequest(id)) }
 

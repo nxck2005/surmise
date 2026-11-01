@@ -43,6 +43,30 @@
     <string name="letters_suffix">letters</string>
     <string name="new_puzzle">new puzzle</string>
 
+    <!-- History -->
+    <string name="filter_any_length">any length</string>
+    <string name="filter_any_kind">any kind</string>
+    <string name="filter_any_status">any result</string>
+    <string name="kind_random">random</string>
+    <string name="kind_daily">daily</string>
+    <string name="kind_challenge">challenge</string>
+    <string name="kind_custom">custom</string>
+    <string name="kind_room">room</string>
+    <string name="kind_sprint">sprint</string>
+    <string name="status_playing">in play</string>
+    <string name="status_won">solved</string>
+    <string name="status_lost">failed</string>
+    <string name="history_solved">solved %1$d/%2$d</string>
+    <string name="history_failed">failed</string>
+    <string name="history_in_play">in play %1$d/%2$d</string>
+    <string name="history_empty">nothing played yet</string>
+    <string name="history_none_match">nothing matches these filters</string>
+    <string name="delete_title">delete #%1$s?</string>
+    <string name="delete_body">it goes from your history and your stats</string>
+    <string name="delete_daily_body">it goes from your history and your stats, and this daily can\'t be played again</string>
+    <string name="delete">delete</string>
+    <string name="keep">keep</string>
+
     <!-- Board -->
     <string name="back">back</string>
     <string name="letters">%1$d letters</string>

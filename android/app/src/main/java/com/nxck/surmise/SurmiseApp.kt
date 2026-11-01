@@ -27,6 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.board.BoardScreen
 import com.nxck.surmise.daily.DailyScreen
+import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
 import com.nxck.surmise.design.SettleEasing
@@ -115,6 +116,11 @@ private fun Tabs(model: AppModel) {
                         onPlay = model::playLength,
                         onRecord = { model.tab = Tab.Record },
                     ),
+                )
+                Tab.History -> HistoryScreen(
+                    items = model.history,
+                    onOpen = { model.resume(it.id) },
+                    onDelete = { model.delete(it.id) },
                 )
                 else -> Soon()
             }
