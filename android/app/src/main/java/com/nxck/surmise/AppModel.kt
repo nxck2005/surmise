@@ -7,6 +7,8 @@ import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.core.CoreHandle
 import com.nxck.surmise.core.gen.AppTokens
 import com.nxck.surmise.core.gen.BoardView
+import com.nxck.surmise.core.gen.ChallengeCode
+import com.nxck.surmise.core.gen.CustomRequest
 import com.nxck.surmise.core.gen.CalendarView
 import com.nxck.surmise.core.gen.DailyOpenRequest
 import com.nxck.surmise.core.gen.DailyView
@@ -21,11 +23,16 @@ import com.nxck.surmise.core.gen.OnlineView
 import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResumeRequest
 import com.nxck.surmise.core.gen.Settings
+import com.nxck.surmise.core.gen.SprintOptions
+import com.nxck.surmise.core.gen.SprintRequest
 import com.nxck.surmise.core.gen.SettingsPatch
 import com.nxck.surmise.core.gen.ThemeInfo
 import com.nxck.surmise.core.gen.TokensRequest
 import com.nxck.surmise.core.gen.TrendsView
 import com.nxck.surmise.design.SurmiseTokens
+import com.nxck.surmise.home.Way
+import com.nxck.surmise.modes.ChallengeState
+import com.nxck.surmise.sprint.SprintModel
 import com.nxck.surmise.settings.Appearance
 import com.nxck.surmise.settings.Prefs
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +45,9 @@ sealed interface Route {
     data object Daily : Route
     data object Year : Route
     data object HowTo : Route
+    data object Sprint : Route
+    data object Challenge : Route
+    data object Custom : Route
     data object About : Route
     data object Board : Route
 }
@@ -49,6 +59,7 @@ val Route.depth: Int
         Route.Daily -> 1
         Route.Year -> 1
         Route.HowTo -> 1
+        Route.Sprint, Route.Challenge, Route.Custom -> 1
         Route.About -> 1
         Route.Board -> 2
     }
@@ -241,17 +252,86 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
 
     fun resume(id: String) = open { client.boardResume(ResumeRequest(id)) }
 
-    private fun open(opener: suspend () -> BoardView) {
+    private fun open(onFail: (Throwable) -> Unit = { homeNote = it }, opener: suspend () -> BoardView) {
         scope.launch {
             homeNote = null
             runCatching { opener() }
-                .onSuccess { v ->
-                    board = boardModel(v)
-                    if (top != Route.Board) stack = stack + Route.Board
-                }
+                .onSuccess { v -> showBoard(boardModel(v)) }
+                .onFailure(onFail)
+        }
+    }
+
+    private fun showBoard(b: BoardModel) {
+        board = b
+        // A custom board takes the custom screen's place: back from it goes
+        // home, never to a field that held the word.
+        if (top == Route.Custom) stack = stack.dropLast(1)
+        if (top != Route.Board) stack = stack + Route.Board
+    }
+
+    // --- other ways to play ---
+
+    var sprintOptions by mutableStateOf(SprintOptions())
+        private set
+    var challenge by mutableStateOf(ChallengeState())
+        private set
+    var customNote by mutableStateOf<Throwable?>(null)
+        private set
+
+    /** The length a mode's setup starts on: the setting, or 5. */
+    val startLength: Int get() = settings.length.takeIf { it in 4..6 } ?: 5
+
+    fun showWay(w: Way) {
+        when (w) {
+            Way.Sprint -> {
+                scope.launch { runCatching { sprintOptions = client.sprintOptions() } }
+                show(Route.Sprint)
+            }
+            Way.Challenge -> {
+                challenge = ChallengeState()
+                show(Route.Challenge)
+            }
+            Way.Custom -> {
+                customNote = null
+                show(Route.Custom)
+            }
+            Way.Rooms -> Unit
+        }
+    }
+
+    fun startSprint(length: Int, durationMs: Long) {
+        scope.launch {
+            runCatching { client.sprintStart(SprintRequest(length, durationMs)) }
+                .onSuccess { v -> showBoard(SprintModel(client, scope, v, onLeave = { closeBoard() })) }
                 .onFailure { homeNote = it }
         }
     }
+
+    fun makeChallenge(length: Int) {
+        scope.launch {
+            runCatching { client.challengeNew(LengthRequest(length)) }
+                .onSuccess { challenge = ChallengeState(made = it.code, madeLength = length) }
+                .onFailure { challenge = challenge.copy(note = it) }
+        }
+    }
+
+    fun openChallenge(code: String) {
+        challenge = challenge.copy(note = null)
+        open(onFail = { challenge = challenge.copy(note = it) }) { client.challengeOpen(ChallengeCode(code)) }
+    }
+
+    /** Asks the engine whether [word] can be the answer, then [then] hands the phone over. */
+    fun checkCustom(word: String, length: Int, anyWord: Boolean, then: () -> Unit) {
+        scope.launch {
+            customNote = null
+            runCatching { client.customCheck(CustomRequest(word, length, anyWord)) }
+                .onSuccess { then() }
+                .onFailure { customNote = it }
+        }
+    }
+
+    fun startCustom(word: String, length: Int, anyWord: Boolean) =
+        open(onFail = { customNote = it }) { client.customStart(CustomRequest(word, length, anyWord)) }
 
     /** Swaps the open board for another (next puzzle, play again). */
     private fun replaceBoard(v: BoardView) {
@@ -295,7 +375,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     fun back() {
         when (top) {
             Route.Board -> closeBoard()
-            Route.Daily, Route.Year, Route.HowTo, Route.About -> pop()
+            Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
         }
     }

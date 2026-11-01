@@ -186,6 +186,48 @@
     <string name="about_font_show">read the font licence</string>
     <string name="about_font_hide">hide the font licence</string>
 
+    <!-- Other ways to play -->
+    <string name="section_more">more ways to play</string>
+    <string name="rooms">rooms</string>
+    <string name="sprint">sprint</string>
+    <string name="challenge">challenge</string>
+    <string name="custom">custom</string>
+    <string name="way_rooms">race friends on the same word</string>
+    <string name="way_sprint">as many as you can against the clock</string>
+    <string name="way_challenge">send a friend the same word</string>
+    <string name="way_custom">pick a word, pass the phone</string>
+    <string name="sprint_about">words come one after another until the clock runs out. solve as many as you can</string>
+    <string name="sprint_length">length</string>
+    <string name="sprint_clock">clock</string>
+    <string name="minutes">%1$d min</string>
+    <string name="sprint_go">start</string>
+    <plurals name="sprint_solved">
+        <item quantity="one">%1$d solved</item>
+        <item quantity="other">%1$d solved</item>
+    </plurals>
+    <string name="sprint_in">in %1$s at %2$d letters</string>
+    <string name="sprint_dealt">words</string>
+    <string name="sprint_accuracy">solved</string>
+    <string name="sprint_per_word">per word</string>
+    <string name="sprint_again">go again</string>
+    <string name="sprint_stop">stop</string>
+    <string name="challenge_about">a challenge is a code for one word. whoever opens it gets the same puzzle you do</string>
+    <string name="challenge_make">make one</string>
+    <string name="challenge_make_code">make a code</string>
+    <string name="challenge_play_it">play it</string>
+    <string name="challenge_share">try this surmise challenge: %1$s</string>
+    <string name="challenge_enter">got a code?</string>
+    <string name="challenge_hint">XXXX-XXXX-XXXX-XXXX</string>
+    <string name="challenge_open">open it</string>
+    <string name="custom_about">type a word for someone else to guess. it stays hidden, and isn\'t saved until they make a guess</string>
+    <string name="custom_hint">a %1$d-letter word</string>
+    <string name="custom_any">any word</string>
+    <string name="custom_any_note">allow words that aren\'t in the word list</string>
+    <string name="custom_hand_over">hand it over</string>
+    <string name="custom_pass">pass the phone</string>
+    <string name="custom_pass_note">someone picked a %1$d-letter word for you. tap when you\'re the one holding the phone</string>
+    <string name="custom_ready">i\'m ready</string>
+
     <!-- Engine refusals, one line per code -->
     <string name="err_too_short">needs %1$d letters</string>
     <string name="err_not_a_word">not in word list</string>
@@ -194,5 +236,9 @@
     <string name="err_new_puzzle_failed">couldn\'t make a new puzzle</string>
     <string name="err_daily_spent">you deleted this one, so it can\'t be played again</string>
     <string name="err_not_found">that puzzle is gone</string>
+    <string name="err_challenge_spent">you deleted this challenge, so it can\'t be played again</string>
+    <string name="err_bad_challenge">that code doesn\'t look right. check it and try again</string>
+    <string name="err_sprint_over">time\'s up</string>
+    <string name="err_restart">this one can\'t be started over</string>
     <string name="err_other">something went wrong (%1$s)</string>
 </resources>

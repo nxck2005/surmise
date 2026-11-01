@@ -73,7 +73,16 @@ private const val HOP_MS = 300
 
 /** The board screen: the grid, a line for notes, the keyboard and the result sheet. */
 @Composable
-fun BoardScreen(model: BoardModel, onBack: () -> Unit, onHome: () -> Unit, onShare: (String) -> Unit) {
+fun BoardScreen(
+    model: BoardModel,
+    onBack: () -> Unit,
+    onHome: () -> Unit,
+    onShare: (String) -> Unit,
+    title: String? = null,
+    subtitle: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    sheet: (@Composable () -> Unit)? = null,
+) {
     val v = model.view
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -126,12 +135,12 @@ fun BoardScreen(model: BoardModel, onBack: () -> Unit, onHome: () -> Unit, onSha
     ) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(bottom = 8.dp)) {
             TopBar(
-                title = boardTitle(context, v),
-                subtitle = stringResource(R.string.code_prefix, v.code),
+                title = title ?: boardTitle(context, v),
+                subtitle = subtitle ?: stringResource(R.string.code_prefix, v.code),
                 onBack = onBack,
                 modifier = Modifier.padding(top = 8.dp),
             ) {
-                Clock(v, model.viewAt)
+                if (trailing != null) trailing() else Clock(v, model.viewAt)
             }
             BoxWithConstraints(
                 Modifier.fillMaxWidth().weight(1f).padding(top = 20.dp, bottom = 12.dp),
@@ -174,7 +183,7 @@ fun BoardScreen(model: BoardModel, onBack: () -> Unit, onHome: () -> Unit, onSha
                 deleteLabel = stringResource(R.string.key_delete),
             )
         }
-        ResultSheet(model, onShare = onShare, onHome = onHome)
+        if (sheet != null) sheet() else ResultSheet(model, onShare = onShare, onHome = onHome)
     }
 }
 
@@ -305,7 +314,7 @@ private fun NoteLine(model: BoardModel, modifier: Modifier) {
                     .border(1.dp, tokens.highlight, CapsuleShape)
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             )
-            model.done && model.revealing < 0 && !model.sheet -> Row(
+            model.done && model.revealing < 0 && !model.sheet && model.result != null -> Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

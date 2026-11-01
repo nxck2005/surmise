@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.nxck.surmise.BackButton
+import com.nxck.surmise.Page
 import com.nxck.surmise.R
 import com.nxck.surmise.core.gen.Info
 import com.nxck.surmise.design.Card
@@ -32,26 +32,6 @@ import com.nxck.surmise.design.Tile
 import com.nxck.surmise.design.TileState
 import com.nxck.surmise.design.pressable
 import com.nxck.surmise.tileStateOf
-
-/** A pushed page with a back button and a big title. */
-@Composable
-private fun Page(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    val tokens = SurmiseTheme.tokens
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(tokens.canvas)
-            .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 24.dp),
-    ) {
-        Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            BackButton(onBack)
-        }
-        SurmiseText(title, SurmiseTheme.type.display, tokens.ink, Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp))
-        content()
-    }
-}
 
 @Composable
 private fun Para(text: String) {

@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -57,6 +60,8 @@ data class HomeState(
     /** Today's finished dailies across everyone, or 0 when not shown. */
     val playedToday: Int,
     val note: Throwable? = null,
+    /** Whether rooms are on offer (online, and the server has them). */
+    val rooms: Boolean = false,
 )
 
 /** What home's taps do. */
@@ -65,7 +70,11 @@ data class HomeActions(
     val onDailyScreen: () -> Unit,
     val onPlay: (length: Int) -> Unit,
     val onRecord: () -> Unit,
+    val onWay: (Way) -> Unit = {},
 )
+
+/** The other ways to play, in home's sideways row. */
+enum class Way { Rooms, Sprint, Challenge, Custom }
 
 @Composable
 fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modifier) {
@@ -93,6 +102,31 @@ fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modi
             for (n in 4..6) {
                 PlayCard(n, state.inPlay[n], { actions.onPlay(n) }, Modifier.weight(1f))
             }
+        }
+        SurmiseText(stringResource(R.string.section_more), type.section, tokens.ink, Modifier.padding(start = 20.dp, top = 22.dp, bottom = 10.dp))
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(Way.entries.filter { it != Way.Rooms || state.rooms }) { w -> WayCard(w) { actions.onWay(w) } }
+        }
+    }
+}
+
+/** One other way to play: its icon, its name and what it is, in a line. */
+@Composable
+private fun WayCard(way: Way, onClick: () -> Unit) {
+    val tokens = SurmiseTheme.tokens
+    val type = SurmiseTheme.type
+    val (icon, title, line) = when (way) {
+        Way.Rooms -> Triple(SurmiseIcons.Rooms, R.string.rooms, R.string.way_rooms)
+        Way.Sprint -> Triple(SurmiseIcons.Sprint, R.string.sprint, R.string.way_sprint)
+        Way.Challenge -> Triple(SurmiseIcons.Share, R.string.challenge, R.string.way_challenge)
+        Way.Custom -> Triple(SurmiseIcons.Custom, R.string.custom, R.string.way_custom)
+    }
+    Card(Modifier.width(148.dp).height(112.dp).pressable(onClick = onClick), padding = PaddingValues(14.dp)) {
+        Column(Modifier.fillMaxWidth()) {
+            Icon(icon, tokens.accentText, size = 22.dp)
+            Spacer(Modifier.weight(1f))
+            SurmiseText(stringResource(title), type.body, tokens.ink, maxLines = 1)
+            SurmiseText(stringResource(line), type.footnote, tokens.inkMuted, maxLines = 2)
         }
     }
 }
