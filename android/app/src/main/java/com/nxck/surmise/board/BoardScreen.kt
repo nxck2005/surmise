@@ -73,7 +73,7 @@ private const val HOP_MS = 300
 
 /** The board screen: the grid, a line for notes, the keyboard and the result sheet. */
 @Composable
-fun BoardScreen(model: BoardModel, onBack: () -> Unit, onShare: (String) -> Unit) {
+fun BoardScreen(model: BoardModel, onBack: () -> Unit, onHome: () -> Unit, onShare: (String) -> Unit) {
     val v = model.view
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -174,7 +174,7 @@ fun BoardScreen(model: BoardModel, onBack: () -> Unit, onShare: (String) -> Unit
                 deleteLabel = stringResource(R.string.key_delete),
             )
         }
-        ResultSheet(model, onShare = onShare, onHome = onBack)
+        ResultSheet(model, onShare = onShare, onHome = onHome)
     }
 }
 

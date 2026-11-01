@@ -27,8 +27,11 @@ class BoardModel(
     private val client: CoreClient,
     private val scope: CoroutineScope,
     initial: BoardView,
-    /** Leaves for home: "home" on the result, or next for a kind that has no fresh board. */
-    private val onHome: () -> Unit,
+    /**
+     * Leaves the board, for next's kind ("daily" goes to the daily screen), or
+     * with null, back to where the board was opened from.
+     */
+    private val onLeave: (next: String?) -> Unit,
     /** Swaps this board for a fresh one. */
     private val onReplace: (BoardView) -> Unit,
 ) {
@@ -136,11 +139,11 @@ class BoardModel(
         if (result != null) sheet = true
     }
 
-    /** Next from the result: a fresh board for a random one, home for the rest. */
+    /** Next from the result: a fresh board for a random one, the kind's own screen for the rest. */
     fun next() {
         val r = result
         if (r == null || r.next != "random") {
-            onHome()
+            onLeave(r?.next)
             return
         }
         scope.launch {

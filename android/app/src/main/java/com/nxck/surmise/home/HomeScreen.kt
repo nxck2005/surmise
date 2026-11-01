@@ -33,6 +33,7 @@ import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.core.gen.HistoryItem
 import com.nxck.surmise.design.CapsuleButton
 import com.nxck.surmise.design.CapsuleShape
+import com.nxck.surmise.design.CapsuleStyle
 import com.nxck.surmise.design.Card
 import com.nxck.surmise.design.Icon
 import com.nxck.surmise.design.MeshGlow
@@ -61,6 +62,7 @@ data class HomeState(
 /** What home's taps do. */
 data class HomeActions(
     val onDaily: (length: Int) -> Unit,
+    val onDailyScreen: () -> Unit,
     val onPlay: (length: Int) -> Unit,
     val onRecord: () -> Unit,
 )
@@ -77,7 +79,7 @@ fun HomeScreen(state: HomeState, actions: HomeActions, modifier: Modifier = Modi
             .padding(bottom = TabBarHeight + 48.dp),
     ) {
         Header(state, actions.onRecord)
-        DailyCard(state, actions.onDaily, Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp))
+        DailyCard(state, actions.onDaily, actions.onDailyScreen, Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp))
         if (state.note != null) {
             SurmiseText(
                 refusalText(context, state.note),
@@ -134,12 +136,12 @@ private fun DailyRow.done(): Boolean = state == "won" || state == "lost"
  * its real mini board, the one in play edged in orange, a solved one checked.
  */
 @Composable
-private fun DailyCard(state: HomeState, onDaily: (Int) -> Unit, modifier: Modifier) {
+private fun DailyCard(state: HomeState, onDaily: (Int) -> Unit, onScreen: () -> Unit, modifier: Modifier) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
     val d = state.daily
     val rows = d?.rows.orEmpty()
-    MeshGlow(modifier.fillMaxWidth().clip(SquircleShape(Radii.hero))) {
+    MeshGlow(modifier.fillMaxWidth().clip(SquircleShape(Radii.hero)).pressable(onClick = onScreen)) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 16.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 SurmiseText(stringResource(R.string.daily), type.caption, tokens.inkDim, Modifier.weight(1f))
@@ -167,6 +169,8 @@ private fun DailyCard(state: HomeState, onDaily: (Int) -> Unit, modifier: Modifi
                 if (next != null) {
                     val label = if (next.state == "playing") R.string.daily_continue else R.string.daily_start
                     CapsuleButton(stringResource(label, next.length), { onDaily(next.length) })
+                } else if (rows.isNotEmpty()) {
+                    CapsuleButton(stringResource(R.string.daily_see), onScreen, style = CapsuleStyle.Secondary)
                 }
             }
         }
