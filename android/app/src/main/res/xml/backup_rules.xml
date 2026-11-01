@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto Backup for API 26-30.
+
+  The puzzle records are worth restoring: they are the player's history, and
+  playtime re-floors from them (stats.Playtime). Two files are deliberately
+  left out:
+
+    settings.json  holds Network, the consent to go online. Only the settings
+                   screen may turn that on, on any device, so a restored copy
+                   must not do it silently.
+    rooms.json     holds this device's seat keys for online rooms. A key
+                   belongs to one install; carrying it to another device
+                   would claim a seat that is not ours.
+
+  Everything else under filesDir/surmise is included by default: the puzzles,
+  and any themes a backup restored. The app's own look preferences (theme,
+  light or dark, tile palette, haptics) live in SharedPreferences, not here.
+-->
+<full-backup-content>
+    <exclude domain="file" path="surmise/settings.json" />
+    <exclude domain="file" path="surmise/rooms.json" />
+</full-backup-content>

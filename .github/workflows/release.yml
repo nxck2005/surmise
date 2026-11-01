@@ -96,8 +96,70 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # The Android app: one signed universal APK, beside the archives. The key
+  # lives only in the repository's secrets and with the maintainer offline;
+  # a lost key means no update can reach existing installs.
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: mobile/go.mod
+          cache-dependency-path: mobile/go.sum
+      - name: NDK
+        run: |
+          ndk=$(sed -n 's/^ *ndkVersion = "\(.*\)"/\1/p' app/build.gradle.kts)
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$ndk" >/dev/null
+      - name: bind the engine
+        working-directory: .
+        run: scripts/build-android-core.sh
+      - name: build
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          SURMISE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SURMISE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SURMISE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # versionCode = major*10,000,000 + minor*10,000 + patch*10 + n, n
+          # being N for -rcN (1-8) and 9 for a final, so an rc sorts below
+          # its release. Any other tag shape builds no APK.
+          if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-rc([1-8]))?$ ]]; then
+            n=${BASH_REMATCH[5]:-9}
+            code=$(( BASH_REMATCH[1] * 10000000 + BASH_REMATCH[2] * 10000 + BASH_REMATCH[3] * 10 + n ))
+          else
+            echo "tag $GITHUB_REF_NAME builds no APK"
+            exit 1
+          fi
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$SURMISE_KEYSTORE_PASSWORD" ] ||
+             [ -z "$SURMISE_KEY_ALIAS" ] || [ -z "$SURMISE_KEY_PASSWORD" ]; then
+            echo "the ANDROID_* signing secrets are not set"
+            exit 1
+          fi
+          export SURMISE_KEYSTORE="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$SURMISE_KEYSTORE"
+          ./gradlew assembleRelease -PsurmiseVersion="$version" -PsurmiseVersionCode="$code"
+          rm -f "$SURMISE_KEYSTORE"
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk "../dist/surmise_${version}_android.apk"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: surmise_android
+          path: dist/*
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [build, android]
     runs-on: ubuntu-latest
     # The only job that needs to write, so the token is widened here rather
     # than at the top of the file. id-token is for the attestation: the

@@ -348,6 +348,27 @@ python3 -m http.server -d web/dist
 details, and the query-string equivalents of the flags, in
 [docs/WEB.md](https://github.com/nxck2005/surmise/blob/main/docs/WEB.md).
 
+## on android
+
+the same game is a native android app: same rules, same saves, same server.
+
+download `surmise_<version>_android.apk` from the [latest
+release](https://github.com/nxck2005/surmise/releases/latest) and open it.
+android 8 or newer. it is on github for now, not the play store.
+
+your puzzles, settings and playtime stay on the phone. the backup row in
+settings writes the same archive as the terminal, so a history moves between
+them in either direction. network is off until you turn it on.
+
+the app draws the bundled themes. `terminal` is not offered, because it means
+"use the terminal's colours". splash art, flags and tile outlines are
+terminal-only.
+
+<!-- Absolute on purpose: the release archives carry no docs/ANDROID.md, and a
+     relative link would dangle inside every one. -->
+details in
+[docs/ANDROID.md](https://github.com/nxck2005/surmise/blob/main/docs/ANDROID.md).
+
 ## development
 
 ```sh

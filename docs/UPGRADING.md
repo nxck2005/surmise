@@ -64,6 +64,31 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.11.0 → v0.12.0: the Android app
+
+The game is now also a native Android app. It has the same rules, the same
+words, the same dailies and the same server as the terminal build, and it
+reads and writes the same save files.
+
+- **Install it from a release.** Download `surmise_<version>_android.apk`
+  from the latest GitHub release and open it. Android 8 or newer. There is no
+  Play Store version yet.
+- **Your history moves both ways.** The app's backup screen writes the same
+  archive as the terminal's `-export`, and reads the same file back. A backup
+  made on the phone restores in the terminal, and the other way round.
+- **Network is off until you turn it on**, exactly as in the terminal. The
+  same daily counts and rooms are there when you do.
+- **The phone keeps its own look.** It uses the bundled themes, but not
+  `terminal`, which means "use the terminal's colours". Its theme, light or
+  dark choice, tile palette and haptics are phone preferences and are not in
+  a backup.
+- **Android's own backup carries your puzzles, not your consent.** It leaves
+  `settings.json` and `rooms.json` out, so restoring a phone cannot turn the
+  network on by itself or copy another device's room seats.
+
+The terminal build itself is unchanged: `schema` does not move, no daily
+answer moves, and no theme or word list changed.
+
 ## v0.10.1 → v0.11.0: filters, a calendar and trends
 
 **Filters on the puzzle list.** Press <kbd>f</kbd> on the puzzle list to

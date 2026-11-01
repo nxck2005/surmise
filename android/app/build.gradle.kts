@@ -4,6 +4,15 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// The release workflow passes the tag's version and its versionCode (see
+// release.yml); any other build is 0.0.0-dev.
+val surmiseVersion = providers.gradleProperty("surmiseVersion").getOrElse("0.0.0-dev")
+val surmiseVersionCode = providers.gradleProperty("surmiseVersionCode").getOrElse("1").toInt()
+
+// The app signing key, from the environment, which only the release workflow
+// sets. A release build without it comes out unsigned.
+val keystore: String? = System.getenv("SURMISE_KEYSTORE")
+
 android {
     namespace = "com.nxck.surmise"
     compileSdk = 37
@@ -15,10 +24,20 @@ android {
         applicationId = "com.nxck.surmise"
         minSdk = 26
         targetSdk = 36
-        // The release workflow sets these from the tag (a later PR).
-        versionCode = 1
-        versionName = "0.0.0-dev"
+        versionCode = surmiseVersionCode
+        versionName = surmiseVersion
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+    }
+
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("SURMISE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SURMISE_KEY_ALIAS")
+                keyPassword = System.getenv("SURMISE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -26,8 +45,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Unsigned until the signing PR: a release build here only proves
-            // that R8 accepts the app.
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
