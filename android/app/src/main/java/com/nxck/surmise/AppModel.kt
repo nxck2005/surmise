@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.core.CoreHandle
+import com.nxck.surmise.core.gen.AppTokens
 import com.nxck.surmise.core.gen.BoardView
 import com.nxck.surmise.core.gen.CalendarView
 import com.nxck.surmise.core.gen.DailyOpenRequest
@@ -12,21 +13,32 @@ import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.core.gen.DayRequest
 import com.nxck.surmise.core.gen.DeleteRequest
 import com.nxck.surmise.core.gen.HistoryItem
+import com.nxck.surmise.core.gen.ImportReport
+import com.nxck.surmise.core.gen.Info
 import com.nxck.surmise.core.gen.LengthRequest
 import com.nxck.surmise.core.gen.NewBoardRequest
 import com.nxck.surmise.core.gen.OnlineView
 import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResumeRequest
 import com.nxck.surmise.core.gen.Settings
+import com.nxck.surmise.core.gen.SettingsPatch
+import com.nxck.surmise.core.gen.ThemeInfo
+import com.nxck.surmise.core.gen.TokensRequest
 import com.nxck.surmise.core.gen.TrendsView
+import com.nxck.surmise.design.SurmiseTokens
+import com.nxck.surmise.settings.Appearance
+import com.nxck.surmise.settings.Prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 /** A screen pushed over the tabs. The tabs are the root and never popped. */
 sealed interface Route {
     data object Tabs : Route
     data object Daily : Route
     data object Year : Route
+    data object HowTo : Route
+    data object About : Route
     data object Board : Route
 }
 
@@ -36,6 +48,8 @@ val Route.depth: Int
         Route.Tabs -> 0
         Route.Daily -> 1
         Route.Year -> 1
+        Route.HowTo -> 1
+        Route.About -> 1
         Route.Board -> 2
     }
 
@@ -49,7 +63,7 @@ enum class Tab { Play, History, Record, Settings }
  * [scope] runs on the main thread. The engine's calls all queue on one
  * thread of their own, so calls made in order are answered in order.
  */
-class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
+class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val prefs: Prefs) {
     private val client get() = core.client
 
     var stack by mutableStateOf(listOf<Route>(Route.Tabs))
@@ -105,6 +119,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     fun select(t: Tab) {
         tab = t
         if (t == Tab.Record) refreshRecord()
+        if (t == Tab.Settings) refreshSettings()
     }
 
     /** Reads the profile, the calendar and each length's trends. */
@@ -116,6 +131,76 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
             for (n in 4..6) runCatching { t[n] = client.recordTrends(LengthRequest(n)) }
             trends = t
         }
+    }
+
+    /** Every theme the picker offers; read when the settings tab opens. */
+    var themes by mutableStateOf(emptyList<ThemeInfo>())
+        private set
+
+    /** Tokens for a theme other than the bundled pair, by "name/tiles". */
+    var themeTokens by mutableStateOf(emptyMap<String, SurmiseTokens>())
+        private set
+
+    /** The engine's version line, for about. */
+    var info by mutableStateOf<Info?>(null)
+        private set
+
+    /** What the last backup or restore did, for a line under the buttons. */
+    var backupNote by mutableStateOf<BackupNote?>(null)
+
+    /**
+     * The theme to draw: the chosen one, or its pair when the appearance
+     * asks for the other side. "" chosen means the bundled night and day.
+     */
+    fun themeName(systemDark: Boolean): String = resolveTheme(prefs.theme, prefs.appearance, systemDark, themes)
+
+    /** Asks the engine for [name]'s tokens with the chosen tiles, once each. */
+    fun loadTokens(name: String) {
+        val key = "$name/${prefs.tiles}"
+        if (key in themeTokens) return
+        scope.launch {
+            runCatching { client.themesTokens(TokensRequest(name, prefs.tiles)) }
+                .onSuccess { t -> themeTokens = themeTokens + (key to SurmiseTokens.fromJson(tokensJson.encodeToString(AppTokens.serializer(), t))) }
+        }
+    }
+
+    /** Reads what the settings tab shows. */
+    fun refreshSettings() {
+        scope.launch {
+            runCatching { settings = client.settingsGet() }
+            runCatching { themes = client.themesList().items }
+            runCatching { info = client.appInfo() }
+        }
+    }
+
+    /** Changes engine settings; the answer is the settings as saved. */
+    fun update(patch: SettingsPatch) {
+        scope.launch {
+            runCatching { settings = client.settingsUpdate(patch) }
+            if (patch.network != null) refreshOnline()
+        }
+    }
+
+    /** Writes the backup archive to [write], which the file picker opened. */
+    fun exportBackup(write: (ByteArray) -> Unit) {
+        scope.launch {
+            backupNote = runCatching { write(core.exportBackup()) }
+                .fold({ BackupNote.Saved }, { BackupNote.Failed })
+        }
+    }
+
+    /** Merges the archive [read] gives into the install. */
+    fun importBackup(read: () -> ByteArray) {
+        scope.launch {
+            backupNote = runCatching { core.importBackup(read()) }
+                .fold({ BackupNote.Restored(it) }, { BackupNote.Failed })
+            refreshHome()
+            refreshSettings()
+        }
+    }
+
+    fun show(route: Route) {
+        if (top != route) stack = stack + route
     }
 
     /** Shows the year: the calendar and the trends. */
@@ -210,7 +295,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
     fun back() {
         when (top) {
             Route.Board -> closeBoard()
-            Route.Daily, Route.Year -> pop()
+            Route.Daily, Route.Year, Route.HowTo, Route.About -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
         }
     }
@@ -224,8 +309,35 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope) {
         if (tab == Tab.Record) refreshRecord()
     }
 
+    private companion object {
+        // The design side's decoder wants every field, so write them all.
+        val tokensJson = Json { encodeDefaults = true }
+    }
+
     /** The app went to the background: bank the running clock. */
     fun onStop() {
         board?.let { b -> scope.launch { b.leave() } }
     }
+}
+
+/** What the last backup or restore did. */
+sealed interface BackupNote {
+    data object Saved : BackupNote
+    data class Restored(val report: ImportReport) : BackupNote
+    data object Failed : BackupNote
+}
+
+/**
+ * The theme to draw for [chosen] ("" is the bundled night and day): the
+ * chosen theme, or its pair when [appearance] wants the other side.
+ */
+fun resolveTheme(chosen: String, appearance: Appearance, systemDark: Boolean, themes: List<ThemeInfo>): String {
+    val dark = when (appearance) {
+        Appearance.System -> systemDark
+        Appearance.Light -> false
+        Appearance.Dark -> true
+    }
+    if (chosen.isEmpty()) return if (dark) "night" else "day"
+    val t = themes.firstOrNull { it.name == chosen } ?: return chosen
+    return if (t.dark != dark && t.pair.isNotEmpty()) t.pair else chosen
 }

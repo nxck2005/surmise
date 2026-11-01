@@ -33,12 +33,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.BackButton
 import com.nxck.surmise.R
+import com.nxck.surmise.Segmented
 import com.nxck.surmise.clockText
 import com.nxck.surmise.core.gen.CalendarView
 import com.nxck.surmise.core.gen.DayView
 import com.nxck.surmise.core.gen.FormView
 import com.nxck.surmise.core.gen.TrendsView
-import com.nxck.surmise.design.CapsuleShape
 import com.nxck.surmise.design.Card
 import com.nxck.surmise.design.SquircleShape
 import com.nxck.surmise.design.SurmiseText
@@ -252,27 +252,6 @@ private fun Best(label: String, value: String, note: String, modifier: Modifier)
             SurmiseText(label, type.footnote, tokens.inkMuted)
             SurmiseText(value, type.displaySmall, tokens.ink, Modifier.padding(top = 4.dp))
             SurmiseText(note, type.caption, tokens.inkDim)
-        }
-    }
-}
-
-/** A row of choices in one capsule, the chosen one raised. */
-@Composable
-fun <T> Segmented(values: List<T>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier, label: @Composable (T) -> String) {
-    val tokens = SurmiseTheme.tokens
-    Row(modifier.fillMaxWidth().height(36.dp).background(tokens.card, CapsuleShape).padding(3.dp)) {
-        for (v in values) {
-            val on = v == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(30.dp)
-                    .pressable(onClick = { onSelect(v) })
-                    .background(if (on) tokens.ink.copy(alpha = 0.12f) else Color.Transparent, CapsuleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                SurmiseText(label(v), SurmiseTheme.type.caption, if (on) tokens.ink else tokens.inkDim, maxLines = 1)
-            }
         }
     }
 }

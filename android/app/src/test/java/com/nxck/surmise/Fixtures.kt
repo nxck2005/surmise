@@ -14,10 +14,15 @@ import com.nxck.surmise.core.gen.OpenerView
 import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResultView
 import com.nxck.surmise.core.gen.Row
+import com.nxck.surmise.core.gen.Settings
+import com.nxck.surmise.core.gen.ThemeInfo
+import com.nxck.surmise.core.gen.ThemePreview
 import com.nxck.surmise.core.gen.TrendsView
 import com.nxck.surmise.core.gen.Trio
 import com.nxck.surmise.core.gen.coreJson
 import com.nxck.surmise.home.HomeState
+import com.nxck.surmise.settings.Appearance
+import com.nxck.surmise.settings.SettingsState
 import kotlinx.serialization.KSerializer
 
 // Fixed engine answers for the screen tests, shaped as the Go side writes
@@ -137,4 +142,21 @@ val historyItems = listOf(
     HistoryItem(id = "d-4", code = "117204", kind = "daily", status = "won", length = 4, attempts = 3, updatedAt = "2026-11-01T09:00:00Z", daily = "2026-11-01"),
     HistoryItem(id = "c-6", code = "880913", kind = "challenge", status = "lost", length = 6, attempts = 7, updatedAt = "2026-10-30T19:30:00Z"),
     HistoryItem(id = "r-4-9", code = "300118", kind = "random", status = "won", length = 4, attempts = 4, updatedAt = "2026-10-29T08:12:00Z"),
+)
+
+val themesFixture = listOf(
+    ThemeInfo(name = "night", dark = true, pair = "day", builtIn = true),
+    ThemeInfo(name = "day", dark = false, pair = "night", builtIn = true),
+    ThemeInfo(name = "nord", dark = true, preview = ThemePreview(canvas = "#2e3440", correct = "#a3be8c", present = "#ebcb8b", absent = "#4c566a")),
+    ThemeInfo(name = "paper", dark = false, preview = ThemePreview(canvas = "#f6f1e7", correct = "#5b8c5a", present = "#d4a843", absent = "#a39e93")),
+    ThemeInfo(name = "rose", dark = true, preview = ThemePreview(canvas = "#191724", correct = "#31748f", present = "#f6c177", absent = "#403d52")),
+)
+
+val settingsFixture = SettingsState(
+    settings = Settings(displayName = "nick", length = 5, rememberLast = true, network = true),
+    theme = "",
+    appearance = Appearance.System,
+    tiles = "",
+    haptics = true,
+    themes = themesFixture,
 )

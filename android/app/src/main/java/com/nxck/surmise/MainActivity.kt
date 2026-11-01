@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.nxck.surmise.design.SurmiseTheme
+import com.nxck.surmise.settings.Prefs
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -22,7 +23,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
-            model = AppModel(Engine.get(this@MainActivity), lifecycleScope)
+            model = AppModel(Engine.get(this@MainActivity), lifecycleScope, Prefs.of(this@MainActivity))
         }
         setContent {
             val m = model

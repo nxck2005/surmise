@@ -1,9 +1,12 @@
 package com.nxck.surmise
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings as SystemSettings
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -19,10 +22,19 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import com.nxck.surmise.core.gen.SettingsPatch
+import com.nxck.surmise.settings.AboutScreen
+import com.nxck.surmise.settings.HowToScreen
+import com.nxck.surmise.settings.SettingsActions
+import com.nxck.surmise.settings.SettingsScreen
+import com.nxck.surmise.settings.SettingsState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.board.BoardScreen
@@ -51,12 +63,32 @@ private const val PUSH_MS = 320
 @Composable
 fun SurmiseApp(model: AppModel) {
     val context = LocalContext.current
-    val dark = isSystemInDarkTheme()
-    val tokens = remember(dark) { BundledTokens.forAppearance(context, dark) }
+    val name = model.themeName(isSystemInDarkTheme())
+    val tiles = model.prefs.tiles
+    val bundled = name in setOf("night", "day") && tiles.isEmpty()
+    LaunchedEffect(name, tiles) { if (!bundled) model.loadTokens(name) }
+    // Until a theme's tokens arrive, the bundled side it is closest to.
+    val tokens = if (bundled) {
+        BundledTokens.load(context.assets, name)
+    } else {
+        model.themeTokens["$name/$tiles"] ?: BundledTokens.forAppearance(context, model.themes.firstOrNull { it.name == name }?.dark ?: true)
+    }
     val motion = Motion(enabled = model.settings.motion != "off" && systemAnimates(context))
+    val view = LocalView.current
+    SideEffect {
+        (view.context as? Activity)?.window?.let { w ->
+            WindowCompat.getInsetsController(w, view).apply {
+                isAppearanceLightStatusBars = !tokens.dark
+                isAppearanceLightNavigationBars = !tokens.dark
+            }
+        }
+    }
 
-    SurmiseTheme(tokens = tokens, motion = motion) {
-        LaunchedEffect(Unit) { model.refreshHome() }
+    SurmiseTheme(tokens = tokens, motion = motion, haptics = model.prefs.haptics) {
+        LaunchedEffect(Unit) {
+            model.refreshHome()
+            model.refreshSettings()
+        }
         BackHandler(enabled = model.handlesBack) { model.back() }
         AnimatedContent(
             targetState = model.top,
@@ -89,6 +121,8 @@ fun SurmiseApp(model: AppModel) {
                     onBack = model::back,
                     startLength = model.settings.length.takeIf { it in 4..6 } ?: 5,
                 )
+                Route.HowTo -> HowToScreen(onBack = model::back)
+                Route.About -> AboutScreen(model.info, onBack = model::back)
                 Route.Board -> model.board?.let { b ->
                     BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
                 }
@@ -131,7 +165,7 @@ private fun Tabs(model: AppModel) {
                     onDelete = { model.delete(it.id) },
                 )
                 Tab.Record -> RecordScreen(model.profile, model.calendar, onYear = model::showYear)
-                else -> Soon()
+                Tab.Settings -> Settings(model)
             }
         }
         TabBar(
@@ -147,12 +181,50 @@ private fun Tabs(model: AppModel) {
     }
 }
 
-/** A tab not built yet. */
 @Composable
-private fun Soon() {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        SurmiseText(stringResource(R.string.tab_soon), SurmiseTheme.type.body, SurmiseTheme.tokens.inkMuted)
+private fun Settings(model: AppModel) {
+    val context = LocalContext.current
+    val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            model.exportBackup { bytes ->
+                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("no stream")
+            }
+        }
     }
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            model.importBackup {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("no stream")
+            }
+        }
+    }
+    val prefs = model.prefs
+    SettingsScreen(
+        state = SettingsState(
+            settings = model.settings,
+            theme = prefs.theme,
+            appearance = prefs.appearance,
+            tiles = prefs.tiles,
+            haptics = prefs.haptics,
+            themes = model.themes,
+            backupNote = model.backupNote,
+        ),
+        actions = SettingsActions(
+            onName = { model.update(SettingsPatch(displayName = it)) },
+            onLength = { model.update(SettingsPatch(length = it)) },
+            onRemember = { model.update(SettingsPatch(rememberLast = it)) },
+            onMotion = { model.update(SettingsPatch(motion = it)) },
+            onNetwork = { model.update(SettingsPatch(network = it)) },
+            onTheme = prefs::chooseTheme,
+            onAppearance = prefs::chooseAppearance,
+            onTiles = prefs::chooseTiles,
+            onHaptics = prefs::chooseHaptics,
+            onBackup = { save.launch("surmise-backup-${java.time.LocalDate.now()}.json") },
+            onRestore = { open.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
+            onHowTo = { model.show(Route.HowTo) },
+            onAbout = { model.show(Route.About) },
+        ),
+    )
 }
 
 /** Whether the system's animator scale lets anything move ("remove animations" sets it to 0). */

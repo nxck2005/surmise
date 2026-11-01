@@ -6,7 +6,6 @@
     <string name="tab_history">history</string>
     <string name="tab_record">record</string>
     <string name="tab_settings">settings</string>
-    <string name="tab_soon">this part is on its way</string>
 
     <!-- Home -->
     <string name="home_record">your record</string>
@@ -131,6 +130,61 @@
     <string name="trends_fastest">fastest win</string>
     <string name="trends_fewest">fewest guesses</string>
     <string name="trends_openers">your openers</string>
+
+    <!-- Settings -->
+    <string name="set_you">you</string>
+    <string name="set_name">name</string>
+    <string name="set_name_hint">add a name</string>
+    <string name="set_name_note">shown on your record, and to others in a room</string>
+    <string name="set_play">play</string>
+    <string name="set_length">start on</string>
+    <string name="set_remember">remember the last one i played</string>
+    <string name="set_remember_note">with this on, the app opens on the length you played last</string>
+    <string name="set_look">look and feel</string>
+    <string name="set_theme">theme</string>
+    <string name="set_theme_default">surmise</string>
+    <string name="set_appearance">appearance</string>
+    <string name="set_appearance_system">auto</string>
+    <string name="set_appearance_light">light</string>
+    <string name="set_appearance_dark">dark</string>
+    <string name="set_tiles">tile colours</string>
+    <string name="set_tiles_standard">standard</string>
+    <string name="set_tiles_colorblind">colour-blind</string>
+    <string name="set_tiles_contrast">high contrast</string>
+    <string name="set_motion">motion</string>
+    <string name="set_motion_off">off</string>
+    <string name="set_motion_calm">calm</string>
+    <string name="set_motion_full">full</string>
+    <string name="set_haptics">haptics</string>
+    <string name="set_online">online</string>
+    <string name="set_network">go online</string>
+    <string name="set_network_note">lets you see how many people played the daily and play in rooms with friends. your games stay on this phone</string>
+    <string name="set_data">your data</string>
+    <string name="set_backup">back up</string>
+    <string name="set_restore">restore from a backup</string>
+    <string name="set_data_note">a backup holds every puzzle, your settings and your themes. restoring adds to what\'s here and never removes anything</string>
+    <string name="set_backup_saved">backup saved</string>
+    <string name="set_backup_failed">that didn\'t work. try another file or place</string>
+    <plurals name="set_restored">
+        <item quantity="one">restored. %1$d puzzle added</item>
+        <item quantity="other">restored. %1$d puzzles added</item>
+    </plurals>
+    <string name="set_howto">how to play</string>
+    <string name="set_about">about</string>
+    <string name="howto_goal">guess the hidden word. a 5-letter word gives you 6 tries, and every length gets one more try than it has letters</string>
+    <string name="howto_marks">after each guess, the tiles show how close you got</string>
+    <string name="howto_correct">c is in the word, in this spot</string>
+    <string name="howto_present">o is in the word, somewhere else</string>
+    <string name="howto_absent">m isn\'t in the word at all</string>
+    <string name="howto_repeats">a letter you use twice only lights up as many times as it\'s in the word</string>
+    <string name="howto_repeats_example">the word was these. the first e is grey, because both of the word\'s e\'s are already green</string>
+    <string name="howto_modes">there\'s a daily at each length, the same for everyone, plus as many random ones as you like</string>
+    <string name="about_version">version</string>
+    <string name="about_engine">engine</string>
+    <string name="about_data">data</string>
+    <string name="about_licence">surmise is free and open source under the mit licence. the type is geist, under the sil open font licence</string>
+    <string name="about_font_show">read the font licence</string>
+    <string name="about_font_hide">hide the font licence</string>
 
     <!-- Engine refusals, one line per code -->
     <string name="err_too_short">needs %1$d letters</string>

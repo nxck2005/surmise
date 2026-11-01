@@ -24,6 +24,9 @@ import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.record.RecordScreen
 import com.nxck.surmise.record.YearScreen
+import com.nxck.surmise.settings.HowToScreen
+import com.nxck.surmise.settings.SettingsActions
+import com.nxck.surmise.settings.SettingsScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -105,4 +108,13 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun year() = shot("year") { YearScreen(calendarFixture, trendsFixture, onBack = {}) }
+
+    @Test
+    fun settings() = shot("settings") {
+        val none = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(settingsFixture, none)
+    }
+
+    @Test
+    fun howTo() = shot("howto") { HowToScreen(onBack = {}) }
 }
