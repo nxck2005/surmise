@@ -134,6 +134,7 @@ fun SurmiseApp(model: AppModel) {
                     calendar = model.calendar,
                     trends = model.trends,
                     onBack = model::back,
+                    onDay = model::showDay,
                     startLength = model.settings.length.takeIf { it in 4..6 } ?: 5,
                 )
                 Route.HowTo -> HowToScreen(onBack = model::back)
@@ -263,6 +264,8 @@ private fun Tabs(model: AppModel) {
                 Tab.History -> HistoryScreen(
                     items = model.history,
                     onOpen = model::openSaved,
+                    day = model.historyDay,
+                    onClearDay = { model.historyDay = "" },
                     onDelete = { model.delete(it.id) },
                 )
                 Tab.Record -> RecordScreen(model.profile, model.calendar, onYear = model::showYear)

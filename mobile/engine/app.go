@@ -9,6 +9,7 @@ import (
 
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/play"
+	"github.com/nxck2005/surmise/internal/stats"
 	"github.com/nxck2005/surmise/internal/store"
 	"github.com/nxck2005/surmise/internal/theme"
 )
@@ -47,6 +48,10 @@ type HistoryItem struct {
 	Attempts  int    `json:"attempts"`
 	UpdatedAt string `json:"updatedAt"` // RFC 3339, UTC
 	Daily     string `json:"daily,omitempty"`
+	// Day is the calendar day the puzzle is filed under (stats.PlayDay),
+	// YYYY-MM-DD in the device zone, as the calendar files it; empty when
+	// there is none.
+	Day string `json:"day,omitempty"`
 }
 
 // History is every live puzzle, most recently updated first.
@@ -79,6 +84,9 @@ func (e *Engine) historyList(Empty) (History, error) {
 			ID: g.ID, Code: game.Code(g.ID), Kind: play.KindOf(g), Status: string(g.Status),
 			Length: g.Length, Attempts: len(g.Guesses),
 			UpdatedAt: g.UpdatedAt.UTC().Format(time.RFC3339), Daily: g.Daily,
+		}
+		if d, ok := stats.PlayDay(g.Daily, g.StartedAt, e.zone); ok {
+			out.Items[i].Day = d.String()
 		}
 	}
 	return out, nil

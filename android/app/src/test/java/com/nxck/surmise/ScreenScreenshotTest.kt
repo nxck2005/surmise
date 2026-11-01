@@ -107,6 +107,12 @@ class ScreenScreenshotTest(private val theme: String) {
     fun history() = shot("history") { HistoryScreen(historyItems, {}, {}) }
 
     @Test
+    fun historyDay() = shot("history-day") {
+        val items = historyItems.mapIndexed { i, it -> it.copy(day = if (i < 2) "2026-11-01" else "2026-10-30") }
+        HistoryScreen(items, {}, {}, day = "2026-11-01")
+    }
+
+    @Test
     fun result() = shot("result") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             Sheet(visible = true, onDismiss = {}) {
