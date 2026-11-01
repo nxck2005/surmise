@@ -1,6 +1,13 @@
 // Command genandroid writes the Android resources that come from the Go side:
 //
-//	android/app/src/main/res/values/brand.xml  the app name, from internal/brand
+//	android/app/src/main/res/values/brand.xml        the app name, from internal/brand
+//	android/design/src/main/assets/tokens/night.json the night theme's app tokens
+//	android/design/src/main/assets/tokens/day.json   the day theme's app tokens
+//
+// The token files are theme.App over the bundled night and day themes, the
+// same JSON the engine's themes.tokens call returns. They are generated (JSON
+// has no comments to say so) and let :design draw previews and screenshot
+// tests without loading the Go library.
 //
 // The product's name lives only in internal/brand, so the app's label is
 // generated rather than typed into the Android project. Run it from the
@@ -15,10 +22,19 @@ import (
 	"os"
 	"path/filepath"
 
+	"encoding/json"
+
 	"github.com/nxck2005/surmise/internal/brand"
+	"github.com/nxck2005/surmise/internal/theme"
 )
 
-const out = "android/app/src/main/res/values/brand.xml"
+const (
+	out       = "android/app/src/main/res/values/brand.xml"
+	tokensDir = "android/design/src/main/assets/tokens"
+)
+
+// tokenThemes are the bundled themes whose tokens ship inside :design.
+var tokenThemes = []string{"night", "day"}
 
 func main() {
 	log.SetFlags(0)
@@ -43,5 +59,28 @@ func main() {
 	}
 	if err := os.WriteFile(out, b.Bytes(), 0o644); err != nil {
 		log.Fatal(err)
+	}
+
+	writeTokens()
+}
+
+func writeTokens() {
+	lib := theme.Bundled()
+	if err := os.MkdirAll(tokensDir, 0o755); err != nil {
+		log.Fatal(err)
+	}
+	for _, name := range tokenThemes {
+		t, ok := lib.Get(name)
+		if !ok {
+			log.Fatalf("genandroid: no bundled theme %q", name)
+		}
+		raw, err := json.MarshalIndent(theme.App(t, theme.TilesStandard), "", "  ")
+		if err != nil {
+			log.Fatal(err)
+		}
+		raw = append(raw, '\n')
+		if err := os.WriteFile(filepath.Join(tokensDir, name+".json"), raw, 0o644); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
