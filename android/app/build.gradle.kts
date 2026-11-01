@@ -56,6 +56,9 @@ roborazzi {
 dependencies {
     implementation(project(":design"))
     implementation(project(":core"))
+    // The bound Go engine. :core compiles against it but cannot bundle a local
+    // .aar, so the app packages it (see core/build.gradle.kts).
+    implementation(files("../core/libs/core.aar"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.foundation)

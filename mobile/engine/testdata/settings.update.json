@@ -1,0 +1,17 @@
+{
+  "request": {
+    "displayName": "nick",
+    "length": 6,
+    "network": true
+  },
+  "response": {
+    "ok": {
+      "displayName": "nick",
+      "length": 6,
+      "motion": "",
+      "network": true,
+      "playtimeMs": 0,
+      "rememberLast": false
+    }
+  }
+}

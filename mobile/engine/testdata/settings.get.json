@@ -1,0 +1,13 @@
+{
+  "request": {},
+  "response": {
+    "ok": {
+      "displayName": "",
+      "length": 0,
+      "motion": "",
+      "network": false,
+      "playtimeMs": 0,
+      "rememberLast": false
+    }
+  }
+}
