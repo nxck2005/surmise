@@ -22,7 +22,14 @@ import com.nxck.surmise.design.Sheet
 import com.nxck.surmise.design.SurmiseTheme
 import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
+import com.nxck.surmise.core.gen.SprintOptions
+import com.nxck.surmise.core.gen.SprintView
+import com.nxck.surmise.modes.ChallengeScreen
+import com.nxck.surmise.modes.ChallengeState
+import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.record.RecordScreen
+import com.nxck.surmise.sprint.SprintSetup
+import com.nxck.surmise.sprint.SprintSummaryBody
 import com.nxck.surmise.record.YearScreen
 import com.nxck.surmise.settings.HowToScreen
 import com.nxck.surmise.settings.SettingsActions
@@ -117,4 +124,27 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun howTo() = shot("howto") { HowToScreen(onBack = {}) }
+
+    @Test
+    fun sprintSetup() = shot("sprint-setup") {
+        SprintSetup(SprintOptions(listOf(60_000, 180_000, 300_000), 180_000), 5, { _, _ -> }, {})
+    }
+
+    @Test
+    fun sprintSummary() = shot("sprint-summary") {
+        Sheet(visible = true, onDismiss = {}) {
+            SprintSummaryBody(
+                SprintView(length = 5, durationMs = 180_000, over = true, dealt = 9, solved = 7, missed = 2, avgGuesses = 3.9, accuracy = 77, solveTimeMs = 147_000),
+                {}, {},
+            )
+        }
+    }
+
+    @Test
+    fun challenge() = shot("challenge") {
+        ChallengeScreen(ChallengeState(made = "7K2M-QX4R-9TPW-B3HD", madeLength = 5), 5, {}, {}, {}, {})
+    }
+
+    @Test
+    fun custom() = shot("custom") { CustomScreen(5, null, { _, _, _, _ -> }, { _, _, _ -> }, {}) }
 }

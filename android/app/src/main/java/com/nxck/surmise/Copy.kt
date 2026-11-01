@@ -21,6 +21,11 @@ fun refusalText(context: Context, e: Throwable, length: Int = 0): String {
         "new_puzzle_failed" -> context.getString(R.string.err_new_puzzle_failed)
         "daily_spent" -> context.getString(R.string.err_daily_spent)
         "not_found" -> context.getString(R.string.err_not_found)
+        "challenge_spent" -> context.getString(R.string.err_challenge_spent)
+        "bad_challenge" -> context.getString(R.string.err_bad_challenge)
+        "sprint_over" -> context.getString(R.string.err_sprint_over)
+        "restart_daily", "restart_custom", "restart_challenge", "restart_room", "restart_sprint" ->
+            context.getString(R.string.err_restart)
         else -> context.getString(R.string.err_other, code)
     }
 }

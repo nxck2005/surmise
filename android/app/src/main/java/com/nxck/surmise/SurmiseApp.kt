@@ -53,6 +53,13 @@ import com.nxck.surmise.design.rememberGlassState
 import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.home.homeState
+import com.nxck.surmise.modes.ChallengeScreen
+import com.nxck.surmise.modes.CustomScreen
+import com.nxck.surmise.sprint.SprintClock
+import com.nxck.surmise.sprint.SprintModel
+import com.nxck.surmise.sprint.SprintSetup
+import com.nxck.surmise.sprint.SprintSummary
+import com.nxck.surmise.sprint.sprintTally
 import com.nxck.surmise.record.RecordScreen
 import com.nxck.surmise.record.YearScreen
 
@@ -123,8 +130,35 @@ fun SurmiseApp(model: AppModel) {
                 )
                 Route.HowTo -> HowToScreen(onBack = model::back)
                 Route.About -> AboutScreen(model.info, onBack = model::back)
-                Route.Board -> model.board?.let { b ->
-                    BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
+                Route.Sprint -> SprintSetup(model.sprintOptions, model.startLength, onStart = model::startSprint, onBack = model::back)
+                Route.Challenge -> ChallengeScreen(
+                    state = model.challenge,
+                    startLength = model.startLength,
+                    onMake = model::makeChallenge,
+                    onShare = { share(context, it) },
+                    onOpen = model::openChallenge,
+                    onBack = model::back,
+                )
+                Route.Custom -> CustomScreen(
+                    startLength = model.startLength,
+                    note = model.customNote,
+                    onCheck = model::checkCustom,
+                    onReady = model::startCustom,
+                    onBack = model::back,
+                )
+                Route.Board -> when (val b = model.board) {
+                    is SprintModel -> BoardScreen(
+                        b,
+                        onBack = { model.closeBoard() },
+                        onHome = model::goHome,
+                        onShare = { share(context, it) },
+                        title = stringResource(R.string.sprint),
+                        subtitle = sprintTally(b.run),
+                        trailing = { SprintClock(b) },
+                        sheet = { SprintSummary(b, onAgain = { model.startSprint(b.run.length, b.run.durationMs) }, onHome = model::goHome) },
+                    )
+                    null -> Unit
+                    else -> BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
                 }
             }
         }
@@ -157,6 +191,7 @@ private fun Tabs(model: AppModel) {
                         onDailyScreen = model::showDaily,
                         onPlay = model::playLength,
                         onRecord = { model.select(Tab.Record) },
+                        onWay = model::showWay,
                     ),
                 )
                 Tab.History -> HistoryScreen(

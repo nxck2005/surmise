@@ -18,14 +18,32 @@ import com.nxck.surmise.isRowRefusal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+/** The engine calls a board's keys go to: a plain board's, or a sprint run's. */
+interface Moves {
+    suspend fun type(c: Char): BoardView
+    suspend fun delete(): BoardView
+    suspend fun trim(index: Int): BoardView
+    suspend fun submit(): BoardView
+    suspend fun view(): BoardView
+}
+
+/** A board on its own: the board.* methods. */
+class BoardMoves(private val client: CoreClient) : Moves {
+    override suspend fun type(c: Char) = client.boardType(TypeRequest(c.toString()))
+    override suspend fun delete() = client.boardDelete()
+    override suspend fun trim(index: Int) = client.boardTrim(TrimRequest(index))
+    override suspend fun submit() = client.boardSubmit()
+    override suspend fun view() = client.boardView()
+}
+
 /**
  * One open board. Every key is a call into the engine, which owns the typed
  * row as well as the guesses, so the screen never holds a copy that could
  * disagree with what gets saved.
  */
-class BoardModel(
-    private val client: CoreClient,
-    private val scope: CoroutineScope,
+open class BoardModel(
+    protected val client: CoreClient,
+    protected val scope: CoroutineScope,
     initial: BoardView,
     /**
      * Leaves the board, for next's kind ("daily" goes to the daily screen), or
@@ -34,6 +52,7 @@ class BoardModel(
     private val onLeave: (next: String?) -> Unit,
     /** Swaps this board for a fresh one. */
     private val onReplace: (BoardView) -> Unit,
+    private val moves: Moves = BoardMoves(client),
 ) {
     var view by mutableStateOf(initial)
         private set
@@ -69,12 +88,12 @@ class BoardModel(
 
     val done: Boolean get() = view.status == "won" || view.status == "lost"
 
-    private fun show(v: BoardView) {
+    protected fun show(v: BoardView) {
         view = v
         viewAt = SystemClock.uptimeMillis()
     }
 
-    private fun refuse(e: Throwable) {
+    protected fun refuse(e: Throwable) {
         note = e
         notes++
         if (isRowRefusal(e)) shakes++
@@ -86,34 +105,34 @@ class BoardModel(
 
     fun type(c: Char) {
         if (done) return
-        scope.launch { runCatching { client.boardType(TypeRequest(c.toString())) }.onSuccess(::show) }
+        scope.launch { runCatching { moves.type(c) }.onSuccess(::show) }
     }
 
     fun delete() {
-        scope.launch { runCatching { client.boardDelete() }.onSuccess(::show) }
+        scope.launch { runCatching { moves.delete() }.onSuccess(::show) }
     }
 
     /** Erases the typed row back to [index]: a tap on a typed tile. */
     fun trim(index: Int) {
-        scope.launch { runCatching { client.boardTrim(TrimRequest(index)) }.onSuccess(::show) }
+        scope.launch { runCatching { moves.trim(index) }.onSuccess(::show) }
     }
 
     fun submit() {
         if (done) return
         scope.launch {
             val before = view.rows.size
-            runCatching { client.boardSubmit() }
+            runCatching { moves.submit() }
                 .onSuccess { v ->
                     note = null
                     show(v)
                     if (v.rows.size > before) revealing = v.rows.size - 1
-                    if (done) loadResult()
+                    if (done) finished()
                 }
                 .onFailure { e ->
                     // A guess the store failed to keep is still played: read
                     // the board again so it shows.
                     if ((e as? CoreException)?.code == "save_failed") {
-                        runCatching { client.boardView() }.onSuccess(::show)
+                        runCatching { moves.view() }.onSuccess(::show)
                     }
                     refuse(e)
                 }
@@ -124,8 +143,16 @@ class BoardModel(
     fun revealed() {
         val wasLast = revealing >= 0 && done
         revealing = -1
-        if (wasLast && result != null) sheet = true
+        if (wasLast) landed()
     }
+
+    /** The finishing row has turned over. */
+    protected open fun landed() {
+        if (result != null) sheet = true
+    }
+
+    /** A guess finished the board. */
+    protected open suspend fun finished() = loadResult()
 
     private suspend fun loadResult() {
         runCatching { client.resultView() }.onSuccess { result = it }
@@ -154,7 +181,7 @@ class BoardModel(
     }
 
     /** Banks the running clock and saves. Safe to call twice. */
-    suspend fun leave() {
+    open suspend fun leave() {
         runCatching { client.boardLeave() }.onSuccess(::show)
     }
 }
