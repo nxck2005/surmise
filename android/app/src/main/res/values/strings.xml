@@ -27,6 +27,7 @@
         <item quantity="one">%1$d guess in</item>
         <item quantity="other">%1$d guesses in</item>
     </plurals>
+    <string name="practice_resume">resume, %1$d of %2$d</string>
     <string name="daily_played_all">%1$s dailies played today, across all three</string>
     <string name="daily_next_hm">next daily in %1$dh %2$dm</string>
     <string name="daily_next_m">next daily in %1$dm</string>
@@ -90,7 +91,6 @@
     <string name="best_fewest">your fewest guesses at %1$d letters</string>
     <string name="stat_played">played</string>
     <string name="stat_won">won</string>
-    <string name="stat_streak">streak</string>
     <string name="guesses">guesses</string>
     <string name="share">share</string>
     <string name="review">review</string>
@@ -139,9 +139,9 @@
     <string name="set_name_hint">add a name</string>
     <string name="set_name_note">shown on your record, and to others in a room</string>
     <string name="set_play">play</string>
-    <string name="set_length">start on</string>
-    <string name="set_remember">remember the last one i played</string>
-    <string name="set_remember_note">with this on, the app opens on the length you played last</string>
+    <string name="set_length">default length</string>
+    <string name="set_remember">follow the last length i played</string>
+    <string name="set_remember_note">new sprints, rooms and challenges start on this length</string>
     <string name="set_look">look and feel</string>
     <string name="set_theme">theme</string>
     <string name="set_theme_default">surmise</string>
@@ -282,6 +282,9 @@
     <string name="room_starting">starting in</string>
     <string name="room_open_until">open until %1$s</string>
     <string name="room_leave">leave room</string>
+    <string name="room_leave_title">leave room %1$s?</string>
+    <string name="room_leave_body">you lose your seat.</string>
+    <string name="room_stay">stay</string>
     <string name="room_step_away">step away</string>
     <string name="room_watching">the round is on. you\'ll play the next one</string>
     <string name="room_solved_of">%1$d of %2$d solved</string>

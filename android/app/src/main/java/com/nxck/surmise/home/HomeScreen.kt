@@ -286,7 +286,7 @@ private fun PlayCard(length: Int, inPlay: HistoryItem?, onClick: () -> Unit, mod
                 SurmiseText(stringResource(R.string.letters_suffix), type.body, tokens.inkDim, Modifier.alignByBaseline().padding(start = 4.dp))
             }
             if (inPlay != null) {
-                SurmiseText(pluralStringResource(R.plurals.guesses_in, inPlay.attempts, inPlay.attempts), type.footnote, tokens.accentText, maxLines = 1)
+                SurmiseText(stringResource(R.string.practice_resume, inPlay.attempts, length + 1), type.footnote, tokens.accentText, maxLines = 1)
             } else {
                 SurmiseText(stringResource(R.string.new_puzzle), type.footnote, tokens.inkMuted, maxLines = 1)
             }

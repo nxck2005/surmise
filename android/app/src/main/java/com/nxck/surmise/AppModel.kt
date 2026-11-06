@@ -463,7 +463,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         v,
         onLeave = { next -> closeBoard(then = if (next == "daily") Route.Daily else null) },
         onReplace = ::replaceBoard,
-    )
+    ).also { it.loadOpened() }
 
     /**
      * Leaves the board screen: banks the clock and saves, then goes back, or

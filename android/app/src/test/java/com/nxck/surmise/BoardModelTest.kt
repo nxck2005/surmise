@@ -44,6 +44,32 @@ class BoardModelTest {
     }
 
     @Test
+    fun aBoardOpenedOverLoadsItsResultButKeepsTheSheetDown() = runTest(UnconfinedTestDispatcher()) {
+        val m = BoardModel(
+            fakeClient(
+                mapOf(
+                    "result.view" to ok(ResultView.serializer(), resultWon),
+                    "record.profile" to ok(ProfileView.serializer(), profile),
+                ),
+            ),
+            this, boardWon, {}, {},
+        )
+        m.loadOpened()
+        assertEquals(resultWon, m.result)
+        assertNotNull(m.profile)
+        assertFalse(m.sheet)
+        m.openResult()
+        assertTrue(m.sheet)
+    }
+
+    @Test
+    fun aBoardInPlayLoadsNoResult() = runTest(UnconfinedTestDispatcher()) {
+        val m = BoardModel(fakeClient(emptyMap()), this, boardInPlay, {}, {})
+        m.loadOpened()
+        assertEquals(null, m.result)
+    }
+
+    @Test
     fun theSheetWaitsForTheRowToTurn() = runTest(UnconfinedTestDispatcher()) {
         val m = BoardModel(
             fakeClient(

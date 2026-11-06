@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.R
 import com.nxck.surmise.boardTitle
@@ -27,9 +26,9 @@ import com.nxck.surmise.core.gen.ResultView
 import com.nxck.surmise.design.CapsuleButton
 import com.nxck.surmise.design.CapsuleStyle
 import com.nxck.surmise.design.Sheet
-import com.nxck.surmise.design.SquircleShape
 import com.nxck.surmise.design.SurmiseText
 import com.nxck.surmise.design.SurmiseTheme
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /** The debrief over a finished board: the score, the record so far, and what next. */
@@ -83,11 +82,7 @@ fun ResultBody(
             Modifier.padding(top = 6.dp),
         )
 
-        if (profile != null) {
-            Stats(profile, b.length, Modifier.padding(top = 20.dp))
-            SurmiseText(stringResource(R.string.guesses), type.caption, tokens.inkDim, Modifier.padding(top = 18.dp))
-            Distribution(profile.distribution, if (won) b.rows.size else 0, Modifier.padding(top = 8.dp))
-        }
+        if (profile != null) Stats(profile, b.length, Modifier.padding(top = 20.dp))
 
         Spacer(Modifier.height(24.dp))
         CapsuleButton(stringResource(R.string.share), onShare, Modifier.fillMaxWidth())
@@ -119,7 +114,10 @@ private fun subline(r: ResultView, won: Boolean, context: android.content.Contex
     return if (best != null) "$time, $best" else time
 }
 
-/** Played, won and streak for the board's length, between two hairlines. */
+/**
+ * Played, won and average guesses for the board's length only, between two
+ * hairlines. Nothing from the other lengths, so every figure means one thing.
+ */
 @Composable
 private fun Stats(p: ProfileView, length: Int, modifier: Modifier) {
     val tokens = SurmiseTheme.tokens
@@ -127,7 +125,7 @@ private fun Stats(p: ProfileView, length: Int, modifier: Modifier) {
     val cells = listOf(
         (mode?.played ?: 0).toString() to stringResource(R.string.stat_played),
         "${((mode?.winRate ?: 0.0) * 100).roundToInt()}%" to stringResource(R.string.stat_won),
-        p.currentStreak.toString() to stringResource(R.string.stat_streak),
+        String.format(Locale.ROOT, "%.1f", mode?.avgAttempts ?: 0.0) to stringResource(R.string.stat_avg_guesses),
     )
     Column(modifier.fillMaxWidth()) {
         Hairline()
@@ -150,29 +148,4 @@ private fun Stats(p: ProfileView, length: Int, modifier: Modifier) {
 @Composable
 private fun Hairline() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(SurmiseTheme.tokens.ink.copy(alpha = 0.08f)))
-}
-
-/** Wins by guesses, one bar each; this board's bar in the chart's highlight. */
-@Composable
-private fun Distribution(counts: List<Int>, mine: Int, modifier: Modifier) {
-    val tokens = SurmiseTheme.tokens
-    val type = SurmiseTheme.type
-    val top = (counts.maxOrNull() ?: 0).coerceAtLeast(1)
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        counts.forEachIndexed { i, n ->
-            val on = i + 1 == mine
-            Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                SurmiseText("${i + 1}", type.code, tokens.inkMuted, Modifier.width(18.dp))
-                Box(Modifier.weight(1f)) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth(n.toFloat() / top)
-                            .height(16.dp)
-                            .background(if (on) tokens.chartHighlight else tokens.chartNeutral, SquircleShape(4.dp)),
-                    )
-                }
-                SurmiseText("$n", type.footnote, if (on) tokens.ink else tokens.inkMuted, Modifier.width(28.dp), align = TextAlign.End)
-            }
-        }
-    }
 }
