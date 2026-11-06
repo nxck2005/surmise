@@ -149,7 +149,7 @@ fun HistoryScreen(
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.DangerButton(label: String, onClick: () -> Unit) {
+internal fun androidx.compose.foundation.layout.RowScope.DangerButton(label: String, onClick: () -> Unit) {
     val tokens = SurmiseTheme.tokens
     Box(
         Modifier.weight(1f).height(40.dp).pressable(onClick = onClick).background(tokens.danger, CapsuleShape),

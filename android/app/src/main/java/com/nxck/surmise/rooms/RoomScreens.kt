@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -38,6 +39,7 @@ import com.nxck.surmise.Page
 import com.nxck.surmise.R
 import com.nxck.surmise.Segmented
 import com.nxck.surmise.clockText
+import com.nxck.surmise.history.DangerButton
 import com.nxck.surmise.core.gen.Note
 import com.nxck.surmise.core.gen.RankView
 import com.nxck.surmise.core.gen.RoomEntryView
@@ -49,6 +51,7 @@ import com.nxck.surmise.design.CapsuleShape
 import com.nxck.surmise.design.CapsuleStyle
 import com.nxck.surmise.design.Card
 import com.nxck.surmise.design.Radii
+import com.nxck.surmise.design.Sheet
 import com.nxck.surmise.design.SquircleShape
 import com.nxck.surmise.design.Switch
 import com.nxck.surmise.design.SurmiseText
@@ -85,44 +88,68 @@ fun RoomsScreen(
     var length by rememberSaveable { mutableIntStateOf(startLength) }
     var auto by rememberSaveable { mutableStateOf(true) }
     var code by rememberSaveable { mutableStateOf("") }
-    Page(stringResource(R.string.rooms), onBack) {
-        SurmiseText(stringResource(R.string.rooms_about), type.body, tokens.inkDim, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp))
+    var asking by rememberSaveable { mutableStateOf<String?>(null) }
+    Box(Modifier.fillMaxSize()) {
+        Page(stringResource(R.string.rooms), onBack) {
+            SurmiseText(stringResource(R.string.rooms_about), type.body, tokens.inkDim, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp))
 
-        Section(R.string.rooms_make)
-        Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Segmented(listOf("live", "async"), mode, { mode = it }) {
-                    stringResource(if (it == "live") R.string.rooms_live else R.string.rooms_async)
+            Section(R.string.rooms_make)
+            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Segmented(listOf("live", "async"), mode, { mode = it }) {
+                        stringResource(if (it == "live") R.string.rooms_live else R.string.rooms_async)
+                    }
+                    Segmented(listOf(4, 5, 6), length, { length = it }) { stringResource(R.string.letters, it) }
+                    if (mode == "live") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SurmiseText(stringResource(R.string.rooms_auto_start), type.body, tokens.ink, Modifier.weight(1f))
+                            Switch(auto, { auto = it })
+                        }
+                    }
+                    CapsuleButton(stringResource(R.string.rooms_make_button), { onMake(mode, length, auto) }, Modifier.fillMaxWidth())
                 }
-                Segmented(listOf(4, 5, 6), length, { length = it }) { stringResource(R.string.letters, it) }
-                if (mode == "live") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SurmiseText(stringResource(R.string.rooms_auto_start), type.body, tokens.ink, Modifier.weight(1f))
-                        Switch(auto, { auto = it })
+            }
+
+            Section(R.string.rooms_join)
+            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    CodeField(code, { code = it }, onGo = { if (code.isNotBlank()) onJoin(code) })
+                    CapsuleButton(stringResource(R.string.rooms_join_button), { onJoin(code) }, Modifier.fillMaxWidth(), enabled = code.isNotBlank())
+                }
+            }
+            Lines(lines)
+
+            if (list.isNotEmpty()) {
+                Section(R.string.rooms_yours)
+                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                    Column {
+                        list.forEachIndexed { i, e ->
+                            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(tokens.ink.copy(alpha = 0.06f)))
+                            EntryRow(e, onOpen = { onJoin(e.code) }, onLeave = { asking = e.code })
+                        }
                     }
                 }
-                CapsuleButton(stringResource(R.string.rooms_make_button), { onMake(mode, length, auto) }, Modifier.fillMaxWidth())
             }
         }
-
-        Section(R.string.rooms_join)
-        Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                CodeField(code, { code = it }, onGo = { if (code.isNotBlank()) onJoin(code) })
-                CapsuleButton(stringResource(R.string.rooms_join_button), { onJoin(code) }, Modifier.fillMaxWidth(), enabled = code.isNotBlank())
-            }
+        LeaveSheet(asking, onStay = { asking = null }) { c ->
+            asking = null
+            onLeave(c)
         }
-        Lines(lines)
+    }
+}
 
-        if (list.isNotEmpty()) {
-            Section(R.string.rooms_yours)
-            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
-                Column {
-                    list.forEachIndexed { i, e ->
-                        if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(tokens.ink.copy(alpha = 0.06f)))
-                        EntryRow(e, onOpen = { onJoin(e.code) }, onLeave = { onLeave(e.code) })
-                    }
-                }
+/** Asks before a room is left: leaving gives up the seat, and there is no way back to it. */
+@Composable
+private fun LeaveSheet(code: String?, onStay: () -> Unit, onLeave: (String) -> Unit) {
+    val tokens = SurmiseTheme.tokens
+    val type = SurmiseTheme.type
+    Sheet(visible = code != null, onDismiss = onStay) {
+        if (code != null) {
+            SurmiseText(stringResource(R.string.room_leave_title, code), type.displaySmall, tokens.ink)
+            SurmiseText(stringResource(R.string.room_leave_body), type.body, tokens.inkDim, Modifier.padding(top = 6.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CapsuleButton(stringResource(R.string.room_stay), onStay, Modifier.weight(1f), style = CapsuleStyle.Secondary)
+                DangerButton(stringResource(R.string.rooms_leave)) { onLeave(code) }
             }
         }
     }
@@ -209,25 +236,32 @@ data class RoomActions(
 @Composable
 fun RoomScreen(room: RoomView, lines: RoomLines, actions: RoomActions, now: () -> Long = System::currentTimeMillis) {
     val title = if (room.code.isEmpty()) stringResource(R.string.rooms) else stringResource(R.string.room_title, room.code)
-    Page(title, actions.onAway) {
-        when (room.screen) {
-            "lobby" -> Lobby(room, actions, now)
-            "watch" -> Watch(room, now)
-            "result" -> room.results?.let { Results(it, actions, saved = false) }
-            else -> Connecting(room)
+    var asking by rememberSaveable { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        Page(title, actions.onAway) {
+            when (room.screen) {
+                "lobby" -> Lobby(room, actions, now)
+                "watch" -> Watch(room, now)
+                "result" -> room.results?.let { Results(it, actions, saved = false) }
+                else -> Connecting(room)
+            }
+            if (room.reconnecting && room.screen != "") {
+                SurmiseText(stringResource(R.string.room_reconnecting), SurmiseTheme.type.caption, SurmiseTheme.tokens.inkMuted, Modifier.padding(start = 20.dp, top = 12.dp))
+            }
+            Lines(lines)
+            if (room.active) {
+                SurmiseText(
+                    stringResource(R.string.room_leave),
+                    SurmiseTheme.type.body,
+                    SurmiseTheme.tokens.danger,
+                    Modifier.fillMaxWidth().padding(top = 28.dp).pressable(onClick = { asking = true }).padding(12.dp),
+                    align = TextAlign.Center,
+                )
+            }
         }
-        if (room.reconnecting && room.screen != "") {
-            SurmiseText(stringResource(R.string.room_reconnecting), SurmiseTheme.type.caption, SurmiseTheme.tokens.inkMuted, Modifier.padding(start = 20.dp, top = 12.dp))
-        }
-        Lines(lines)
-        if (room.active) {
-            SurmiseText(
-                stringResource(R.string.room_leave),
-                SurmiseTheme.type.body,
-                SurmiseTheme.tokens.danger,
-                Modifier.fillMaxWidth().padding(top = 28.dp).pressable(onClick = actions.onLeave).padding(12.dp),
-                align = TextAlign.Center,
-            )
+        LeaveSheet(room.code.takeIf { asking }, onStay = { asking = false }) {
+            asking = false
+            actions.onLeave()
         }
     }
 }

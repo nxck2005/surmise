@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,7 +20,10 @@ enum class CapsuleStyle {
     Secondary,
 }
 
-/** A pill button. Disabled, it fades and stops taking presses. */
+/**
+ * A pill button. Disabled, it turns to the quiet fill with muted text and
+ * stops taking presses: a faded orange still reads as something to press.
+ */
 @Composable
 fun CapsuleButton(
     label: String,
@@ -31,13 +33,14 @@ fun CapsuleButton(
     enabled: Boolean = true,
 ) {
     val tokens = SurmiseTheme.tokens
-    val (fill, text) = when (style) {
-        CapsuleStyle.Primary -> tokens.action to tokens.onAction
-        CapsuleStyle.Secondary -> (if (tokens.dark) tokens.highlight else tokens.chartNeutral) to tokens.ink
+    val quiet = if (tokens.dark) tokens.highlight else tokens.chartNeutral
+    val (fill, text) = when {
+        !enabled -> quiet to tokens.inkMuted
+        style == CapsuleStyle.Primary -> tokens.action to tokens.onAction
+        else -> quiet to tokens.ink
     }
     Box(
         modifier = modifier
-            .alpha(if (enabled) 1f else 0.4f)
             .pressable(onClick = onClick, enabled = enabled)
             .height(40.dp)
             .defaultMinSize(minWidth = 64.dp)

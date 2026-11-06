@@ -154,12 +154,22 @@ open class BoardModel(
     /** A guess finished the board. */
     protected open suspend fun finished() = loadResult()
 
-    private suspend fun loadResult() {
+    private suspend fun loadResult(raise: Boolean = true) {
         runCatching { client.resultView() }.onSuccess { result = it }
         runCatching { client.recordProfile() }.onSuccess { profile = it }
         // With no row turning (motion off lands it at once) the sheet need
         // not wait on anything.
-        if (revealing < 0) sheet = true
+        if (raise && revealing < 0) sheet = true
+    }
+
+    /**
+     * A board opened already over (from the history, say) loads its result
+     * so "see result" can show it, but keeps the sheet down: the player came
+     * to look at the grid.
+     */
+    fun loadOpened() {
+        if (!done || result != null) return
+        scope.launch { loadResult(raise = false) }
     }
 
     fun openResult() {
