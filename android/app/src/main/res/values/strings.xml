@@ -9,6 +9,24 @@
     <string name="tab_friends">friends</string>
     <string name="tab_you">you</string>
     <string name="friends_line">play the same word as someone else</string>
+    <string name="friends_code_label">got a code?</string>
+    <string name="friends_code_hint">room or challenge code</string>
+    <string name="friends_open">open</string>
+    <string name="friends_rooms_offline">rooms need online play</string>
+    <string name="friends_start">start something</string>
+    <string name="friends_room_line">race live, or give everyone a day</string>
+    <string name="friends_needs_online">needs online play</string>
+    <string name="friends_challenge">send a challenge</string>
+    <string name="friends_challenge_line">a code for one word, works offline</string>
+    <string name="friends_custom">pass the phone</string>
+    <string name="friends_custom_line">you pick the word, they guess it</string>
+    <string name="friends_live_line">everyone plays at once, 10 minutes</string>
+    <string name="friends_async_line">open for a day, play when you like</string>
+    <string name="friends_length">length</string>
+    <string name="friends_auto_note">off: you start it yourself</string>
+    <string name="friends_room_after">you get a code to send. back steps out and keeps your seat</string>
+    <string name="room_back_keeps">back keeps your seat</string>
+    <string name="room">room</string>
     <string name="you_record">record</string>
     <string name="you_history">history</string>
     <string name="how_to_play_label">how to play</string>
@@ -197,11 +215,7 @@
     <!-- Other ways to play -->
     <string name="rooms">rooms</string>
     <string name="sprint">sprint</string>
-    <string name="challenge">challenge</string>
     <string name="custom">custom</string>
-    <string name="way_rooms">race friends on the same word</string>
-    <string name="way_challenge">send a friend the same word</string>
-    <string name="way_custom">pick a word, pass the phone</string>
     <string name="sprint_about">words come one after another until the clock runs out. solve as many as you can</string>
     <string name="sprint_length">length</string>
     <string name="sprint_clock">clock</string>
@@ -219,13 +233,9 @@
     <string name="sprint_again">go again</string>
     <string name="sprint_stop">stop</string>
     <string name="challenge_about">a challenge is a code for one word. whoever opens it gets the same puzzle you do</string>
-    <string name="challenge_make">make one</string>
     <string name="challenge_make_code">make a code</string>
     <string name="challenge_play_it">play it</string>
     <string name="challenge_share">try this surmise challenge: %1$s</string>
-    <string name="challenge_enter">got a code?</string>
-    <string name="challenge_hint">XXXX-XXXX-XXXX-XXXX</string>
-    <string name="challenge_open">open it</string>
     <string name="custom_about">type a word for someone else to guess. it stays hidden, and isn\'t saved until they make a guess</string>
     <string name="custom_hint">a %1$d-letter word</string>
     <string name="custom_any">any word</string>
@@ -250,15 +260,11 @@
     <string name="err_other">something went wrong (%1$s)</string>
 
     <!-- rooms -->
-    <string name="rooms_about">play the same word with friends. live rooms race at once, any-time rooms stay open for a day</string>
     <string name="rooms_make">make a room</string>
     <string name="rooms_live">live</string>
     <string name="rooms_async">any time</string>
     <string name="rooms_auto_start">start when everyone\'s ready</string>
     <string name="rooms_make_button">make room</string>
-    <string name="rooms_join">join a room</string>
-    <string name="rooms_join_hint">room code</string>
-    <string name="rooms_join_button">join</string>
     <string name="rooms_yours">your rooms</string>
     <string name="rooms_leave">leave</string>
     <string name="rooms_open">open</string>

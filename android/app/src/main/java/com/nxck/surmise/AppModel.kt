@@ -34,7 +34,10 @@ import com.nxck.surmise.core.gen.ThemeInfo
 import com.nxck.surmise.core.gen.TokensRequest
 import com.nxck.surmise.core.gen.TrendsView
 import com.nxck.surmise.design.SurmiseTokens
-import com.nxck.surmise.friends.Way
+import com.nxck.surmise.friends.CodeKind
+import com.nxck.surmise.friends.FriendsSheet
+import com.nxck.surmise.friends.codeKind
+import com.nxck.surmise.friends.normalizeCode
 import com.nxck.surmise.modes.ChallengeState
 import com.nxck.surmise.rooms.RoomsModel
 import com.nxck.surmise.sprint.SprintModel
@@ -51,10 +54,8 @@ sealed interface Route {
     data object Year : Route
     data object HowTo : Route
     data object Sprint : Route
-    data object Challenge : Route
     data object Custom : Route
     data object About : Route
-    data object Rooms : Route
     data object Room : Route
     data object RoomResult : Route
     data object Board : Route
@@ -67,9 +68,8 @@ val Route.depth: Int
         Route.Settings -> 1
         Route.Year -> 1
         Route.HowTo -> 1
-        Route.Sprint, Route.Challenge, Route.Custom -> 1
+        Route.Sprint, Route.Custom -> 1
         Route.About -> 1
-        Route.Rooms -> 1
         Route.RoomResult -> 1
         Route.Room -> 2
         Route.Board -> 2
@@ -177,7 +177,14 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     /** Switches tab, reading what the you tab shows when it opens. */
     fun select(t: Tab) {
         tab = t
+        friendsSheet = null
         if (t == Tab.You) refreshRecord()
+        if (t == Tab.Friends) {
+            friendsNote = null
+            friendsOffline = false
+            rooms.clearNotes()
+            rooms.refreshList()
+        }
     }
 
     /** Opens settings over the tabs. */
@@ -390,25 +397,53 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         show(Route.Sprint)
     }
 
-    fun showWay(w: Way) {
-        when (w) {
-            Way.Challenge -> {
-                challenge = ChallengeState()
-                show(Route.Challenge)
-            }
-            Way.Custom -> {
-                customNote = null
-                show(Route.Custom)
-            }
-            Way.Rooms -> {
-                rooms.clearNotes()
-                rooms.refreshList()
-                show(Route.Rooms)
-            }
+    /** The sheet up over the friends tab, if any. */
+    var friendsSheet by mutableStateOf<FriendsSheet?>(null)
+
+    /** The last refusal for a code typed on the friends tab. */
+    var friendsNote by mutableStateOf<Throwable?>(null)
+        private set
+
+    /** Set when a room code was typed while rooms are off. */
+    var friendsOffline by mutableStateOf(false)
+        private set
+
+    /** Whether rooms can be played: online play on, and the server has them. */
+    val roomsOn: Boolean get() = online.rooms && online.consent
+
+    fun showFriendsSheet(s: FriendsSheet) {
+        when (s) {
+            FriendsSheet.Challenge -> challenge = ChallengeState()
+            FriendsSheet.Room -> rooms.clearNotes()
+        }
+        friendsSheet = s
+    }
+
+    /**
+     * Opens what a typed code stands for: 6 characters join a room, 16 open
+     * a challenge. Challenges work offline; rooms do not.
+     */
+    fun openCode(raw: String) {
+        val code = normalizeCode(raw)
+        friendsNote = null
+        friendsOffline = false
+        rooms.clearNotes()
+        when (codeKind(code)) {
+            CodeKind.Room -> if (roomsOn) joinRoom(code) else friendsOffline = true
+            CodeKind.Challenge -> open(onFail = { friendsNote = it }) { client.challengeOpen(ChallengeCode(code)) }
+            null -> Unit
         }
     }
 
-    fun makeRoom(mode: String, length: Int, autoStart: Boolean) = rooms.make(mode, length, autoStart) { show(Route.Room) }
+    fun showCustom() {
+        customNote = null
+        show(Route.Custom)
+    }
+
+    fun makeRoom(mode: String, length: Int, autoStart: Boolean) = rooms.make(mode, length, autoStart) {
+        friendsSheet = null
+        show(Route.Room)
+    }
 
     fun joinRoom(code: String) = rooms.join(code) { show(Route.Room) }
 
@@ -536,13 +571,16 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         when (top) {
             Route.Board -> leaveBoard()
             Route.Room -> awayFromRoom()
-            Route.Settings, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms, Route.RoomResult -> pop()
-            Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
+            Route.Settings, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Custom, Route.RoomResult -> pop()
+            Route.Tabs -> when {
+                friendsSheet != null -> friendsSheet = null
+                tab != Tab.Play -> select(Tab.Play)
+            }
         }
     }
 
     /** Whether the back gesture is ours to handle, rather than the system's. */
-    val handlesBack: Boolean get() = top != Route.Tabs || tab != Tab.Play
+    val handlesBack: Boolean get() = top != Route.Tabs || tab != Tab.Play || friendsSheet != null
 
     private fun pop() {
         if (stack.size > 1) stack = stack.dropLast(1)

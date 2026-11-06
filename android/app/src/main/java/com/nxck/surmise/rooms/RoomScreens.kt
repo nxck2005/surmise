@@ -71,73 +71,6 @@ import java.util.Locale
 /** What the rooms screens show besides the room: the last refusal and note. */
 data class RoomLines(val error: Throwable? = null, val note: Note? = null)
 
-/** The rooms hub: make a room, join one by its code, or go back to one of ours. */
-@Composable
-fun RoomsScreen(
-    list: List<RoomEntryView>,
-    lines: RoomLines,
-    startLength: Int,
-    onMake: (mode: String, length: Int, autoStart: Boolean) -> Unit,
-    onJoin: (String) -> Unit,
-    onLeave: (String) -> Unit,
-    onBack: () -> Unit,
-) {
-    val tokens = SurmiseTheme.tokens
-    val type = SurmiseTheme.type
-    var mode by rememberSaveable { mutableStateOf("live") }
-    var length by rememberSaveable { mutableIntStateOf(startLength) }
-    var auto by rememberSaveable { mutableStateOf(true) }
-    var code by rememberSaveable { mutableStateOf("") }
-    var asking by rememberSaveable { mutableStateOf<String?>(null) }
-    Box(Modifier.fillMaxSize()) {
-        Page(stringResource(R.string.rooms), onBack) {
-            SurmiseText(stringResource(R.string.rooms_about), type.body, tokens.inkDim, Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp))
-
-            Section(R.string.rooms_make)
-            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Segmented(listOf("live", "async"), mode, { mode = it }) {
-                        stringResource(if (it == "live") R.string.rooms_live else R.string.rooms_async)
-                    }
-                    Segmented(listOf(4, 5, 6), length, { length = it }) { stringResource(R.string.letters, it) }
-                    if (mode == "live") {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            SurmiseText(stringResource(R.string.rooms_auto_start), type.body, tokens.ink, Modifier.weight(1f))
-                            Switch(auto, { auto = it })
-                        }
-                    }
-                    CapsuleButton(stringResource(R.string.rooms_make_button), { onMake(mode, length, auto) }, Modifier.fillMaxWidth())
-                }
-            }
-
-            Section(R.string.rooms_join)
-            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    CodeField(code, { code = it }, onGo = { if (code.isNotBlank()) onJoin(code) })
-                    CapsuleButton(stringResource(R.string.rooms_join_button), { onJoin(code) }, Modifier.fillMaxWidth(), enabled = code.isNotBlank())
-                }
-            }
-            Lines(lines)
-
-            if (list.isNotEmpty()) {
-                Section(R.string.rooms_yours)
-                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
-                    Column {
-                        list.forEachIndexed { i, e ->
-                            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(tokens.ink.copy(alpha = 0.06f)))
-                            EntryRow(e, onOpen = { onJoin(e.code) }, onLeave = { asking = e.code })
-                        }
-                    }
-                }
-            }
-        }
-        LeaveSheet(asking, onStay = { asking = null }) { c ->
-            asking = null
-            onLeave(c)
-        }
-    }
-}
-
 /** Asks before a room is left: leaving gives up the seat, and there is no way back to it. */
 @Composable
 private fun LeaveSheet(code: String?, onStay: () -> Unit, onLeave: (String) -> Unit) {
@@ -158,54 +91,6 @@ private fun LeaveSheet(code: String?, onStay: () -> Unit, onLeave: (String) -> U
 @Composable
 private fun Section(title: Int) {
     SurmiseText(stringResource(title), SurmiseTheme.type.section, SurmiseTheme.tokens.ink, Modifier.padding(start = 20.dp, top = 24.dp, bottom = 10.dp))
-}
-
-@Composable
-private fun CodeField(code: String, onChange: (String) -> Unit, onGo: () -> Unit) {
-    val tokens = SurmiseTheme.tokens
-    val type = SurmiseTheme.type
-    Box(
-        Modifier.fillMaxWidth().height(48.dp).background(tokens.canvas.copy(alpha = 0.5f), SquircleShape(12.dp)).padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        if (code.isEmpty()) SurmiseText(stringResource(R.string.rooms_join_hint), type.code, tokens.inkMuted)
-        BasicTextField(
-            value = code,
-            onValueChange = { if (it.length <= 8) onChange(it.uppercase()) },
-            singleLine = true,
-            textStyle = type.code.copy(color = tokens.ink),
-            cursorBrush = SolidColor(tokens.cursor),
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Characters,
-                autoCorrectEnabled = false,
-                keyboardType = KeyboardType.Ascii,
-                imeAction = ImeAction.Go,
-            ),
-            keyboardActions = KeyboardActions(onGo = { onGo() }),
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
-
-@Composable
-private fun EntryRow(e: RoomEntryView, onOpen: () -> Unit, onLeave: () -> Unit) {
-    val tokens = SurmiseTheme.tokens
-    val type = SurmiseTheme.type
-    Row(Modifier.fillMaxWidth().height(56.dp).pressable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SurmiseText(e.code, type.code, tokens.ink)
-                if (e.open) SurmiseText(stringResource(R.string.rooms_open), type.footnote, tokens.accentText, Modifier.padding(start = 8.dp))
-            }
-            val day = dayText(e.joinedAtMs)
-            SurmiseText(
-                stringResource(if (e.mode == "async") R.string.rooms_mode_async else R.string.rooms_mode_live, day),
-                type.footnote,
-                tokens.inkMuted,
-            )
-        }
-        SurmiseText(stringResource(R.string.rooms_leave), type.caption, tokens.danger, Modifier.pressable(onClick = onLeave).padding(8.dp))
-    }
 }
 
 /** The last refusal and the last note, as lines under the cards. */
@@ -235,7 +120,12 @@ data class RoomActions(
 /** The open room, as its screen says: connecting, the lobby, watching or the results. */
 @Composable
 fun RoomScreen(room: RoomView, lines: RoomLines, actions: RoomActions, now: () -> Long = System::currentTimeMillis) {
-    val title = if (room.code.isEmpty()) stringResource(R.string.rooms) else stringResource(R.string.room_title, room.code)
+    // The lobby shows the code in tiles, so its title does not say it again.
+    val title = when {
+        room.code.isEmpty() -> stringResource(R.string.rooms)
+        room.screen == "lobby" -> stringResource(R.string.room)
+        else -> stringResource(R.string.room_title, room.code)
+    }
     var asking by rememberSaveable { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
         Page(title, actions.onAway) {
@@ -255,6 +145,13 @@ fun RoomScreen(room: RoomView, lines: RoomLines, actions: RoomActions, now: () -
                     SurmiseTheme.type.body,
                     SurmiseTheme.tokens.danger,
                     Modifier.fillMaxWidth().padding(top = 28.dp).pressable(onClick = { asking = true }).padding(12.dp),
+                    align = TextAlign.Center,
+                )
+                SurmiseText(
+                    stringResource(R.string.room_back_keeps),
+                    SurmiseTheme.type.footnote,
+                    SurmiseTheme.tokens.inkMuted,
+                    Modifier.fillMaxWidth(),
                     align = TextAlign.Center,
                 )
             }

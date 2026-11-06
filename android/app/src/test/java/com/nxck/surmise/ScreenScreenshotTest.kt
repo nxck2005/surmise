@@ -15,7 +15,11 @@ import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.board.BoardScreen
 import com.nxck.surmise.board.NextAction
 import com.nxck.surmise.board.ResultBody
+import com.nxck.surmise.friends.FriendsActions
 import com.nxck.surmise.friends.FriendsScreen
+import com.nxck.surmise.friends.FriendsSheet
+import com.nxck.surmise.friends.FriendsSheets
+import com.nxck.surmise.friends.FriendsState
 import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
@@ -25,7 +29,6 @@ import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.core.gen.SprintOptions
 import com.nxck.surmise.core.gen.SprintView
-import com.nxck.surmise.modes.ChallengeScreen
 import com.nxck.surmise.modes.ChallengeState
 import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.record.RecordScreen
@@ -40,7 +43,6 @@ import com.nxck.surmise.rooms.RoomActions
 import com.nxck.surmise.rooms.RoomLines
 import com.nxck.surmise.rooms.RoomResultScreen
 import com.nxck.surmise.rooms.RoomScreen
-import com.nxck.surmise.rooms.RoomsScreen
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
@@ -126,7 +128,15 @@ class ScreenScreenshotTest(private val theme: String) {
     }
 
     @Test
-    fun friends() = shot("friends") { FriendsScreen(rooms = true, onWay = {}) }
+    fun friends() = shot("friends") { FriendsScreen(FriendsState(rooms = true, entries = roomEntries), FriendsActions()) }
+
+    @Test
+    fun friendsOffline() = shot("friends-offline") { FriendsScreen(FriendsState(rooms = false, offline = true), FriendsActions()) }
+
+    @Test
+    fun makeRoom() = shot("make-room") {
+        FriendsSheets(FriendsSheet.Room, 5, null, ChallengeState(), {}, { _, _, _ -> }, {}, {}, {})
+    }
 
     @Test
     fun history() = shot("history") { HistoryScreen(historyItems, {}, {}) }
@@ -178,14 +188,11 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun challenge() = shot("challenge") {
-        ChallengeScreen(ChallengeState(made = "7K2M-QX4R-9TPW-B3HD", madeLength = 5), 5, {}, {}, {}, {})
+        FriendsSheets(FriendsSheet.Challenge, 5, null, ChallengeState(made = "7K2M-QX4R-9TPW-B3HD", madeLength = 5), {}, { _, _, _ -> }, {}, {}, {})
     }
 
     @Test
     fun custom() = shot("custom") { CustomScreen(5, null, { _, _, _, _ -> }, { _, _, _ -> }, {}) }
-
-    @Test
-    fun rooms() = shot("rooms") { RoomsScreen(roomEntries, RoomLines(), 5, { _, _, _ -> }, {}, {}, {}) }
 
     @Test
     fun roomLobby() = shot("room-lobby") { RoomScreen(roomLobby, RoomLines(), RoomActions(), now = { 0 }) }

@@ -38,7 +38,10 @@ import com.nxck.surmise.settings.SettingsState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.board.BoardScreen
+import com.nxck.surmise.friends.FriendsActions
 import com.nxck.surmise.friends.FriendsScreen
+import com.nxck.surmise.friends.FriendsSheets
+import com.nxck.surmise.friends.FriendsState
 import com.nxck.surmise.you.YouScreen
 import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
@@ -54,14 +57,12 @@ import com.nxck.surmise.design.rememberGlassState
 import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.home.homeState
-import com.nxck.surmise.modes.ChallengeScreen
 import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.sprint.SprintClock
 import com.nxck.surmise.rooms.RoomActions
 import com.nxck.surmise.rooms.RoomLines
 import com.nxck.surmise.rooms.RoomResultScreen
 import com.nxck.surmise.rooms.RoomScreen
-import com.nxck.surmise.rooms.RoomsScreen
 import com.nxck.surmise.rooms.RoundClock
 import com.nxck.surmise.sprint.SprintModel
 import com.nxck.surmise.sprint.SprintSetup
@@ -133,28 +134,11 @@ fun SurmiseApp(model: AppModel) {
                 Route.HowTo -> HowToScreen(onBack = model::back)
                 Route.About -> AboutScreen(model.info, onBack = model::back)
                 Route.Sprint -> SprintSetup(model.sprintOptions, model.startLength, onStart = model::startSprint, onBack = model::back)
-                Route.Challenge -> ChallengeScreen(
-                    state = model.challenge,
-                    startLength = model.startLength,
-                    onMake = model::makeChallenge,
-                    onShare = { share(context, it) },
-                    onOpen = model::openChallenge,
-                    onBack = model::back,
-                )
                 Route.Custom -> CustomScreen(
                     startLength = model.startLength,
                     note = model.customNote,
                     onCheck = model::checkCustom,
                     onReady = model::startCustom,
-                    onBack = model::back,
-                )
-                Route.Rooms -> RoomsScreen(
-                    list = model.rooms.list,
-                    lines = RoomLines(model.rooms.error, model.rooms.note),
-                    startLength = model.startLength,
-                    onMake = model::makeRoom,
-                    onJoin = model::joinRoom,
-                    onLeave = model.rooms::leave,
                     onBack = model::back,
                 )
                 Route.Room -> Room(model)
@@ -263,8 +247,19 @@ private fun Tabs(model: AppModel) {
                     ),
                 )
                 Tab.Friends -> FriendsScreen(
-                    rooms = model.online.rooms && model.online.consent,
-                    onWay = model::showWay,
+                    state = FriendsState(
+                        rooms = model.roomsOn,
+                        entries = model.rooms.list,
+                        note = model.friendsNote ?: model.rooms.error.takeIf { model.friendsSheet == null },
+                        offline = model.friendsOffline,
+                    ),
+                    actions = FriendsActions(
+                        onCode = model::openCode,
+                        onSheet = model::showFriendsSheet,
+                        onCustom = model::showCustom,
+                        onOnline = model::showSettings,
+                        onRoom = model::joinRoom,
+                    ),
                 )
                 Tab.You -> YouScreen(
                     history = model.youHistory,
@@ -292,6 +287,22 @@ private fun Tabs(model: AppModel) {
                 .navigationBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
         )
+        if (model.tab == Tab.Friends) {
+            FriendsSheets(
+                sheet = model.friendsSheet,
+                startLength = model.startLength,
+                roomError = model.rooms.error,
+                challenge = model.challenge,
+                onDismiss = { model.friendsSheet = null },
+                onMakeRoom = model::makeRoom,
+                onMakeChallenge = model::makeChallenge,
+                onShare = { share(context, it) },
+                onPlayChallenge = {
+                    model.friendsSheet = null
+                    model.openChallenge(it)
+                },
+            )
+        }
     }
 }
 
