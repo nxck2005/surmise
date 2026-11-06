@@ -72,6 +72,7 @@
     <string name="back">back</string>
     <string name="letters">%1$d letters</string>
     <string name="board_daily">daily, %1$d letters</string>
+    <string name="board_practice">practice, %1$d letters</string>
     <string name="board_custom">custom, %1$d letters</string>
     <string name="board_challenge">challenge, %1$d letters</string>
     <string name="board_sprint">sprint, %1$d letters</string>
@@ -94,8 +95,11 @@
     <string name="guesses">guesses</string>
     <string name="share">share</string>
     <string name="review">review</string>
-    <string name="next_puzzle">next puzzle</string>
-    <string name="next_daily">daily</string>
+    <string name="next_word">next word</string>
+    <string name="next_daily">next: daily %1$d letters</string>
+    <string name="share_all_three">share all three</string>
+    <string name="result_done">done</string>
+    <string name="trio_progress">%1$d of 3</string>
     <string name="next_again">again</string>
     <string name="home">home</string>
 

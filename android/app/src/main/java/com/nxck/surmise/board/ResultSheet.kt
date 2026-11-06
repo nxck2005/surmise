@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.nxck.surmise.R
 import com.nxck.surmise.boardTitle
 import com.nxck.surmise.clockText
+import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.core.gen.ProfileView
 import com.nxck.surmise.core.gen.ResultView
 import com.nxck.surmise.design.CapsuleButton
@@ -31,9 +32,20 @@ import com.nxck.surmise.design.SurmiseTheme
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/** The result sheet's second button: where the player goes after this board. */
+data class NextAction(val label: String, val onClick: () -> Unit)
+
+/**
+ * The daily to play after the [length] one: today's first that is not over,
+ * in 4, 5, 6 order. The [length] one is skipped, as the view read before it
+ * finished may still call it in play.
+ */
+fun nextDailyLength(daily: DailyView?, length: Int): Int? =
+    daily?.rows?.sortedBy { it.length }?.firstOrNull { it.length != length && (it.state == "new" || it.state == "playing") }?.length
+
 /** The debrief over a finished board: the score, the record so far, and what next. */
 @Composable
-fun ResultSheet(model: BoardModel, onShare: (String) -> Unit, onHome: () -> Unit) {
+fun ResultSheet(model: BoardModel, onShare: (String) -> Unit, onHome: () -> Unit, daily: DailyView? = null) {
     val r = model.result
     Sheet(visible = model.sheet && r != null, onDismiss = { model.sheet = false }) {
         if (r != null) {
@@ -41,12 +53,31 @@ fun ResultSheet(model: BoardModel, onShare: (String) -> Unit, onHome: () -> Unit
                 r = r,
                 profile = model.profile,
                 onShare = { onShare(r.share) },
-                onReview = { model.sheet = false },
-                onNext = model::next,
-                onHome = onHome,
+                onDone = onHome,
+                next = nextAction(r, daily, model::next, onShare),
             )
         }
     }
+}
+
+/**
+ * Next for a random board is a new word; for a daily, the next daily of
+ * today, or once all three are over, the three as one share. Other kinds
+ * have no next.
+ */
+@Composable
+private fun nextAction(r: ResultView, daily: DailyView?, onNext: () -> Unit, onShare: (String) -> Unit): NextAction? = when (r.next) {
+    "random" -> NextAction(stringResource(R.string.next_word), onNext)
+    "daily" -> {
+        val n = nextDailyLength(daily, r.board.length)
+        when {
+            n != null -> NextAction(stringResource(R.string.next_daily, n), onNext)
+            daily != null && daily.trio.complete && daily.share.isNotEmpty() ->
+                NextAction(stringResource(R.string.share_all_three)) { onShare(daily.share) }
+            else -> null
+        }
+    }
+    else -> null
 }
 
 @Composable
@@ -54,9 +85,8 @@ fun ResultBody(
     r: ResultView,
     profile: ProfileView?,
     onShare: () -> Unit,
-    onReview: () -> Unit,
-    onNext: () -> Unit,
-    onHome: () -> Unit,
+    onDone: () -> Unit,
+    next: NextAction?,
 ) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
@@ -87,16 +117,8 @@ fun ResultBody(
         Spacer(Modifier.height(24.dp))
         CapsuleButton(stringResource(R.string.share), onShare, Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val next = when (r.next) {
-                "random" -> R.string.next_puzzle
-                "daily" -> R.string.next_daily
-                else -> R.string.home
-            }
-            CapsuleButton(stringResource(R.string.review), onReview, Modifier.weight(1f), style = CapsuleStyle.Secondary)
-            if (r.next == "random" || r.next == "daily") {
-                CapsuleButton(stringResource(next), onNext, Modifier.weight(1f), style = CapsuleStyle.Secondary)
-            }
-            CapsuleButton(stringResource(R.string.home), onHome, Modifier.weight(1f), style = CapsuleStyle.Secondary)
+            if (next != null) CapsuleButton(next.label, next.onClick, Modifier.weight(2f), style = CapsuleStyle.Secondary)
+            CapsuleButton(stringResource(R.string.result_done), onDone, Modifier.weight(1f), style = CapsuleStyle.Secondary)
         }
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nxck.surmise.board.BoardModel
+import com.nxck.surmise.board.nextDailyLength
 import com.nxck.surmise.core.CoreHandle
 import com.nxck.surmise.core.gen.AppTokens
 import com.nxck.surmise.core.gen.BoardView
@@ -452,6 +453,24 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     fun startCustom(word: String, length: Int, anyWord: Boolean) =
         open(onFail = { customNote = it }) { client.customStart(CustomRequest(word, length, anyWord)) }
 
+    /**
+     * Next from a daily's result: today's next daily that is not over, in
+     * place of this board, so back still goes where the first was opened from.
+     */
+    private fun openNextDaily(length: Int) {
+        val n = nextDailyLength(daily, length) ?: return closeBoard()
+        val b = board
+        scope.launch {
+            b?.leave()
+            runCatching { client.dailyOpen(DailyOpenRequest(length = n)) }
+                .onSuccess(::replaceBoard)
+                .onFailure {
+                    homeNote = it
+                    closeBoard()
+                }
+        }
+    }
+
     /** Swaps the open board for another (next puzzle, play again). */
     private fun replaceBoard(v: BoardView) {
         board = boardModel(v)
@@ -461,7 +480,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         client,
         scope,
         v,
-        onLeave = { next -> closeBoard(then = if (next == "daily") Route.Daily else null) },
+        onLeave = { next -> if (next == "daily") openNextDaily(v.length) else closeBoard() },
         onReplace = ::replaceBoard,
     ).also { it.loadOpened() }
 

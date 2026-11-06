@@ -64,6 +64,7 @@ fun boardTitle(context: Context, b: BoardView): String = when (b.kind) {
     "challenge" -> context.getString(R.string.board_challenge, b.length)
     "sprint" -> context.getString(R.string.board_sprint, b.length)
     "room" -> context.getString(R.string.board_room, b.length)
+    "random" -> context.getString(R.string.board_practice, b.length)
     else -> context.getString(R.string.letters, b.length)
 }
 

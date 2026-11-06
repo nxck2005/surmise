@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.board.BoardScreen
+import com.nxck.surmise.board.NextAction
 import com.nxck.surmise.board.ResultBody
 import com.nxck.surmise.daily.DailyScreen
 import com.nxck.surmise.history.HistoryScreen
@@ -89,6 +90,31 @@ class ScreenScreenshotTest(private val theme: String) {
     }
 
     @Test
+    fun boardDaily() = shot("board-daily") {
+        val scope = rememberCoroutineScope()
+        val daily = boardInPlay.copy(kind = "daily", daily = "2026-11-01")
+        BoardScreen(BoardModel(fakeClient(emptyMap()), scope, daily, {}, {}), onBack = {}, onHome = {}, onShare = {}, daily = dailyToday)
+    }
+
+    @Test
+    fun boardOver() = shot("board-over") {
+        val scope = rememberCoroutineScope()
+        val won = boardWon.copy(kind = "daily", daily = "2026-11-01")
+        val client = fakeClient(
+            mapOf(
+                "result.view" to ok(com.nxck.surmise.core.gen.ResultView.serializer(), resultWon.copy(board = won, next = "daily")),
+                "record.profile" to ok(com.nxck.surmise.core.gen.ProfileView.serializer(), profile),
+            ),
+        )
+        val m = androidx.compose.runtime.remember { BoardModel(client, scope, won, {}, {}) }
+        androidx.compose.runtime.LaunchedEffect(m) {
+            m.loadOpened()
+            m.sheet = true
+        }
+        BoardScreen(m, onBack = {}, onHome = {}, onShare = {}, daily = dailyToday)
+    }
+
+    @Test
     fun daily() = shot("daily") {
         DailyScreen(dailyToday.copy(resetsAtMs = 1_000L + 33_120_000L), "sunday, november 1", 1284, {}, {}, {}, now = { 1_000L })
     }
@@ -116,7 +142,7 @@ class ScreenScreenshotTest(private val theme: String) {
     fun result() = shot("result") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             Sheet(visible = true, onDismiss = {}) {
-                ResultBody(resultWon, profile, onShare = {}, onReview = {}, onNext = {}, onHome = {})
+                ResultBody(resultWon, profile, onShare = {}, onDone = {}, next = NextAction("next word") {})
             }
         }
     }

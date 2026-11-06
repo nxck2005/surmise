@@ -184,7 +184,12 @@ fun SurmiseApp(model: AppModel) {
                         sheet = { SprintSummary(b, onAgain = { model.startSprint(b.run.length, b.run.durationMs) }, onHome = model::goHome) },
                     )
                     null -> Unit
-                    else -> BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
+                    else -> {
+                        // A daily's result offers the next daily, so read today's
+                        // three again once this one is over.
+                        LaunchedEffect(b, b.done) { if (b.done && b.view.kind == "daily") model.refreshHome() }
+                        BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) }, daily = model.daily)
+                    }
                 }
             }
         }
