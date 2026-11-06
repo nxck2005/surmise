@@ -52,6 +52,9 @@ type HistoryItem struct {
 	// YYYY-MM-DD in the device zone, as the calendar files it; empty when
 	// there is none.
 	Day string `json:"day,omitempty"`
+	// Marks is one string per guess, a letter per tile: g for correct, y for
+	// present, a for absent. Colours only, so a mini board never shows a word.
+	Marks []string `json:"marks"`
 }
 
 // History is every live puzzle, most recently updated first.
@@ -84,12 +87,33 @@ func (e *Engine) historyList(Empty) (History, error) {
 			ID: g.ID, Code: game.Code(g.ID), Kind: play.KindOf(g), Status: string(g.Status),
 			Length: g.Length, Attempts: len(g.Guesses),
 			UpdatedAt: g.UpdatedAt.UTC().Format(time.RFC3339), Daily: g.Daily,
+			Marks: markStrings(g.Marks),
 		}
 		if d, ok := stats.PlayDay(g.Daily, g.StartedAt, e.zone); ok {
 			out.Items[i].Day = d.String()
 		}
 	}
 	return out, nil
+}
+
+// markStrings writes each guess's marks as g, y and a.
+func markStrings(rows [][]game.Mark) []string {
+	out := make([]string, len(rows))
+	for i, row := range rows {
+		b := make([]byte, len(row))
+		for j, m := range row {
+			switch m {
+			case game.Correct:
+				b[j] = 'g'
+			case game.Present:
+				b[j] = 'y'
+			default:
+				b[j] = 'a'
+			}
+		}
+		out[i] = string(b)
+	}
+	return out
 }
 
 // DeleteRequest removes one puzzle.

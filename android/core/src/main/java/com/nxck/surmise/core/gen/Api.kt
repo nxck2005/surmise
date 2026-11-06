@@ -185,6 +185,7 @@ data class HistoryItem(
     @SerialName("updatedAt") val updatedAt: String = "",
     @SerialName("daily") val daily: String = "",
     @SerialName("day") val day: String = "",
+    @SerialName("marks") val marks: List<String> = emptyList(),
 )
 
 @Serializable
