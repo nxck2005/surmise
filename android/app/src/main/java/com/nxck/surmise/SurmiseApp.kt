@@ -38,7 +38,8 @@ import com.nxck.surmise.settings.SettingsState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.board.BoardScreen
-import com.nxck.surmise.daily.DailyScreen
+import com.nxck.surmise.friends.FriendsScreen
+import com.nxck.surmise.you.YouScreen
 import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
@@ -121,15 +122,7 @@ fun SurmiseApp(model: AppModel) {
         ) { route ->
             when (route) {
                 Route.Tabs -> Tabs(model)
-                Route.Daily -> DailyScreen(
-                    daily = model.daily,
-                    date = homeDate(),
-                    playedToday = if (model.online.consent) model.online.menuCount else 0,
-                    onBack = model::back,
-                    onOpen = model::openDaily,
-                    onShare = { share(context, it) },
-                    counts = if (model.online.consent) model.dailyCounts else emptyMap(),
-                )
+                Route.Settings -> Settings(model)
                 Route.Year -> YearScreen(
                     calendar = model.calendar,
                     trends = model.trends,
@@ -240,10 +233,10 @@ private fun Tabs(model: AppModel) {
     val glass = rememberGlassState()
     val items = listOf(
         TabItem(stringResource(R.string.tab_play), SurmiseIcons.Play),
-        TabItem(stringResource(R.string.tab_history), SurmiseIcons.History),
-        TabItem(stringResource(R.string.tab_record), SurmiseIcons.Record),
-        TabItem(stringResource(R.string.tab_settings), SurmiseIcons.Settings),
+        TabItem(stringResource(R.string.tab_friends), SurmiseIcons.Rooms),
+        TabItem(stringResource(R.string.tab_you), SurmiseIcons.You),
     )
+    val context = LocalContext.current
     Box(Modifier.fillMaxSize().background(tokens.canvas)) {
         Box(Modifier.fillMaxSize().glassSource(glass)) {
             when (model.tab) {
@@ -256,25 +249,37 @@ private fun Tabs(model: AppModel) {
                         note = model.homeNote,
                         rooms = model.online.rooms && model.online.consent,
                         running = model.rooms.room.takeIf { it.active && it.probe }?.code.orEmpty(),
+                        dailyCounts = if (model.online.consent) model.dailyCounts else emptyMap(),
                     ),
                     actions = HomeActions(
                         onDaily = model::openDaily,
-                        onDailyScreen = model::showDaily,
                         onPlay = model::playLength,
-                        onRecord = { model.select(Tab.Record) },
-                        onWay = model::showWay,
+                        onNew = model::newWord,
+                        onSprint = model::showSprint,
+                        onHowTo = { model.show(Route.HowTo) },
+                        onSettings = model::showSettings,
+                        onShare = { share(context, it) },
                         onRoom = model::showRoom,
                     ),
                 )
-                Tab.History -> HistoryScreen(
-                    items = model.history,
-                    onOpen = model::openSaved,
-                    day = model.historyDay,
-                    onClearDay = { model.historyDay = "" },
-                    onDelete = { model.delete(it.id) },
+                Tab.Friends -> FriendsScreen(
+                    rooms = model.online.rooms && model.online.consent,
+                    onWay = model::showWay,
                 )
-                Tab.Record -> RecordScreen(model.profile, model.calendar, onYear = model::showYear)
-                Tab.Settings -> Settings(model)
+                Tab.You -> YouScreen(
+                    history = model.youHistory,
+                    onHistory = { model.youHistory = it },
+                    record = { RecordScreen(model.profile, model.calendar, onYear = model::showYear) },
+                    list = {
+                        HistoryScreen(
+                            items = model.history,
+                            onOpen = model::openSaved,
+                            day = model.historyDay,
+                            onClearDay = { model.historyDay = "" },
+                            onDelete = { model.delete(it.id) },
+                        )
+                    },
+                )
             }
         }
         TabBar(
@@ -309,6 +314,7 @@ private fun Settings(model: AppModel) {
     }
     val prefs = model.prefs
     SettingsScreen(
+        onBack = model::back,
         state = SettingsState(
             settings = model.settings,
             theme = prefs.theme,

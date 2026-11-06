@@ -34,7 +34,7 @@ import com.nxck.surmise.core.gen.ThemeInfo
 import com.nxck.surmise.core.gen.TokensRequest
 import com.nxck.surmise.core.gen.TrendsView
 import com.nxck.surmise.design.SurmiseTokens
-import com.nxck.surmise.home.Way
+import com.nxck.surmise.friends.Way
 import com.nxck.surmise.modes.ChallengeState
 import com.nxck.surmise.rooms.RoomsModel
 import com.nxck.surmise.sprint.SprintModel
@@ -47,7 +47,7 @@ import kotlinx.serialization.json.Json
 /** A screen pushed over the tabs. The tabs are the root and never popped. */
 sealed interface Route {
     data object Tabs : Route
-    data object Daily : Route
+    data object Settings : Route
     data object Year : Route
     data object HowTo : Route
     data object Sprint : Route
@@ -64,7 +64,7 @@ sealed interface Route {
 val Route.depth: Int
     get() = when (this) {
         Route.Tabs -> 0
-        Route.Daily -> 1
+        Route.Settings -> 1
         Route.Year -> 1
         Route.HowTo -> 1
         Route.Sprint, Route.Challenge, Route.Custom -> 1
@@ -75,7 +75,7 @@ val Route.depth: Int
         Route.Board -> 2
     }
 
-enum class Tab { Play, History, Record, Settings }
+enum class Tab { Play, Friends, You }
 
 /**
  * What the app shows, held as Compose state. Every change goes through the
@@ -141,6 +141,11 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
             runCatching { daily = client.dailyView(DayRequest()) }
             runCatching { history = client.historyList().items }
             runCatching { online = client.onlineMenuCount() }
+            // Everyone's counts for today's three, shown on the daily card.
+            val day = daily?.day
+            if (day != null && online.consent && online.daily) {
+                for (n in 4..6) runCatching { online = client.onlineDailyCount(CountRequest(day, n)) }
+            }
         }
     }
 
@@ -155,21 +160,30 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         }
     }
 
-    /** Switches tab, reading what the record tab shows when it opens. */
     /** The history's calendar day, picked on the year; "" is every day. */
     var historyDay by mutableStateOf("")
+
+    /** Whether the you tab shows the history, not the record. */
+    var youHistory by mutableStateOf(false)
 
     /** Shows the history for one calendar day, from the year. */
     fun showDay(day: String) {
         historyDay = day
+        youHistory = true
         stack = listOf(Route.Tabs)
-        select(Tab.History)
+        select(Tab.You)
     }
 
+    /** Switches tab, reading what the you tab shows when it opens. */
     fun select(t: Tab) {
         tab = t
-        if (t == Tab.Record) refreshRecord()
-        if (t == Tab.Settings) refreshSettings()
+        if (t == Tab.You) refreshRecord()
+    }
+
+    /** Opens settings over the tabs. */
+    fun showSettings() {
+        refreshSettings()
+        show(Route.Settings)
     }
 
     /** Reads the profile, the calendar and each length's trends. */
@@ -266,20 +280,17 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     fun inPlay(length: Int): HistoryItem? =
         history.firstOrNull { it.kind == "random" && it.length == length && it.status == "in_progress" }
 
+    /**
+     * Starts a new board of [length] even with one in play; that one stays
+     * in the history, still open to resume there.
+     */
+    fun newWord(length: Int) = open { client.boardNew(NewBoardRequest(length)) }
+
     fun playLength(length: Int) {
         val resume = inPlay(length)
         open {
             if (resume != null) client.boardResume(ResumeRequest(resume.id)) else client.boardNew(NewBoardRequest(length))
         }
-    }
-
-    /** Shows the daily screen. */
-    fun showDaily() {
-        if (top != Route.Daily) stack = stack + Route.Daily
-        refreshHome()
-        val day = daily?.day ?: return
-        if (!online.consent || !online.daily) return
-        scope.launch { for (n in 4..6) runCatching { online = client.onlineDailyCount(CountRequest(day, n)) } }
     }
 
     /** Everyone's finished boards of today's daily, by length. */
@@ -374,12 +385,13 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     /** The length a mode's setup starts on: the setting, or 5. */
     val startLength: Int get() = settings.length.takeIf { it in 4..6 } ?: 5
 
+    fun showSprint() {
+        scope.launch { runCatching { sprintOptions = client.sprintOptions() } }
+        show(Route.Sprint)
+    }
+
     fun showWay(w: Way) {
         when (w) {
-            Way.Sprint -> {
-                scope.launch { runCatching { sprintOptions = client.sprintOptions() } }
-                show(Route.Sprint)
-            }
             Way.Challenge -> {
                 challenge = ChallengeState()
                 show(Route.Challenge)
@@ -524,7 +536,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
         when (top) {
             Route.Board -> leaveBoard()
             Route.Room -> awayFromRoom()
-            Route.Daily, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms, Route.RoomResult -> pop()
+            Route.Settings, Route.Year, Route.HowTo, Route.About, Route.Sprint, Route.Challenge, Route.Custom, Route.Rooms, Route.RoomResult -> pop()
             Route.Tabs -> if (tab != Tab.Play) select(Tab.Play)
         }
     }
@@ -535,7 +547,7 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     private fun pop() {
         if (stack.size > 1) stack = stack.dropLast(1)
         refreshHome()
-        if (tab == Tab.Record) refreshRecord()
+        if (tab == Tab.You) refreshRecord()
     }
 
     private companion object {

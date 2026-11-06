@@ -15,7 +15,7 @@ import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.board.BoardScreen
 import com.nxck.surmise.board.NextAction
 import com.nxck.surmise.board.ResultBody
-import com.nxck.surmise.daily.DailyScreen
+import com.nxck.surmise.friends.FriendsScreen
 import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
@@ -78,7 +78,7 @@ class ScreenScreenshotTest(private val theme: String) {
         compose.onRoot().captureRoboImage("src/test/screenshots/$name.$theme.png")
     }
 
-    private val noHome = HomeActions(onDaily = {}, onDailyScreen = {}, onPlay = {}, onRecord = {})
+    private val noHome = HomeActions(onDaily = {}, onPlay = {})
 
     @Test
     fun home() = shot("home") { HomeScreen(homeFixture, noHome) }
@@ -115,19 +115,18 @@ class ScreenScreenshotTest(private val theme: String) {
     }
 
     @Test
-    fun daily() = shot("daily") {
-        DailyScreen(dailyToday.copy(resetsAtMs = 1_000L + 33_120_000L), "sunday, november 1", 1284, {}, {}, {}, now = { 1_000L })
-    }
-
-    @Test
-    fun dailyComplete() = shot("daily-complete") {
+    fun homeDailyDone() = shot("home-daily-done") {
         val done = dailyToday.copy(
+            resetsAtMs = 1_000L + 33_120_000L,
             rows = dailyToday.rows.map { it.copy(state = "won", attempts = 3, elapsedMs = 58_000, marks = List(3) { _ -> List(it.length) { "correct" } }) },
             trio = com.nxck.surmise.core.gen.Trio(done = 3, of = 3, guesses = 9, elapsedMs = 245_000, complete = true),
             share = "surmise daily",
         )
-        DailyScreen(done, "sunday, november 1", 0, {}, {}, {}, now = { 1_000L })
+        HomeScreen(homeFixture.copy(daily = done, inPlay = emptyMap(), dailyCounts = mapOf(4 to 312, 5 to 1284, 6 to 201)), noHome, now = { 1_000L })
     }
+
+    @Test
+    fun friends() = shot("friends") { FriendsScreen(rooms = true, onWay = {}) }
 
     @Test
     fun history() = shot("history") { HistoryScreen(historyItems, {}, {}) }
@@ -156,7 +155,7 @@ class ScreenScreenshotTest(private val theme: String) {
     @Test
     fun settings() = shot("settings") {
         val none = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
-        SettingsScreen(settingsFixture, none)
+        SettingsScreen(settingsFixture, none, onBack = {})
     }
 
     @Test

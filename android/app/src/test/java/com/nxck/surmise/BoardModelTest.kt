@@ -111,7 +111,7 @@ class BoardModelTest {
     }
 
     @Test
-    fun nextOnADailyGoesToTheDailyScreen() = runTest(UnconfinedTestDispatcher()) {
+    fun nextOnADailyAsksForTheNextDaily() = runTest(UnconfinedTestDispatcher()) {
         var left: String? = null
         val daily = boardWon.copy(kind = "daily")
         val m = BoardModel(
