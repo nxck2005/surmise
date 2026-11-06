@@ -416,6 +416,14 @@ func TestHistoryListsLivePuzzlesNewestFirst(t *testing.T) {
 	if len(h.Items) != 2 || h.Items[0].ID != otherID {
 		t.Fatalf("history = %+v, want the newer first", h.Items)
 	}
+	// slate against about: a and t are present, the rest absent. Only marks,
+	// never letters.
+	if got := h.Items[0].Marks; len(got) != 1 || got[0] != "aayya" {
+		t.Errorf("marks = %q, want [aayya]", got)
+	}
+	if got := h.Items[1].Marks; len(got) != 1 || got[0] != "ggggg" {
+		t.Errorf("marks = %q, want [ggggg]", got)
+	}
 	call(t, e, "history.delete", `{"id":"`+fixedID+`"}`) // finished: a tombstone stays
 	ok, _ = call(t, e, "history.list", `{}`)
 	h = History{}

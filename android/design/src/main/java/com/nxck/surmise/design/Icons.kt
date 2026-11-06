@@ -37,6 +37,7 @@ object SurmiseIcons {
     val History = stroke("history", "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01", width = 1.9f)
     val Record = stroke("record", "M4 20V10M10 20V4M16 20v-7M22 20H2", width = 1.9f)
     val Settings = stroke("settings", "M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4", width = 1.9f)
+    val You = stroke("you", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1-4 4.2-6 8-6s7 2 8 6", width = 1.9f)
 
     // Navigation.
     val Back = stroke("back", "M7 1L1 7l6 6", w = 8f, h = 14f)

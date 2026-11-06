@@ -10,6 +10,9 @@
           "id": "9b1d2c3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e",
           "kind": "random",
           "length": 5,
+          "marks": [
+            "aayya"
+          ],
           "status": "in_progress",
           "updatedAt": "REDACTED"
         },
@@ -20,6 +23,10 @@
           "id": "3f2a7c1e-8b4d-4c6a-9e2f-1d5b8a7c3e90",
           "kind": "random",
           "length": 5,
+          "marks": [
+            "aagag",
+            "ggggg"
+          ],
           "status": "won",
           "updatedAt": "REDACTED"
         }

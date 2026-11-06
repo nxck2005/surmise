@@ -13,9 +13,16 @@ import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.nxck.surmise.board.BoardModel
 import com.nxck.surmise.board.BoardScreen
+import com.nxck.surmise.board.NextAction
 import com.nxck.surmise.board.ResultBody
-import com.nxck.surmise.daily.DailyScreen
+import com.nxck.surmise.friends.FriendsActions
+import com.nxck.surmise.friends.FriendsScreen
+import com.nxck.surmise.friends.FriendsSheet
+import com.nxck.surmise.friends.FriendsSheets
+import com.nxck.surmise.friends.FriendsState
 import com.nxck.surmise.history.HistoryScreen
+import com.nxck.surmise.you.YouScreen
+import java.time.LocalDate
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
 import com.nxck.surmise.design.Sheet
@@ -24,7 +31,6 @@ import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.core.gen.SprintOptions
 import com.nxck.surmise.core.gen.SprintView
-import com.nxck.surmise.modes.ChallengeScreen
 import com.nxck.surmise.modes.ChallengeState
 import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.record.RecordScreen
@@ -39,7 +45,6 @@ import com.nxck.surmise.rooms.RoomActions
 import com.nxck.surmise.rooms.RoomLines
 import com.nxck.surmise.rooms.RoomResultScreen
 import com.nxck.surmise.rooms.RoomScreen
-import com.nxck.surmise.rooms.RoomsScreen
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
@@ -77,7 +82,7 @@ class ScreenScreenshotTest(private val theme: String) {
         compose.onRoot().captureRoboImage("src/test/screenshots/$name.$theme.png")
     }
 
-    private val noHome = HomeActions(onDaily = {}, onDailyScreen = {}, onPlay = {}, onRecord = {})
+    private val noHome = HomeActions(onDaily = {}, onPlay = {})
 
     @Test
     fun home() = shot("home") { HomeScreen(homeFixture, noHome) }
@@ -89,40 +94,77 @@ class ScreenScreenshotTest(private val theme: String) {
     }
 
     @Test
-    fun daily() = shot("daily") {
-        DailyScreen(dailyToday.copy(resetsAtMs = 1_000L + 33_120_000L), "sunday, november 1", 1284, {}, {}, {}, now = { 1_000L })
+    fun boardDaily() = shot("board-daily") {
+        val scope = rememberCoroutineScope()
+        val daily = boardInPlay.copy(kind = "daily", daily = "2026-11-01")
+        BoardScreen(BoardModel(fakeClient(emptyMap()), scope, daily, {}, {}), onBack = {}, onHome = {}, onShare = {}, daily = dailyToday)
     }
 
     @Test
-    fun dailyComplete() = shot("daily-complete") {
+    fun boardOver() = shot("board-over") {
+        val scope = rememberCoroutineScope()
+        val won = boardWon.copy(kind = "daily", daily = "2026-11-01")
+        val client = fakeClient(
+            mapOf(
+                "result.view" to ok(com.nxck.surmise.core.gen.ResultView.serializer(), resultWon.copy(board = won, next = "daily")),
+                "record.profile" to ok(com.nxck.surmise.core.gen.ProfileView.serializer(), profile),
+            ),
+        )
+        val m = androidx.compose.runtime.remember { BoardModel(client, scope, won, {}, {}) }
+        androidx.compose.runtime.LaunchedEffect(m) {
+            m.loadOpened()
+            m.sheet = true
+        }
+        BoardScreen(m, onBack = {}, onHome = {}, onShare = {}, daily = dailyToday)
+    }
+
+    @Test
+    fun homeDailyDone() = shot("home-daily-done") {
         val done = dailyToday.copy(
+            resetsAtMs = 1_000L + 33_120_000L,
             rows = dailyToday.rows.map { it.copy(state = "won", attempts = 3, elapsedMs = 58_000, marks = List(3) { _ -> List(it.length) { "correct" } }) },
             trio = com.nxck.surmise.core.gen.Trio(done = 3, of = 3, guesses = 9, elapsedMs = 245_000, complete = true),
             share = "surmise daily",
         )
-        DailyScreen(done, "sunday, november 1", 0, {}, {}, {}, now = { 1_000L })
+        HomeScreen(homeFixture.copy(daily = done, inPlay = emptyMap(), dailyCounts = mapOf(4 to 312, 5 to 1284, 6 to 201)), noHome, now = { 1_000L })
     }
 
     @Test
-    fun history() = shot("history") { HistoryScreen(historyItems, {}, {}) }
+    fun friends() = shot("friends") { FriendsScreen(FriendsState(rooms = true, entries = roomEntries), FriendsActions()) }
+
+    @Test
+    fun friendsOffline() = shot("friends-offline") { FriendsScreen(FriendsState(rooms = false, offline = true), FriendsActions()) }
+
+    @Test
+    fun makeRoom() = shot("make-room") {
+        FriendsSheets(FriendsSheet.Room, 5, null, ChallengeState(), {}, { _, _, _ -> }, {}, {}, {})
+    }
+
+    @Test
+    fun history() = shot("history") {
+        YouScreen(profile, history = true, {}, {}, record = {}, list = { HistoryScreen(historyItems, {}, {}, today = shotDay) })
+    }
 
     @Test
     fun historyDay() = shot("history-day") {
-        val items = historyItems.mapIndexed { i, it -> it.copy(day = if (i < 2) "2026-11-01" else "2026-10-30") }
-        HistoryScreen(items, {}, {}, day = "2026-11-01")
+        YouScreen(profile, history = true, {}, {}, record = {}, list = {
+            HistoryScreen(historyItems, {}, {}, day = "2026-11-01", today = shotDay)
+        })
     }
 
     @Test
     fun result() = shot("result") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             Sheet(visible = true, onDismiss = {}) {
-                ResultBody(resultWon, profile, onShare = {}, onReview = {}, onNext = {}, onHome = {})
+                ResultBody(resultWon, profile, onShare = {}, onDone = {}, next = NextAction("next word") {})
             }
         }
     }
 
     @Test
-    fun record() = shot("record") { RecordScreen(profile, calendarFixture, onYear = {}) }
+    fun record() = shot("record") {
+        YouScreen(profile, history = false, {}, {}, record = { RecordScreen(profile, calendarFixture, onYear = {}) }, list = {})
+    }
 
     @Test
     fun year() = shot("year") { YearScreen(calendarFixture, trendsFixture, onBack = {}) }
@@ -130,7 +172,7 @@ class ScreenScreenshotTest(private val theme: String) {
     @Test
     fun settings() = shot("settings") {
         val none = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
-        SettingsScreen(settingsFixture, none)
+        SettingsScreen(settingsFixture, none, onBack = {})
     }
 
     @Test
@@ -153,14 +195,11 @@ class ScreenScreenshotTest(private val theme: String) {
 
     @Test
     fun challenge() = shot("challenge") {
-        ChallengeScreen(ChallengeState(made = "7K2M-QX4R-9TPW-B3HD", madeLength = 5), 5, {}, {}, {}, {})
+        FriendsSheets(FriendsSheet.Challenge, 5, null, ChallengeState(made = "7K2M-QX4R-9TPW-B3HD", madeLength = 5), {}, { _, _, _ -> }, {}, {}, {})
     }
 
     @Test
     fun custom() = shot("custom") { CustomScreen(5, null, { _, _, _, _ -> }, { _, _, _ -> }, {}) }
-
-    @Test
-    fun rooms() = shot("rooms") { RoomsScreen(roomEntries, RoomLines(), 5, { _, _, _ -> }, {}, {}, {}) }
 
     @Test
     fun roomLobby() = shot("room-lobby") { RoomScreen(roomLobby, RoomLines(), RoomActions(), now = { 0 }) }
@@ -176,3 +215,6 @@ class ScreenScreenshotTest(private val theme: String) {
         RoomResultScreen(roomResult.results!!.copy(mode = "async", canRematch = false, canRefresh = true), RoomLines(), RoomActions())
     }
 }
+
+/** The day the history shots call today, so the headings never move. */
+private val shotDay: LocalDate = LocalDate.of(2026, 11, 1)

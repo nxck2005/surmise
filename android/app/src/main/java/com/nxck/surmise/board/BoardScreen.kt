@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +48,8 @@ import com.nxck.surmise.TopBar
 import com.nxck.surmise.boardTitle
 import com.nxck.surmise.clockText
 import com.nxck.surmise.core.gen.BoardView
+import com.nxck.surmise.core.gen.DailyRow
+import com.nxck.surmise.core.gen.DailyView
 import com.nxck.surmise.design.CapsuleButton
 import com.nxck.surmise.design.CapsuleShape
 import com.nxck.surmise.design.CapsuleStyle
@@ -82,6 +85,8 @@ fun BoardScreen(
     subtitle: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     sheet: (@Composable () -> Unit)? = null,
+    /** Today's dailies, for a daily board's trio line and its next. */
+    daily: DailyView? = null,
 ) {
     val v = model.view
     val context = LocalContext.current
@@ -138,17 +143,22 @@ fun BoardScreen(
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(bottom = 8.dp)) {
             TopBar(
                 title = title ?: boardTitle(context, v),
-                subtitle = subtitle ?: stringResource(R.string.code_prefix, v.code),
+                subtitle = subtitle,
                 onBack = onBack,
                 modifier = Modifier.padding(top = 8.dp),
             ) {
                 if (trailing != null) trailing() else Clock(v, model.viewAt)
             }
+            if (v.kind == "daily" && daily != null) TrioLine(daily, v, Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp))
+            // Centred in its space; with the result up, small and at the top,
+            // so the finished grid shows above the sheet.
+            val under = model.sheet && model.result != null
             BoxWithConstraints(
                 Modifier.fillMaxWidth().weight(1f).padding(top = 20.dp, bottom = 12.dp),
-                contentAlignment = Alignment.TopCenter,
+                contentAlignment = if (under) Alignment.TopCenter else Alignment.Center,
             ) {
-                val size = tileSize(maxWidth, maxHeight, v.length, v.maxAttempts)
+                val fit = tileSize(maxWidth, maxHeight, v.length, v.maxAttempts)
+                val size = if (under) min(fit, SheetTileSize) else fit
                 Grid(
                     v = v,
                     size = size,
@@ -185,7 +195,7 @@ fun BoardScreen(
                 deleteLabel = stringResource(R.string.key_delete),
             )
         }
-        if (sheet != null) sheet() else ResultSheet(model, onShare = onShare, onHome = onHome)
+        if (sheet != null) sheet() else ResultSheet(model, onShare = onShare, onHome = onHome, daily = daily)
     }
 }
 
@@ -201,6 +211,38 @@ private fun hardwareKey(model: BoardModel, e: androidx.compose.ui.input.key.KeyE
         }
     }
     return true
+}
+
+/** A tile's size while the result sheet is up over the grid. */
+private val SheetTileSize = 34.dp
+
+/**
+ * Where a daily board stands among today's three: a bar each, green when
+ * over, orange for this one, grey when not started; then "N of 3".
+ */
+@Composable
+private fun TrioLine(daily: DailyView, v: BoardView, modifier: Modifier) {
+    val tokens = SurmiseTheme.tokens
+    val over = { r: DailyRow -> r.state == "won" || r.state == "lost" || r.state == "spent" }
+    val thisOver = v.status == "won" || v.status == "lost"
+    val rows = daily.rows.sortedBy { it.length }
+    val done = rows.count { if (it.length == v.length) thisOver else over(it) }
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        for (r in rows) {
+            val color = when {
+                r.length == v.length -> if (thisOver) tokens.tiles.correct.fill else tokens.action
+                over(r) -> tokens.tiles.correct.fill
+                else -> if (tokens.dark) tokens.highlight else tokens.chartNeutral
+            }
+            Box(Modifier.width(18.dp).height(4.dp).background(color, CapsuleShape))
+        }
+        SurmiseText(
+            stringResource(R.string.trio_progress, done),
+            SurmiseTheme.type.footnote,
+            tokens.inkMuted,
+            Modifier.padding(start = 4.dp),
+        )
+    }
 }
 
 /** The largest tile, up to the design's, that fits the grid in the space. */

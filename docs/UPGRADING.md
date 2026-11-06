@@ -64,6 +64,26 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.12.3 → next: the Android app is laid out again
+
+The app has three tabs now: **play**, **friends** and **you**. Things moved:
+
+- **The daily has no screen of its own.** Today's three boards sit on play,
+  and each opens its own. The result of a daily leads on to the next one.
+- **Opening a finished puzzle no longer throws its result at you.** Practice
+  says "resume, 2 of 6" when a board is in play, and "+ new word" deals a
+  fresh one.
+- **Rooms and challenges share one code box** on friends: a 6-letter code
+  joins a room, a 16-letter one opens a challenge. Leaving a room now asks
+  first; back keeps your seat.
+- **The record and the history are on you**, with settings behind the gear
+  there. The history groups puzzles by day and draws each as a small board of
+  colours, never letters. Filters are three chips.
+- "remember last length" is now "follow the last length i played", and the
+  result sheet shows played, won and average guesses for that length.
+
+Nothing is lost and no setting moves. The terminal build is unchanged.
+
 ## v0.12.2 → v0.12.3: Android catches up with the terminal
 
 Four places where the app did less than the terminal, and one wrong label:

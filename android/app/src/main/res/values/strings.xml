@@ -3,19 +3,49 @@
 <resources>
     <!-- Tabs -->
     <string name="tab_play">play</string>
-    <string name="tab_history">history</string>
-    <string name="tab_record">record</string>
     <string name="tab_settings">settings</string>
+    <string name="tab_friends">friends</string>
+    <string name="tab_you">you</string>
+    <string name="friends_line">play the same word as someone else</string>
+    <string name="friends_code_label">got a code?</string>
+    <string name="friends_code_hint">room or challenge code</string>
+    <string name="friends_open">open</string>
+    <string name="friends_rooms_offline">rooms need online play</string>
+    <string name="friends_start">start something</string>
+    <string name="friends_room_line">race live, or give everyone a day</string>
+    <string name="friends_needs_online">needs online play</string>
+    <string name="friends_challenge">send a challenge</string>
+    <string name="friends_challenge_line">a code for one word, works offline</string>
+    <string name="friends_custom">pass the phone</string>
+    <string name="friends_custom_line">you pick the word, they guess it</string>
+    <string name="friends_live_line">everyone plays at once, 10 minutes</string>
+    <string name="friends_async_line">open for a day, play when you like</string>
+    <string name="friends_length">length</string>
+    <string name="friends_auto_note">off: you start it yourself</string>
+    <string name="friends_room_after">you get a code to send. back steps out and keeps your seat</string>
+    <string name="room_back_keeps">back keeps your seat</string>
+    <string name="room">room</string>
+    <string name="you_record">record</string>
+    <string name="you_history">history</string>
+    <string name="how_to_play_label">how to play</string>
+    <string name="section_practice">practice</string>
+    <string name="practice_line">a random word, any time</string>
+    <string name="practice_new">new word</string>
+    <string name="practice_new_label">start a new %1$d-letter word</string>
+    <plurals name="practice_resume_label">
+        <item quantity="one">resume your %1$d-letter word, %2$d of %3$d guesses in</item>
+        <item quantity="other">resume your %1$d-letter word, %2$d of %3$d guesses in</item>
+    </plurals>
+    <string name="way_sprint_long">as many words as you can, against the clock</string>
+    <string name="daily_board_count">%1$s played</string>
 
     <!-- Home -->
-    <string name="home_record">your record</string>
     <string name="daily">daily</string>
     <string name="daily_title">today\'s three</string>
     <string name="daily_done">%1$d of %2$d done</string>
     <string name="daily_played_today">%1$s played today</string>
     <string name="daily_continue">continue %1$d letters</string>
     <string name="daily_start">start %1$d letters</string>
-    <string name="daily_see">see today</string>
     <string name="daily_note_new">not started</string>
     <string name="daily_note_spent">deleted</string>
     <string name="daily_note_lost">not this time</string>
@@ -28,26 +58,14 @@
         <item quantity="other">%1$d guesses in</item>
     </plurals>
     <string name="practice_resume">resume, %1$d of %2$d</string>
-    <string name="daily_played_all">%1$s dailies played today, across all three</string>
     <string name="daily_next_hm">next daily in %1$dh %2$dm</string>
     <string name="daily_next_m">next daily in %1$dm</string>
-    <string name="daily_solved_time">solved in %1$d, %2$s</string>
-    <string name="daily_action_continue">continue</string>
-    <string name="daily_action_play">play</string>
-    <string name="trio_hint">finish all three to share them as one result</string>
-    <plurals name="trio_summary">
-        <item quantity="one">%1$d guess, %2$s</item>
-        <item quantity="other">%1$d guesses, %2$s</item>
-    </plurals>
-    <string name="section_play">play</string>
-    <string name="letters_suffix">letters</string>
-    <string name="new_puzzle">new puzzle</string>
 
     <!-- History -->
     <string name="filter_any_length">any length</string>
     <string name="filter_any_kind">any kind</string>
     <string name="filter_any_status">any result</string>
-    <string name="kind_random">random</string>
+    <string name="kind_random">practice</string>
     <string name="kind_daily">daily</string>
     <string name="kind_challenge">challenge</string>
     <string name="kind_custom">custom</string>
@@ -58,7 +76,11 @@
     <string name="status_lost">failed</string>
     <string name="history_solved">solved %1$d/%2$d</string>
     <string name="history_failed">failed</string>
-    <string name="history_in_play">in play %1$d/%2$d</string>
+    <string name="history_today">today</string>
+    <string name="history_yesterday">yesterday</string>
+    <string name="history_pick_length">length</string>
+    <string name="history_pick_kind">kind</string>
+    <string name="history_pick_status">result</string>
     <string name="history_empty">nothing played yet</string>
     <string name="history_none_match">nothing matches these filters</string>
     <string name="history_day">%1$s  ×</string>
@@ -72,6 +94,7 @@
     <string name="back">back</string>
     <string name="letters">%1$d letters</string>
     <string name="board_daily">daily, %1$d letters</string>
+    <string name="board_practice">practice, %1$d letters</string>
     <string name="board_custom">custom, %1$d letters</string>
     <string name="board_challenge">challenge, %1$d letters</string>
     <string name="board_sprint">sprint, %1$d letters</string>
@@ -94,8 +117,11 @@
     <string name="guesses">guesses</string>
     <string name="share">share</string>
     <string name="review">review</string>
-    <string name="next_puzzle">next puzzle</string>
-    <string name="next_daily">daily</string>
+    <string name="next_word">next word</string>
+    <string name="next_daily">next: daily %1$d letters</string>
+    <string name="share_all_three">share all three</string>
+    <string name="result_done">done</string>
+    <string name="trio_progress">%1$d of 3</string>
     <string name="next_again">again</string>
     <string name="home">home</string>
 
@@ -103,10 +129,10 @@
     <string name="record_playtime">%1$s played</string>
     <string name="record_streak">win streak</string>
     <string name="record_best">best %1$d</string>
-    <string name="record_two_weeks">last two weeks</string>
-    <string name="record_year_link">your year</string>
+    <string name="record_year">your year</string>
+    <string name="record_year_link">all of it, and trends</string>
     <string name="record_by_length">by length</string>
-    <string name="record_guesses">how many guesses your wins took</string>
+    <string name="record_guesses">guesses per win, all lengths</string>
     <string name="record_empty">play a few and your record shows up here</string>
     <string name="stat_avg_guesses">avg guesses</string>
     <string name="stat_avg_time">avg time</string>
@@ -189,15 +215,9 @@
     <string name="about_font_hide">hide the font licence</string>
 
     <!-- Other ways to play -->
-    <string name="section_more">more ways to play</string>
     <string name="rooms">rooms</string>
     <string name="sprint">sprint</string>
-    <string name="challenge">challenge</string>
     <string name="custom">custom</string>
-    <string name="way_rooms">race friends on the same word</string>
-    <string name="way_sprint">as many as you can against the clock</string>
-    <string name="way_challenge">send a friend the same word</string>
-    <string name="way_custom">pick a word, pass the phone</string>
     <string name="sprint_about">words come one after another until the clock runs out. solve as many as you can</string>
     <string name="sprint_length">length</string>
     <string name="sprint_clock">clock</string>
@@ -215,13 +235,9 @@
     <string name="sprint_again">go again</string>
     <string name="sprint_stop">stop</string>
     <string name="challenge_about">a challenge is a code for one word. whoever opens it gets the same puzzle you do</string>
-    <string name="challenge_make">make one</string>
     <string name="challenge_make_code">make a code</string>
     <string name="challenge_play_it">play it</string>
     <string name="challenge_share">try this surmise challenge: %1$s</string>
-    <string name="challenge_enter">got a code?</string>
-    <string name="challenge_hint">XXXX-XXXX-XXXX-XXXX</string>
-    <string name="challenge_open">open it</string>
     <string name="custom_about">type a word for someone else to guess. it stays hidden, and isn\'t saved until they make a guess</string>
     <string name="custom_hint">a %1$d-letter word</string>
     <string name="custom_any">any word</string>
@@ -246,15 +262,11 @@
     <string name="err_other">something went wrong (%1$s)</string>
 
     <!-- rooms -->
-    <string name="rooms_about">play the same word with friends. live rooms race at once, any-time rooms stay open for a day</string>
     <string name="rooms_make">make a room</string>
     <string name="rooms_live">live</string>
     <string name="rooms_async">any time</string>
     <string name="rooms_auto_start">start when everyone\'s ready</string>
     <string name="rooms_make_button">make room</string>
-    <string name="rooms_join">join a room</string>
-    <string name="rooms_join_hint">room code</string>
-    <string name="rooms_join_button">join</string>
     <string name="rooms_yours">your rooms</string>
     <string name="rooms_leave">leave</string>
     <string name="rooms_open">open</string>
@@ -314,5 +326,4 @@
     <string name="err_too_many_rooms">you\'re in too many rooms. leave one first</string>
     <string name="err_bad_room_code">room codes are 6 letters</string>
     <string name="err_no_room">you\'re not in a room</string>
-    <string name="daily_count">%1$s played this today</string>
 </resources>

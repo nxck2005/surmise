@@ -111,7 +111,7 @@ class BoardModelTest {
     }
 
     @Test
-    fun nextOnADailyGoesToTheDailyScreen() = runTest(UnconfinedTestDispatcher()) {
+    fun nextOnADailyAsksForTheNextDaily() = runTest(UnconfinedTestDispatcher()) {
         var left: String? = null
         val daily = boardWon.copy(kind = "daily")
         val m = BoardModel(
@@ -126,5 +126,15 @@ class BoardModelTest {
         m.submit()
         m.next()
         assertEquals("daily", left)
+    }
+
+    @Test
+    fun nextDailySkipsTheOneJustPlayedAndTheOnesOver() {
+        // 4 is over, 5 was just played (the view may still call it in play).
+        assertEquals(6, com.nxck.surmise.board.nextDailyLength(dailyToday, 5))
+        assertEquals(5, com.nxck.surmise.board.nextDailyLength(dailyToday, 6))
+        val allOver = dailyToday.copy(rows = dailyToday.rows.map { it.copy(state = "won") })
+        assertEquals(null, com.nxck.surmise.board.nextDailyLength(allOver, 4))
+        assertEquals(null, com.nxck.surmise.board.nextDailyLength(null, 4))
     }
 }

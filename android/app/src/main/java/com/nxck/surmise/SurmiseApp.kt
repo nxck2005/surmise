@@ -38,7 +38,11 @@ import com.nxck.surmise.settings.SettingsState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.nxck.surmise.board.BoardScreen
-import com.nxck.surmise.daily.DailyScreen
+import com.nxck.surmise.friends.FriendsActions
+import com.nxck.surmise.friends.FriendsScreen
+import com.nxck.surmise.friends.FriendsSheets
+import com.nxck.surmise.friends.FriendsState
+import com.nxck.surmise.you.YouScreen
 import com.nxck.surmise.history.HistoryScreen
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
@@ -53,14 +57,12 @@ import com.nxck.surmise.design.rememberGlassState
 import com.nxck.surmise.home.HomeActions
 import com.nxck.surmise.home.HomeScreen
 import com.nxck.surmise.home.homeState
-import com.nxck.surmise.modes.ChallengeScreen
 import com.nxck.surmise.modes.CustomScreen
 import com.nxck.surmise.sprint.SprintClock
 import com.nxck.surmise.rooms.RoomActions
 import com.nxck.surmise.rooms.RoomLines
 import com.nxck.surmise.rooms.RoomResultScreen
 import com.nxck.surmise.rooms.RoomScreen
-import com.nxck.surmise.rooms.RoomsScreen
 import com.nxck.surmise.rooms.RoundClock
 import com.nxck.surmise.sprint.SprintModel
 import com.nxck.surmise.sprint.SprintSetup
@@ -121,15 +123,7 @@ fun SurmiseApp(model: AppModel) {
         ) { route ->
             when (route) {
                 Route.Tabs -> Tabs(model)
-                Route.Daily -> DailyScreen(
-                    daily = model.daily,
-                    date = homeDate(),
-                    playedToday = if (model.online.consent) model.online.menuCount else 0,
-                    onBack = model::back,
-                    onOpen = model::openDaily,
-                    onShare = { share(context, it) },
-                    counts = if (model.online.consent) model.dailyCounts else emptyMap(),
-                )
+                Route.Settings -> Settings(model)
                 Route.Year -> YearScreen(
                     calendar = model.calendar,
                     trends = model.trends,
@@ -140,28 +134,11 @@ fun SurmiseApp(model: AppModel) {
                 Route.HowTo -> HowToScreen(onBack = model::back)
                 Route.About -> AboutScreen(model.info, onBack = model::back)
                 Route.Sprint -> SprintSetup(model.sprintOptions, model.startLength, onStart = model::startSprint, onBack = model::back)
-                Route.Challenge -> ChallengeScreen(
-                    state = model.challenge,
-                    startLength = model.startLength,
-                    onMake = model::makeChallenge,
-                    onShare = { share(context, it) },
-                    onOpen = model::openChallenge,
-                    onBack = model::back,
-                )
                 Route.Custom -> CustomScreen(
                     startLength = model.startLength,
                     note = model.customNote,
                     onCheck = model::checkCustom,
                     onReady = model::startCustom,
-                    onBack = model::back,
-                )
-                Route.Rooms -> RoomsScreen(
-                    list = model.rooms.list,
-                    lines = RoomLines(model.rooms.error, model.rooms.note),
-                    startLength = model.startLength,
-                    onMake = model::makeRoom,
-                    onJoin = model::joinRoom,
-                    onLeave = model.rooms::leave,
                     onBack = model::back,
                 )
                 Route.Room -> Room(model)
@@ -184,7 +161,12 @@ fun SurmiseApp(model: AppModel) {
                         sheet = { SprintSummary(b, onAgain = { model.startSprint(b.run.length, b.run.durationMs) }, onHome = model::goHome) },
                     )
                     null -> Unit
-                    else -> BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) })
+                    else -> {
+                        // A daily's result offers the next daily, so read today's
+                        // three again once this one is over.
+                        LaunchedEffect(b, b.done) { if (b.done && b.view.kind == "daily") model.refreshHome() }
+                        BoardScreen(b, onBack = { model.closeBoard() }, onHome = model::goHome, onShare = { share(context, it) }, daily = model.daily)
+                    }
                 }
             }
         }
@@ -235,10 +217,10 @@ private fun Tabs(model: AppModel) {
     val glass = rememberGlassState()
     val items = listOf(
         TabItem(stringResource(R.string.tab_play), SurmiseIcons.Play),
-        TabItem(stringResource(R.string.tab_history), SurmiseIcons.History),
-        TabItem(stringResource(R.string.tab_record), SurmiseIcons.Record),
-        TabItem(stringResource(R.string.tab_settings), SurmiseIcons.Settings),
+        TabItem(stringResource(R.string.tab_friends), SurmiseIcons.Rooms),
+        TabItem(stringResource(R.string.tab_you), SurmiseIcons.You),
     )
+    val context = LocalContext.current
     Box(Modifier.fillMaxSize().background(tokens.canvas)) {
         Box(Modifier.fillMaxSize().glassSource(glass)) {
             when (model.tab) {
@@ -251,25 +233,49 @@ private fun Tabs(model: AppModel) {
                         note = model.homeNote,
                         rooms = model.online.rooms && model.online.consent,
                         running = model.rooms.room.takeIf { it.active && it.probe }?.code.orEmpty(),
+                        dailyCounts = if (model.online.consent) model.dailyCounts else emptyMap(),
                     ),
                     actions = HomeActions(
                         onDaily = model::openDaily,
-                        onDailyScreen = model::showDaily,
                         onPlay = model::playLength,
-                        onRecord = { model.select(Tab.Record) },
-                        onWay = model::showWay,
+                        onNew = model::newWord,
+                        onSprint = model::showSprint,
+                        onHowTo = { model.show(Route.HowTo) },
+                        onShare = { share(context, it) },
                         onRoom = model::showRoom,
                     ),
                 )
-                Tab.History -> HistoryScreen(
-                    items = model.history,
-                    onOpen = model::openSaved,
-                    day = model.historyDay,
-                    onClearDay = { model.historyDay = "" },
-                    onDelete = { model.delete(it.id) },
+                Tab.Friends -> FriendsScreen(
+                    state = FriendsState(
+                        rooms = model.roomsOn,
+                        entries = model.rooms.list,
+                        note = model.friendsNote ?: model.rooms.error.takeIf { model.friendsSheet == null },
+                        offline = model.friendsOffline,
+                    ),
+                    actions = FriendsActions(
+                        onCode = model::openCode,
+                        onSheet = model::showFriendsSheet,
+                        onCustom = model::showCustom,
+                        onOnline = model::showSettings,
+                        onRoom = model::joinRoom,
+                    ),
                 )
-                Tab.Record -> RecordScreen(model.profile, model.calendar, onYear = model::showYear)
-                Tab.Settings -> Settings(model)
+                Tab.You -> YouScreen(
+                    profile = model.profile,
+                    history = model.youHistory,
+                    onHistory = { model.youHistory = it },
+                    onSettings = model::showSettings,
+                    record = { RecordScreen(model.profile, model.calendar, onYear = model::showYear) },
+                    list = {
+                        HistoryScreen(
+                            items = model.history,
+                            onOpen = model::openSaved,
+                            day = model.historyDay,
+                            onClearDay = { model.historyDay = "" },
+                            onDelete = { model.delete(it.id) },
+                        )
+                    },
+                )
             }
         }
         TabBar(
@@ -282,6 +288,22 @@ private fun Tabs(model: AppModel) {
                 .navigationBarsPadding()
                 .padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
         )
+        if (model.tab == Tab.Friends) {
+            FriendsSheets(
+                sheet = model.friendsSheet,
+                startLength = model.startLength,
+                roomError = model.rooms.error,
+                challenge = model.challenge,
+                onDismiss = { model.friendsSheet = null },
+                onMakeRoom = model::makeRoom,
+                onMakeChallenge = model::makeChallenge,
+                onShare = { share(context, it) },
+                onPlayChallenge = {
+                    model.friendsSheet = null
+                    model.openChallenge(it)
+                },
+            )
+        }
     }
 }
 
@@ -304,6 +326,7 @@ private fun Settings(model: AppModel) {
     }
     val prefs = model.prefs
     SettingsScreen(
+        onBack = model::back,
         state = SettingsState(
             settings = model.settings,
             theme = prefs.theme,

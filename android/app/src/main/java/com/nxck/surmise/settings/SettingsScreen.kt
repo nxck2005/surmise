@@ -13,7 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -51,7 +52,7 @@ import com.nxck.surmise.design.SurmiseIcons
 import com.nxck.surmise.design.SurmiseText
 import com.nxck.surmise.design.SurmiseTheme
 import com.nxck.surmise.design.Switch
-import com.nxck.surmise.design.TabBarHeight
+import com.nxck.surmise.BackButton
 import com.nxck.surmise.design.hex
 import com.nxck.surmise.design.pressable
 
@@ -83,17 +84,22 @@ class SettingsActions(
 )
 
 @Composable
-fun SettingsScreen(state: SettingsState, actions: SettingsActions, modifier: Modifier = Modifier) {
+fun SettingsScreen(state: SettingsState, actions: SettingsActions, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
     val s = state.settings
     Column(
         modifier
+            .fillMaxSize()
+            .background(tokens.canvas)
+            .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
-            .padding(bottom = TabBarHeight + 48.dp),
+            .padding(bottom = 24.dp),
     ) {
-        SurmiseText(stringResource(R.string.tab_settings), type.display, tokens.ink, Modifier.padding(start = 20.dp, top = 18.dp))
+        Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            BackButton(onBack)
+        }
+        SurmiseText(stringResource(R.string.tab_settings), type.display, tokens.ink, Modifier.padding(start = 20.dp, top = 20.dp))
 
         Section(stringResource(R.string.set_you)) {
             NameRow(s.displayName, actions.onName)
