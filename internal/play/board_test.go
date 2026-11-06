@@ -40,6 +40,9 @@ func fixed(t *testing.T, a *App) *Board {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// NewFrom stamps the wall clock; the calendar files a puzzle by its
+	// start, so pin it to the fake clock's day or the test breaks on Nov 2.
+	g.StartedAt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 	return a.Open(g, false)
 }
 
