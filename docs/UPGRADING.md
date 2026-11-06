@@ -64,7 +64,7 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
-## v0.12.3 → next: the Android app is laid out again
+## v0.12.3 → v0.12.4: the Android app is laid out again
 
 The app has three tabs now: **play**, **friends** and **you**. Things moved:
 
