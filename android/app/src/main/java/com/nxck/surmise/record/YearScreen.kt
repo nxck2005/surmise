@@ -174,14 +174,47 @@ private fun YearCard(c: CalendarView, onDay: (String) -> Unit, modifier: Modifie
     }
 }
 
+/**
+ * The last [weeks] weeks of play as a grid, a column a week, for the record's
+ * "your year" card. Not pressable day by day: the card opens the year.
+ */
+@Composable
+internal fun YearStrip(c: CalendarView?, weeks: Int, modifier: Modifier = Modifier) {
+    val today = c?.today?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
+    val byDay = c?.days.orEmpty().associate { it.day to it.games }
+    val start = today.with(DayOfWeek.MONDAY).minusWeeks((weeks - 1).toLong())
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val gap = 2.dp
+        val cell = ((maxWidth - gap * (weeks - 1)) / weeks).coerceAtMost(12.dp)
+        Column {
+            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                for (w in 0 until weeks) {
+                    Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                        for (d in 0 until 7) {
+                            val day = start.plusDays(w * 7L + d)
+                            val m = Modifier.size(cell)
+                            if (day.isAfter(today)) {
+                                Box(m)
+                            } else {
+                                Box(m.background(heat(byDay[day.toString()] ?: 0), SquircleShape(2.dp)))
+                            }
+                        }
+                    }
+                }
+            }
+            Box(Modifier.padding(top = 6.dp)) { MonthLabels(start, cell + gap, weeks) }
+        }
+    }
+}
+
 /** Month initials over the first week that holds the 1st of each month. */
 @Composable
-private fun MonthLabels(start: LocalDate, step: Dp) {
+internal fun MonthLabels(start: LocalDate, step: Dp, weeks: Int = YEAR_WEEKS) {
     Box(Modifier.fillMaxWidth().height(14.dp)) {
-        for (w in 0 until YEAR_WEEKS) {
+        for (w in 0 until weeks) {
             val weekStart = start.plusWeeks(w.toLong())
             val first = (0 until 7).map { weekStart.plusDays(it.toLong()) }.firstOrNull { it.dayOfMonth == 1 } ?: continue
-            if (w > YEAR_WEEKS - 3) continue
+            if (w > weeks - 3) continue
             SurmiseText(
                 monthText(first),
                 SurmiseTheme.type.footnote,
@@ -195,7 +228,7 @@ private fun MonthLabels(start: LocalDate, step: Dp) {
 
 /** The year grid's five steps of the chart colour, by games that day. */
 @Composable
-private fun heat(games: Int): Color {
+internal fun heat(games: Int): Color {
     val c = SurmiseTheme.tokens.chartHighlight
     return when {
         games <= 0 -> SurmiseTheme.tokens.ink.copy(alpha = 0.06f)

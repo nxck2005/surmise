@@ -164,7 +164,9 @@ class AppModel(val core: CoreHandle, private val scope: CoroutineScope, val pref
     var historyDay by mutableStateOf("")
 
     /** Whether the you tab shows the history, not the record. */
-    var youHistory by mutableStateOf(false)
+    var youHistory: Boolean
+        get() = prefs.youHistory
+        set(v) = prefs.chooseYouHistory(v)
 
     /** Shows the history for one calendar day, from the year. */
     fun showDay(day: String) {

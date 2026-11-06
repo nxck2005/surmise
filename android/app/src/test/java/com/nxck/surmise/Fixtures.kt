@@ -143,10 +143,23 @@ fun <T> ok(serializer: KSerializer<T>, value: T): String = """{"ok":${coreJson.e
 fun refusal(code: String): String = """{"err":{"code":"$code","detail":""}}"""
 
 val historyItems = listOf(
-    HistoryItem(id = "r-5-1", code = "042317", kind = "random", status = "in_progress", length = 5, attempts = 2, updatedAt = "2026-11-01T10:00:00Z"),
-    HistoryItem(id = "d-4", code = "117204", kind = "daily", status = "won", length = 4, attempts = 3, updatedAt = "2026-11-01T09:00:00Z", daily = "2026-11-01"),
-    HistoryItem(id = "c-6", code = "880913", kind = "challenge", status = "lost", length = 6, attempts = 7, updatedAt = "2026-10-30T19:30:00Z"),
-    HistoryItem(id = "r-4-9", code = "300118", kind = "random", status = "won", length = 4, attempts = 4, updatedAt = "2026-10-29T08:12:00Z"),
+    HistoryItem(
+        id = "r-5-1", code = "042317", kind = "random", status = "in_progress", length = 5, attempts = 2,
+        updatedAt = "2026-11-01T10:00:00Z", day = "2026-11-01", marks = listOf("aagag", "gayga"),
+    ),
+    HistoryItem(
+        id = "d-4", code = "117204", kind = "daily", status = "won", length = 4, attempts = 3,
+        updatedAt = "2026-11-01T09:00:00Z", daily = "2026-11-01", day = "2026-11-01", marks = listOf("ayaa", "yaga", "gggg"),
+    ),
+    HistoryItem(
+        id = "c-6", code = "880913", kind = "challenge", status = "lost", length = 6, attempts = 7,
+        updatedAt = "2026-10-30T19:30:00Z", day = "2026-10-31",
+        marks = listOf("aayaaa", "gayaag", "gaygag", "ggyagg", "gggagg", "gggagg", "gggagg"),
+    ),
+    HistoryItem(
+        id = "r-4-9", code = "300118", kind = "random", status = "won", length = 4, attempts = 4,
+        updatedAt = "2026-10-29T08:12:00Z", day = "2026-10-29", marks = listOf("aaya", "yaga", "gagg", "gggg"),
+    ),
 )
 
 val themesFixture = listOf(

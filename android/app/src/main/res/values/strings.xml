@@ -3,8 +3,6 @@
 <resources>
     <!-- Tabs -->
     <string name="tab_play">play</string>
-    <string name="tab_history">history</string>
-    <string name="tab_record">record</string>
     <string name="tab_settings">settings</string>
     <string name="tab_friends">friends</string>
     <string name="tab_you">you</string>
@@ -67,7 +65,7 @@
     <string name="filter_any_length">any length</string>
     <string name="filter_any_kind">any kind</string>
     <string name="filter_any_status">any result</string>
-    <string name="kind_random">random</string>
+    <string name="kind_random">practice</string>
     <string name="kind_daily">daily</string>
     <string name="kind_challenge">challenge</string>
     <string name="kind_custom">custom</string>
@@ -78,7 +76,11 @@
     <string name="status_lost">failed</string>
     <string name="history_solved">solved %1$d/%2$d</string>
     <string name="history_failed">failed</string>
-    <string name="history_in_play">in play %1$d/%2$d</string>
+    <string name="history_today">today</string>
+    <string name="history_yesterday">yesterday</string>
+    <string name="history_pick_length">length</string>
+    <string name="history_pick_kind">kind</string>
+    <string name="history_pick_status">result</string>
     <string name="history_empty">nothing played yet</string>
     <string name="history_none_match">nothing matches these filters</string>
     <string name="history_day">%1$s  ×</string>
@@ -127,10 +129,10 @@
     <string name="record_playtime">%1$s played</string>
     <string name="record_streak">win streak</string>
     <string name="record_best">best %1$d</string>
-    <string name="record_two_weeks">last two weeks</string>
-    <string name="record_year_link">your year</string>
+    <string name="record_year">your year</string>
+    <string name="record_year_link">all of it, and trends</string>
     <string name="record_by_length">by length</string>
-    <string name="record_guesses">how many guesses your wins took</string>
+    <string name="record_guesses">guesses per win, all lengths</string>
     <string name="record_empty">play a few and your record shows up here</string>
     <string name="stat_avg_guesses">avg guesses</string>
     <string name="stat_avg_time">avg time</string>

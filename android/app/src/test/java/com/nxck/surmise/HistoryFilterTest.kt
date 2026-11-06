@@ -29,4 +29,29 @@ class HistoryFilterTest {
 
     @Test
     fun aBadTimeIsBlankNotACrash() = assertEquals("", shortDate("yesterday"))
+
+    @Test
+    fun rowsGroupUnderTheirDayNewestFirst() {
+        val groups = com.nxck.surmise.history.groupByDay(historyItems)
+        assertEquals(
+            listOf("2026-11-01", "2026-10-31", "2026-10-29"),
+            groups.map { it.first.toString() },
+        )
+        assertEquals(listOf("r-5-1", "d-4"), groups[0].second.map { it.id })
+    }
+
+    @Test
+    fun aDayHeadingNamesTheWeekdayAndTheYearOnlyWhenItDiffers() {
+        val today = java.time.LocalDate.of(2026, 11, 6)
+        assertEquals("wednesday, nov 4", com.nxck.surmise.history.dayHeading(java.time.LocalDate.of(2026, 11, 4), today))
+        assertEquals("monday, dec 1, 2025", com.nxck.surmise.history.dayHeading(java.time.LocalDate.of(2025, 12, 1), today))
+    }
+
+    @Test
+    fun marksBecomeColoursOnly() {
+        assertEquals(
+            listOf(listOf("absent", "present", "correct")),
+            com.nxck.surmise.history.miniMarks(listOf("ayg")),
+        )
+    }
 }

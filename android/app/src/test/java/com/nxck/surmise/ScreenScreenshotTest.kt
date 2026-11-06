@@ -21,6 +21,8 @@ import com.nxck.surmise.friends.FriendsSheet
 import com.nxck.surmise.friends.FriendsSheets
 import com.nxck.surmise.friends.FriendsState
 import com.nxck.surmise.history.HistoryScreen
+import com.nxck.surmise.you.YouScreen
+import java.time.LocalDate
 import com.nxck.surmise.design.BundledTokens
 import com.nxck.surmise.design.Motion
 import com.nxck.surmise.design.Sheet
@@ -139,12 +141,15 @@ class ScreenScreenshotTest(private val theme: String) {
     }
 
     @Test
-    fun history() = shot("history") { HistoryScreen(historyItems, {}, {}) }
+    fun history() = shot("history") {
+        YouScreen(profile, history = true, {}, {}, record = {}, list = { HistoryScreen(historyItems, {}, {}, today = shotDay) })
+    }
 
     @Test
     fun historyDay() = shot("history-day") {
-        val items = historyItems.mapIndexed { i, it -> it.copy(day = if (i < 2) "2026-11-01" else "2026-10-30") }
-        HistoryScreen(items, {}, {}, day = "2026-11-01")
+        YouScreen(profile, history = true, {}, {}, record = {}, list = {
+            HistoryScreen(historyItems, {}, {}, day = "2026-11-01", today = shotDay)
+        })
     }
 
     @Test
@@ -157,7 +162,9 @@ class ScreenScreenshotTest(private val theme: String) {
     }
 
     @Test
-    fun record() = shot("record") { RecordScreen(profile, calendarFixture, onYear = {}) }
+    fun record() = shot("record") {
+        YouScreen(profile, history = false, {}, {}, record = { RecordScreen(profile, calendarFixture, onYear = {}) }, list = {})
+    }
 
     @Test
     fun year() = shot("year") { YearScreen(calendarFixture, trendsFixture, onBack = {}) }
@@ -208,3 +215,6 @@ class ScreenScreenshotTest(private val theme: String) {
         RoomResultScreen(roomResult.results!!.copy(mode = "async", canRematch = false, canRefresh = true), RoomLines(), RoomActions())
     }
 }
+
+/** The day the history shots call today, so the headings never move. */
+private val shotDay: LocalDate = LocalDate.of(2026, 11, 1)

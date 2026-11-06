@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,10 +31,12 @@ import com.nxck.surmise.design.SurmiseText
 import com.nxck.surmise.design.SurmiseTheme
 import com.nxck.surmise.design.TabBarHeight
 import com.nxck.surmise.design.pressable
-import java.time.LocalDate
 import kotlin.math.roundToInt
 
-/** The record tab: the streak, the totals, each length, and the guesses wins took. */
+/**
+ * The you tab's record: the streak with the four figures, the last half year
+ * of play (a tap opens the year), each length, and the guesses wins took.
+ */
 @Composable
 fun RecordScreen(profile: ProfileView?, calendar: CalendarView?, onYear: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = SurmiseTheme.tokens
@@ -43,32 +44,24 @@ fun RecordScreen(profile: ProfileView?, calendar: CalendarView?, onYear: () -> U
     Column(
         modifier
             .verticalScroll(rememberScrollState())
-            .statusBarsPadding()
             .padding(bottom = TabBarHeight + 48.dp),
     ) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp), verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                if (!profile?.displayName.isNullOrBlank()) {
-                    SurmiseText(profile!!.displayName, type.caption, tokens.inkMuted)
-                }
-                SurmiseText(stringResource(R.string.tab_record), type.display, tokens.ink)
-            }
-            if (profile != null && profile.playtimeMs > 0) {
-                SurmiseText(stringResource(R.string.record_playtime, playtimeText(profile.playtimeMs)), type.caption, tokens.inkDim, Modifier.padding(bottom = 8.dp))
-            }
-        }
         if (profile == null) return@Column
         if (profile.played == 0) {
             SurmiseText(stringResource(R.string.record_empty), type.body, tokens.inkMuted, Modifier.fillMaxWidth().padding(32.dp), align = TextAlign.Center)
             return@Column
         }
-        StreakCard(profile, calendar, onYear, Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp))
-        Card(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp), padding = PaddingValues(vertical = 14.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                Figure(profile.played.toString(), stringResource(R.string.stat_played))
-                Figure(percent(profile.winRate), stringResource(R.string.stat_won))
-                Figure(oneDecimal(profile.avgAttempts), stringResource(R.string.stat_avg_guesses))
-                Figure(clockText(profile.avgTimeMs), stringResource(R.string.stat_avg_time))
+        StreakCard(profile, Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp))
+        Card(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp).pressable(onClick = onYear),
+            padding = PaddingValues(16.dp),
+        ) {
+            Column {
+                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SurmiseText(stringResource(R.string.record_year), type.section, tokens.ink, Modifier.weight(1f))
+                    SurmiseText(stringResource(R.string.record_year_link), type.caption, tokens.accentText)
+                }
+                YearStrip(calendar, RECORD_WEEKS)
             }
         }
         if (profile.modes.isNotEmpty()) {
@@ -104,6 +97,9 @@ fun RecordScreen(profile: ProfileView?, calendar: CalendarView?, onYear: () -> U
     }
 }
 
+/** About half a year: what fits a phone's width at a readable cell. */
+private const val RECORD_WEEKS = 25
+
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.Figure(value: String, label: String) {
     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -119,42 +115,26 @@ private fun Cell(text: String, head: Boolean = false) {
     SurmiseText(text, if (head) type.footnote else type.caption, if (head) tokens.inkMuted else tokens.inkDim, Modifier.width(60.dp), align = TextAlign.End, maxLines = 1)
 }
 
-/** The win streak, with the last two weeks of play as a strip. */
+/** The win streak, with the four figures under it. */
 @Composable
-private fun StreakCard(p: ProfileView, calendar: CalendarView?, onYear: () -> Unit, modifier: Modifier) {
+private fun StreakCard(p: ProfileView, modifier: Modifier) {
     val tokens = SurmiseTheme.tokens
     val type = SurmiseTheme.type
-    MeshGlow(modifier.fillMaxWidth().clip(SquircleShape(Radii.hero)).pressable(onClick = onYear)) {
+    MeshGlow(modifier.fillMaxWidth().clip(SquircleShape(Radii.hero))) {
         Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 SurmiseText("${p.currentStreak}", type.display, tokens.ink)
                 SurmiseText(stringResource(R.string.record_streak), type.body, tokens.inkDim, Modifier.padding(start = 8.dp, bottom = 6.dp).weight(1f))
                 SurmiseText(stringResource(R.string.record_best, p.maxStreak), type.caption, tokens.inkDim, Modifier.padding(bottom = 6.dp))
             }
-            val days = lastDays(calendar, 14)
-            Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                days.forEachIndexed { i, games ->
-                    val fill = when {
-                        games == 0 -> tokens.ink.copy(alpha = 0.08f)
-                        i == days.lastIndex -> tokens.action
-                        else -> tokens.chartHighlight
-                    }
-                    Box(Modifier.weight(1f).height(18.dp).background(fill, SquircleShape(4.dp)))
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                SurmiseText(stringResource(R.string.record_two_weeks), type.footnote, tokens.inkDim, Modifier.weight(1f))
-                SurmiseText(stringResource(R.string.record_year_link), type.footnote, tokens.accentText)
+            Row(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                Figure(p.played.toString(), stringResource(R.string.stat_played))
+                Figure(percent(p.winRate), stringResource(R.string.stat_won))
+                Figure(oneDecimal(p.avgAttempts), stringResource(R.string.stat_avg_guesses))
+                Figure(clockText(p.avgTimeMs), stringResource(R.string.stat_avg_time))
             }
         }
     }
-}
-
-/** Games a day for the [n] days up to the calendar's today, oldest first. */
-fun lastDays(calendar: CalendarView?, n: Int): List<Int> {
-    val today = calendar?.today?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return List(n) { 0 }
-    val games = calendar.days.associate { it.day to it.games }
-    return (n - 1 downTo 0).map { games[today.minusDays(it.toLong()).toString()] ?: 0 }
 }
 
 /** Labelled bars, the largest in the chart's highlight. */

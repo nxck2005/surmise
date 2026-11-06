@@ -241,7 +241,6 @@ private fun Tabs(model: AppModel) {
                         onNew = model::newWord,
                         onSprint = model::showSprint,
                         onHowTo = { model.show(Route.HowTo) },
-                        onSettings = model::showSettings,
                         onShare = { share(context, it) },
                         onRoom = model::showRoom,
                     ),
@@ -262,8 +261,10 @@ private fun Tabs(model: AppModel) {
                     ),
                 )
                 Tab.You -> YouScreen(
+                    profile = model.profile,
                     history = model.youHistory,
                     onHistory = { model.youHistory = it },
+                    onSettings = model::showSettings,
                     record = { RecordScreen(model.profile, model.calendar, onYear = model::showYear) },
                     list = {
                         HistoryScreen(

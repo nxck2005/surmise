@@ -29,6 +29,10 @@ class Prefs(private val sp: SharedPreferences) {
     var haptics by mutableStateOf(sp.getBoolean(HAPTICS, true))
         private set
 
+    /** Whether the you tab last showed the history, not the record. */
+    var youHistory by mutableStateOf(sp.getBoolean(YOU_HISTORY, false))
+        private set
+
     fun chooseTheme(v: String) {
         theme = v
         sp.edit().putString(THEME, v).apply()
@@ -49,11 +53,17 @@ class Prefs(private val sp: SharedPreferences) {
         sp.edit().putBoolean(HAPTICS, v).apply()
     }
 
+    fun chooseYouHistory(v: Boolean) {
+        youHistory = v
+        sp.edit().putBoolean(YOU_HISTORY, v).apply()
+    }
+
     companion object {
         private const val THEME = "theme"
         private const val APPEARANCE = "appearance"
         private const val TILES = "tiles"
         private const val HAPTICS = "haptics"
+        private const val YOU_HISTORY = "you_history"
 
         fun of(context: Context) = Prefs(context.getSharedPreferences("surmise", Context.MODE_PRIVATE))
     }

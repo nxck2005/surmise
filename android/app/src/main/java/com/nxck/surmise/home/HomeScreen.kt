@@ -80,7 +80,6 @@ data class HomeActions(
     val onNew: (length: Int) -> Unit = {},
     val onSprint: () -> Unit = {},
     val onHowTo: () -> Unit = {},
-    val onSettings: () -> Unit = {},
     val onShare: (String) -> Unit = {},
     val onRoom: () -> Unit = {},
 )
@@ -151,7 +150,7 @@ private fun SprintCard(onClick: () -> Unit, modifier: Modifier) {
 
 /** A round button in the header: how to play, or settings. */
 @Composable
-private fun RoundButton(label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
+internal fun RoundButton(label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
         Modifier
             .size(44.dp)
@@ -177,9 +176,6 @@ private fun Header(state: HomeState, actions: HomeActions) {
         Row(Modifier.padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             RoundButton(stringResource(R.string.how_to_play_label), actions.onHowTo) {
                 SurmiseText("?", type.headline.copy(fontWeight = type.section.fontWeight), tokens.ink)
-            }
-            RoundButton(stringResource(R.string.tab_settings), actions.onSettings) {
-                Icon(SurmiseIcons.Settings, tokens.ink, size = 20.dp)
             }
         }
     }
