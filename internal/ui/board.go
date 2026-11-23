@@ -79,7 +79,7 @@ func stackSpaced(rows []string, gap int) string {
 		}
 		spaced = append(spaced, r)
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, spaced...)
+	return joinVerticalCentre(spaced...)
 }
 
 // renderScoredRow draws a finished row at one row tall. It is what everything
@@ -93,9 +93,21 @@ func renderScoredRow(guess string, marks []game.Mark) string {
 func renderScoredRowAt(guess string, marks []game.Mark, tiles int) string {
 	cells := make([]string, len(guess))
 	for i := range guess {
-		cells[i] = sized(tileStyle(marks[i]), tiles).Render(strings.ToUpper(string(guess[i])))
+		cells[i] = st.cell(faceForMark(marks[i]), upperLetter(guess[i]), tiles, false)
 	}
 	return joinTiles(cells)
+}
+
+// faceForMark maps a mark to the tile face that draws it.
+func faceForMark(m game.Mark) cellFace {
+	switch m {
+	case game.Correct:
+		return faceCorrect
+	case game.Present:
+		return facePresent
+	default:
+		return faceAbsent
+	}
 }
 
 // renderCelebratingRow draws a solved row with one tile lit. The light is the
@@ -105,12 +117,15 @@ func renderScoredRowAt(guess string, marks []game.Mark, tiles int) string {
 func renderCelebratingRow(guess string, marks []game.Mark, lit, tiles int) string {
 	cells := make([]string, len(guess))
 	for i := range guess {
-		letter := strings.ToUpper(string(guess[i]))
-		style := tileStyle(marks[i])
 		if i == lit {
-			style = style.Background(lift(style.GetBackground(), 0.35))
+			// The lit tile is the only one that cannot come from the cache: its
+			// background is mixed for this frame. Every other tile is the
+			// settled one the board always draws.
+			style := tileStyle(marks[i]).Background(lift(tileStyle(marks[i]).GetBackground(), 0.35))
+			cells[i] = sized(style, tiles).Render(upperLetter(guess[i]))
+			continue
 		}
-		cells[i] = sized(style, tiles).Render(letter)
+		cells[i] = st.cell(faceForMark(marks[i]), upperLetter(guess[i]), tiles, false)
 	}
 	return joinTiles(cells)
 }
@@ -129,6 +144,126 @@ func tileStyle(mark game.Mark) lipgloss.Style {
 	}
 }
 
+// upperLetters are the letters a board draws, already upper-cased. A stored
+// guess is lowercase ASCII (game.Validate holds it to that), so looking one up
+// is the whole conversion — the old strings.ToUpper(string(c)) allocated two
+// strings per tile, and a board draws thirty tiles a frame.
+var upperLetters = [26]string{
+	"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+	"N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+}
+
+// upperLetter upper-cases one byte of a stored word. Anything outside a–z goes
+// through the rune conversion, which is what string(byte) meant before, so a
+// caller that does hand over something else still gets the old answer.
+func upperLetter(c byte) string {
+	if c >= 'a' && c <= 'z' {
+		return upperLetters[c-'a']
+	}
+	return strings.ToUpper(string(rune(c)))
+}
+
+// cellFace names the style one cell is drawn with. It is the key the cell cache
+// uses for "which style", and the one place a face is mapped to a style.
+type cellFace uint8
+
+const (
+	faceCorrect cellFace = iota
+	facePresent
+	faceAbsent
+	faceActive
+	faceActiveRefused
+	faceCaret
+	faceEmpty
+	faceEmptyBlank
+	faceKeyUnused
+	faceKeyCorrect
+	faceKeyPresent
+	faceKeyAbsent
+)
+
+// slot reports whether this face is drawn as a slot rather than as a scored
+// tile or keycap: only a slot goes through slotCell, whose outline and frame
+// depend on the board's setting.
+func (f cellFace) slot() bool {
+	switch f {
+	case faceActive, faceActiveRefused, faceCaret, faceEmpty, faceEmptyBlank:
+		return true
+	}
+	return false
+}
+
+// faceStyle is the one mapping from a face to the styles it renders with.
+func (s *styles) faceStyle(f cellFace) (style, frame lipgloss.Style) {
+	switch f {
+	case faceCorrect:
+		return s.tileCorrect, s.muted
+	case facePresent:
+		return s.tilePresent, s.muted
+	case faceAbsent:
+		return s.tileAbsent, s.muted
+	case faceActive:
+		return s.tileActive, s.muted
+	case faceActiveRefused:
+		return s.tileRejected, s.muted
+	case faceCaret:
+		return s.caret, s.muted
+	case faceEmpty:
+		return s.tileEmpty, s.muted
+	case faceEmptyBlank:
+		return s.tileEmpty, s.emptyFrame
+	case faceKeyCorrect:
+		return s.keyCorrect, s.muted
+	case faceKeyPresent:
+		return s.keyPresent, s.muted
+	case faceKeyAbsent:
+		return s.keyAbsent, s.muted
+	default:
+		return s.keyUnused, s.muted
+	}
+}
+
+// cellKey identifies one rendered atom. text is the letter or glyph already in
+// its display form; outline only participates for a slot, and is normalised to
+// false otherwise so the cache does not split one keycap across two entries.
+type cellKey struct {
+	face    cellFace
+	text    string
+	tiles   int
+	outline bool
+}
+
+// cell returns the rendered atom for a face, height and text, drawing it once
+// per style set.
+//
+// Every input is a function of the style set (or of the board's outline
+// setting, which is in the key), so a cached atom is the same bytes Render
+// would produce. The cache is lazy rather than prebuilt because a theme preview
+// walks a whole library and only a handful of faces are ever drawn from each;
+// prebuilding 26 letters across twelve faces would pay for cells nobody sees.
+func (s *styles) cell(face cellFace, text string, tiles int, outline bool) string {
+	slot := face.slot()
+	if !slot {
+		outline = false
+	}
+	key := cellKey{face: face, text: text, tiles: tiles, outline: outline}
+	if v, ok := s.cells[key]; ok {
+		return v
+	}
+	style, frame := s.faceStyle(face)
+	var v string
+	if slot {
+		v = slotCell(style, frame, text, tiles, outline)
+	} else {
+		v = sized(style, tiles).Render(text)
+	}
+	if s.cells == nil {
+		s.cells = make(map[cellKey]string, 64)
+	}
+	s.cells[key] = v
+	return v
+}
+
 // renderRevealingRow draws a scored row part-way through its reveal: the first
 // shown tiles in the colours they scored, the rest still wearing the style they
 // were typed in. Both come from tile(), so both are exactly TileWidth wide — the
@@ -140,12 +275,12 @@ func renderRevealingRow(guess string, marks []game.Mark, shown, tiles int, outli
 	}
 	cells := make([]string, len(guess))
 	for i := range guess {
-		letter := strings.ToUpper(string(guess[i]))
+		letter := upperLetter(guess[i])
 		if i >= shown {
-			cells[i] = slotCell(st.tileActive, st.muted, letter, tiles, outline)
+			cells[i] = st.cell(faceActive, letter, tiles, outline)
 			continue
 		}
-		cells[i] = sized(tileStyle(marks[i]), tiles).Render(letter)
+		cells[i] = st.cell(faceForMark(marks[i]), letter, tiles, false)
 	}
 	return joinTiles(cells)
 }
@@ -163,21 +298,28 @@ func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles 
 			// A typed letter is a click target: clicking it erases the row back
 			// to that slot, which is how a mouse edits a mistake mid-word.
 			trim := action{kind: actTrim, index: i}
-			style := st.tileActive
+			face := faceActive
 			if rejected {
-				style = style.Foreground(st.err.GetForeground())
+				face = faceActiveRefused
 			}
+			cell := st.cell(face, upperLetter(typing[i]), tiles, outline)
 			if h.hovered(trim) {
-				style = st.hover(style)
+				// Hover is one atom at a time and changes per frame, so it is
+				// the one cell that is not taken from the cache.
+				style := st.tileActive
+				if rejected {
+					style = st.tileRejected
+				}
+				cell = slotCell(st.hover(style), st.muted, upperLetter(typing[i]), tiles, outline)
 			}
 			// The whole cell is the target, however tall it is: mark records the
 			// atom's height, so a tall tile is clickable across all of it.
-			cells[i] = h.mark(trim, slotCell(style, st.muted, strings.ToUpper(string(typing[i])), tiles, outline))
+			cells[i] = h.mark(trim, cell)
 		} else if i == len(typing) {
 			// Mark the caret position so the player can see where input lands.
-			cells[i] = slotCell(st.caret, st.muted, st.glyph.Caret, tiles, outline)
+			cells[i] = st.cell(faceCaret, st.glyph.Caret, tiles, outline)
 		} else {
-			cells[i] = slotCell(st.tileEmpty, st.muted, st.glyph.Empty, tiles, outline)
+			cells[i] = st.cell(faceEmpty, st.glyph.Empty, tiles, outline)
 		}
 	}
 	return joinTiles(cells)
@@ -185,9 +327,10 @@ func renderTypingRow(typing string, length int, h *hitMap, rejected bool, tiles 
 
 func renderEmptyRow(length, tiles int, outline bool) string {
 	cells := make([]string, length)
-	frame := lipgloss.NewStyle().Foreground(st.tileEmpty.GetForeground())
+	// Every empty cell of a row is the same atom.
+	cell := st.cell(faceEmptyBlank, st.glyph.Empty, tiles, outline)
 	for i := range cells {
-		cells[i] = slotCell(st.tileEmpty, frame, st.glyph.Empty, tiles, outline)
+		cells[i] = cell
 	}
 	return joinTiles(cells)
 }
@@ -228,6 +371,26 @@ func slotCell(style, frame lipgloss.Style, content string, tiles int, outline bo
 // backgrounds of adjacent tiles run together into one solid bar instead of
 // reading as distinct letters.
 func joinTiles(cells []string) string {
+	if len(cells) == 0 {
+		return ""
+	}
+	// The flat case — every cell one row — is the board, the keyboard, the
+	// legend and every preview: JoinHorizontal would split each cell into
+	// lines, measure it, find the tallest block is one line, and concatenate
+	// with one space, which is exactly strings.Join. The check keeps the tall
+	// board's three-row tiles, where the blocks really are joined line by line,
+	// on the library path.
+	flat := true
+	for _, c := range cells {
+		if strings.IndexByte(c, '\n') >= 0 ||
+			strings.IndexByte(c, '\t') >= 0 || strings.Contains(c, "\r\n") {
+			flat = false
+			break
+		}
+	}
+	if flat {
+		return strings.Join(cells, " ")
+	}
 	spaced := make([]string, 0, len(cells)*2-1)
 	for i, c := range cells {
 		if i > 0 {
@@ -327,7 +490,7 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Tim
 	// settled-frame and layout checks).
 	width := lipgloss.Width(rows[0])
 	for i := range rows {
-		rows[i] = lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(rows[i])
+		rows[i] = centreLine(rows[i], width)
 	}
 	return stackSpaced(rows, gap)
 }
@@ -336,9 +499,9 @@ func renderKeyboard(states map[byte]game.Mark, h *hitMap, a *anims, now time.Tim
 func renderCommandKey(label string, act action, h *hitMap, a *anims, now time.Time) string {
 	style := st.keyUnused
 	if h.hovered(act) || a.pressed(now, 0, act.kind) {
-		style = st.hover(style)
+		return h.mark(act, st.hover(style).Render(label))
 	}
-	return h.mark(act, style.Render(label))
+	return h.mark(act, st.cell(faceKeyUnused, label, flatTile, false))
 }
 
 // renderKeyboardRow draws one row of caps. A cap just struck wears the hover
@@ -348,25 +511,28 @@ func renderKeyboardRow(letters string, states map[byte]game.Mark, h *hitMap, a *
 	cells := make([]string, len(letters))
 	for i := range letters {
 		c := letters[i]
-		letter := strings.ToUpper(string(c))
+		letter := upperLetter(c)
 
-		style := st.keyUnused
+		face := faceKeyUnused
 		if mark, played := states[c]; played {
 			switch mark {
 			case game.Correct:
-				style = st.keyCorrect
+				face = faceKeyCorrect
 			case game.Present:
-				style = st.keyPresent
+				face = faceKeyPresent
 			default:
-				style = st.keyAbsent
+				face = faceKeyAbsent
 			}
 		}
 
 		typeIt := action{kind: actLetter, letter: c}
 		if h.hovered(typeIt) || a.pressed(now, c, actLetter) {
-			style = st.hover(style)
+			// The pulse fades, so it is built for this frame rather than cached.
+			style, _ := st.faceStyle(face)
+			cells[i] = h.mark(typeIt, st.hover(style).Render(letter))
+			continue
 		}
-		cells[i] = h.mark(typeIt, style.Render(letter))
+		cells[i] = h.mark(typeIt, st.cell(face, letter, flatTile, false))
 	}
 	// A one-space gutter keeps adjacent keycaps' backgrounds from merging into
 	// a single bar, the same reason the board tiles are spaced.

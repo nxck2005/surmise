@@ -182,11 +182,10 @@ func (m *customScreen) view(h *hitMap) string {
 		note, style = m.note(), st.muted
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Center,
-		lipgloss.JoinVertical(lipgloss.Left, rows...),
+	return joinVerticalCentre(
+		joinVerticalLeft(rows...),
 		"",
-		lipgloss.NewStyle().Width(noteWidth()).Align(lipgloss.Center).
-			Render(style.Render(note)),
+		centreLine(style.Render(note), noteWidth()),
 	)
 }
 
@@ -217,8 +216,7 @@ func (m *customScreen) renderRow(h *hitMap, row int, label, value string) string
 		valueStyle = st.hover(valueStyle)
 	}
 
-	cell := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center).
-		Render(valueStyle.Render(value))
+	cell := valueBoxStyle.Render(valueStyle.Render(value))
 	if m.enabled(row) {
 		cell = h.mark(next, cell)
 	}

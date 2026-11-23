@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/words"
@@ -120,8 +119,9 @@ func (s *howToScreen) view(h *hitMap) string {
 	heading := st.muted.Render(page.name) + st.help.Render(st.glyph.Separator) + s.dots(h)
 	// Squared off first, so the join slides the body under the heading as one
 	// block instead of centring every line of it on its own.
-	return lipgloss.JoinVertical(lipgloss.Center, heading, "",
-		block(lipgloss.JoinVertical(lipgloss.Left, sections...)))
+	// The inner join is already square, so the outer one has nothing to fix.
+	return joinVerticalCentre(heading, "",
+		joinVerticalLeft(sections...))
 }
 
 // dots are the position indicator, and each one is also a click target: a
@@ -201,47 +201,47 @@ func howToScoring() (required, optional []string) {
 	)
 
 	return []string{
-			key,
-			example(prose("say the answer is CARGO and you guess CRANE:"), "crane", "cargo"),
-		}, []string{
-			aside(
-				"C is in the right spot. R and A are in the",
-				"word, but in other spots. N and E aren't in it.",
-			),
-			example(prose(
-				"a letter only lights up as many times as it's",
-				"in the answer. if the answer is ABIDE:",
-			), "geese", "abide"),
-			aside(
-				"ABIDE has one E. the last E in GEESE is in the",
-				"right spot, so the other E's don't light up.",
-			),
-		}
+		key,
+		example(prose("say the answer is CARGO and you guess CRANE:"), "crane", "cargo"),
+	}, []string{
+		aside(
+			"C is in the right spot. R and A are in the",
+			"word, but in other spots. N and E aren't in it.",
+		),
+		example(prose(
+			"a letter only lights up as many times as it's",
+			"in the answer. if the answer is ABIDE:",
+		), "geese", "abide"),
+		aside(
+			"ABIDE has one E. the last E in GEESE is in the",
+			"right spot, so the other E's don't light up.",
+		),
+	}
 }
 
 func howToSaving() (required, optional []string) {
 	return []string{
-			prose(
-				"the game saves after every guess, so you can",
-				"quit whenever you like. everything you've",
-				"played is under puzzles in the menu.",
-			),
-			prose("press tab, then enter, for a new puzzle."),
-			prose(
-				"there's one daily for each length, and it's",
-				"the same for everyone. a new one comes out at",
-				"midnight UTC.",
-			),
-		}, []string{
-			aside(
-				"custom puzzles are saved too, but they don't",
-				"count toward your stats.",
-			),
-			aside(
-				"a challenge code gives everyone the same board.",
-				"it's saved and counted like any other puzzle.",
-			),
-		}
+		prose(
+			"the game saves after every guess, so you can",
+			"quit whenever you like. everything you've",
+			"played is under puzzles in the menu.",
+		),
+		prose("press tab, then enter, for a new puzzle."),
+		prose(
+			"there's one daily for each length, and it's",
+			"the same for everyone. a new one comes out at",
+			"midnight UTC.",
+		),
+	}, []string{
+		aside(
+			"custom puzzles are saved too, but they don't",
+			"count toward your stats.",
+		),
+		aside(
+			"a challenge code gives everyone the same board.",
+			"it's saved and counted like any other puzzle.",
+		),
+	}
 }
 
 func howToControls() (required, optional []string) {

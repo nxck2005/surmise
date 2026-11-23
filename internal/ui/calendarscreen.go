@@ -92,13 +92,34 @@ func calendarLevel(n, peak int) int {
 }
 
 // calendarRamp is the five shades, from the empty-tile colour up to the
-// correct tile's. On a terminal that cannot blend, every played day is the
-// correct colour and only "played or not" shows, which is still the point.
-func calendarRamp() [5]color.Color {
-	empty := st.tileEmpty.GetForeground()
-	full := st.tileCorrect.GetBackground()
+// correct tile's, together with each shade's glyph rendered plain and picked.
+// On a terminal that cannot blend, every played day is the correct colour and
+// only "played or not" shows, which is still the point.
+//
+// It is a function of the style set alone, so it is built once there rather
+// than blended and rendered on every frame of the screen: the year is up to
+// 378 squares and each one drew through one of ten freshly built styles.
+func (s *styles) calendarRamp() *calCache {
+	if s.cal.ready {
+		return &s.cal
+	}
+	empty := s.tileEmpty.GetForeground()
+	full := s.tileCorrect.GetBackground()
 	r := blend(5, empty, full)
-	return [5]color.Color{empty, r[1], r[2], r[3], r[4]}
+	s.cal.ramp = [5]color.Color{empty, r[1], r[2], r[3], r[4]}
+	glyph := s.glyph.Day
+	if lipgloss.Width(glyph) == 0 {
+		glyph = calendarGlyph
+	}
+	// Five shades times the two states a day can be drawn in (the ordinary
+	// square and the cursor's reversed one), rendered through the theme's own
+	// day glyph so a wide glyph still widens every week.
+	for i, c := range s.cal.ramp {
+		s.cal.plain[i] = lipgloss.NewStyle().Foreground(c).Render(glyph)
+		s.cal.picked[i] = lipgloss.NewStyle().Foreground(c).Reverse(true).Render(glyph)
+	}
+	s.cal.ready = true
+	return &s.cal
 }
 
 // calendarScreen is a year of play, one square a day, like a GitHub profile's
@@ -110,7 +131,69 @@ type calendarScreen struct {
 	shown   int       // index into ranges
 	cursor  daily.Day // the selected day; always drawn and visible
 
+	// grid caches the squares of the shown range: the dates, which of them the
+	// range holds, and the busiest day's count. The frame needs all of it on
+	// every message, but it is derived from the range and the tallies, which do
+	// not move until the range does or the history is re-read.
+	grid calGrid
+
 	width, height int
+}
+
+// calGrid is one shown range's squares, in the order they are drawn: seven rows
+// of columns, Sunday first, for the range's whole grid. The key says which
+// range it was built for; a different one simply misses.
+type calGrid struct {
+	key    calGridKey
+	days   []daily.Day // cols*7, row-major: days[r*cols+c]
+	inside []bool
+	// index is each square's day-of-range, which is what the click target
+	// carries. It is a date subtraction per square, so it is done here once per
+	// range rather than for every drawn square on every frame.
+	index []int
+	total int
+	peak  int
+}
+
+type calGridKey struct {
+	start daily.Day // the Sunday at the top of the first column
+	cols  int
+	from  daily.Day // the range's first and last day, so a range sharing a
+	to    daily.Day // grid with another is still rebuilt when its edges differ
+}
+
+// squares fills the grid for the showing range and layout, building it once
+// per range. It returns the cache directly: nothing outside this method may
+// keep it past a reload, which is why reload and refresh clear it.
+func (m *calendarScreen) squares(l calLayout) *calGrid {
+	r := m.rng()
+	key := calGridKey{start: l.start, cols: l.cols, from: r.from, to: r.to}
+	if m.grid.days != nil && m.grid.key == key {
+		return &m.grid
+	}
+	days := make([]daily.Day, l.cols*7)
+	inside := make([]bool, len(days))
+	index := make([]int, len(days))
+	total, peak := 0, 0
+	for row := 0; row < 7; row++ {
+		for col := 0; col < l.cols; col++ {
+			i := row*l.cols + col
+			d := l.start.AddDays(7*col + row)
+			days[i] = d
+			index[i] = d.DaysSince(r.from)
+			if r.contains(d) {
+				inside[i] = true
+				if n := m.tally(d).Games; n > 0 {
+					total += n
+					if n > peak {
+						peak = n
+					}
+				}
+			}
+		}
+	}
+	m.grid = calGrid{key: key, days: days, inside: inside, index: index, total: total, peak: peak}
+	return &m.grid
 }
 
 func (m *calendarScreen) resize(w, h int) { m.width, m.height = w, h }
@@ -122,6 +205,7 @@ func (m *calendarScreen) reload(games []*game.Game, today daily.Day, zone *time.
 	m.ranges = calendarRanges(m.tallies, today)
 	m.shown = 0
 	m.cursor = today
+	m.grid = calGrid{}
 }
 
 // refresh re-reads the counts after coming back from a day's puzzle list,
@@ -134,6 +218,7 @@ func (m *calendarScreen) refresh(games []*game.Game, today daily.Day, zone *time
 	m.shown = min(shown, len(m.ranges)-1)
 	m.cursor = cursor
 	m.keepCursor()
+	m.grid = calGrid{}
 }
 
 func (m *calendarScreen) rng() calRange { return m.ranges[m.shown] }
@@ -222,6 +307,7 @@ func (m *calendarScreen) showRange(i int) {
 	}
 	m.shown = i
 	m.keepCursor()
+	m.grid = calGrid{}
 }
 
 // update reads a key. It reports whether the player asked to list the
@@ -258,8 +344,9 @@ func (m *calendarScreen) monthRow(l calLayout) string {
 	}
 	var placed []label
 	prev := time.Month(0)
+	grid := m.squares(l)
 	for c := l.first; c < l.cols; c++ {
-		top := l.start.AddDays(7 * c)
+		top := grid.days[c]
 		if top.Before(m.rng().from) {
 			top = m.rng().from
 		}
@@ -287,13 +374,9 @@ func (m *calendarScreen) monthRow(l calLayout) string {
 }
 
 // gridRows is the seven lines of days, Sunday first.
-func (m *calendarScreen) gridRows(h *hitMap, l calLayout, peak int) []string {
-	ramp := calendarRamp()
-	var plain, picked [5]string
-	for i := range ramp {
-		plain[i] = lipgloss.NewStyle().Foreground(ramp[i]).Render(l.glyph)
-		picked[i] = lipgloss.NewStyle().Foreground(ramp[i]).Reverse(true).Render(l.glyph)
-	}
+func (m *calendarScreen) gridRows(h *hitMap, l calLayout) []string {
+	cal := st.calendarRamp()
+	grid := m.squares(l)
 	lines := make([]string, 0, 7)
 	for r := 0; r < 7; r++ {
 		label := strings.Repeat(" ", calendarGutter)
@@ -308,17 +391,18 @@ func (m *calendarScreen) gridRows(h *hitMap, l calLayout, peak int) []string {
 		var b strings.Builder
 		b.WriteString(st.muted.Render(label))
 		for c := l.first; c < l.cols; c++ {
-			d := l.start.AddDays(7*c + r)
-			if !m.rng().contains(d) {
+			i := r*l.cols + c
+			if !grid.inside[i] {
 				b.WriteString(strings.Repeat(" ", l.w))
 				continue
 			}
-			level := calendarLevel(m.tally(d).Games, peak)
-			cell := plain[level]
+			d := grid.days[i]
+			level := calendarLevel(m.tally(d).Games, grid.peak)
+			cell := cal.plain[level]
 			if d == m.cursor {
-				cell = picked[level]
+				cell = cal.picked[level]
 			}
-			b.WriteString(h.mark(action{kind: actCalendarDay, index: d.DaysSince(m.rng().from)}, cell))
+			b.WriteString(h.mark(action{kind: actCalendarDay, index: grid.index[i]}, cell))
 		}
 		lines = append(lines, b.String())
 	}
@@ -369,12 +453,8 @@ func (m *calendarScreen) view(h *hitMap) string {
 	l := m.layout()
 	r := m.rng()
 
-	total, peak := 0, 0
-	for d := r.from; !r.to.Before(d); d = d.AddDays(1) {
-		n := m.tally(d).Games
-		total += n
-		peak = max(peak, n)
-	}
+	grid := m.squares(l)
+	total := grid.total
 
 	heading := fmt.Sprintf("%d games", total)
 	switch total {
@@ -389,10 +469,10 @@ func (m *calendarScreen) view(h *hitMap) string {
 		heading += " in " + r.label
 	}
 
-	ramp := calendarRamp()
+	cal := st.calendarRamp()
 	legend := st.muted.Render("less ")
-	for _, c := range ramp {
-		legend += lipgloss.NewStyle().Foreground(c).Render(l.glyph)
+	for _, cell := range cal.plain {
+		legend += cell
 	}
 	legend += st.muted.Render(" more")
 	if pad := calendarGutter + (l.cols-l.first)*l.w - lipgloss.Width(legend); pad > 0 {
@@ -422,7 +502,7 @@ func (m *calendarScreen) view(h *hitMap) string {
 		lines = append(lines, st.text.Render(heading), "")
 	}
 	lines = append(lines, m.monthRow(l))
-	lines = append(lines, m.gridRows(h, l, peak)...)
+	lines = append(lines, m.gridRows(h, l)...)
 	if showLegend {
 		lines = append(lines, legend)
 	}
@@ -430,7 +510,9 @@ func (m *calendarScreen) view(h *hitMap) string {
 	if showYears {
 		lines = append(lines, "", m.rangeRow(h))
 	}
-	return block(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	// JoinVertical(Left) already pads every line to the widest, so the block
+	// is square by construction and needs no second pass over it.
+	return joinVerticalLeft(lines...)
 }
 
 func (m *calendarScreen) help(h *hitMap) string {

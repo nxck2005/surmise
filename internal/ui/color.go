@@ -39,6 +39,12 @@ func setColorProfile(p colorprofile.Profile) {
 	}
 	colors = p
 	st.panel = nil
+	// The histogram's and the calendar's ramps are blends, and a shallow
+	// terminal draws them flat: what was rendered for the old depth is not this
+	// depth's frame either.
+	st.hist = histCache{}
+	st.cal = calCache{}
+	st.shimmer = shimmerCache{}
 }
 
 // rich reports whether a gradient is worth drawing. Below 256 colours a blend

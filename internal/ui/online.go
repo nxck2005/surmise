@@ -85,6 +85,10 @@ func (m *Model) markGone(err error) bool {
 	}
 	m.gone = true
 	m.note = serverNote(gone.Message)
+	// A room result on screen was drawn for a client that could still call the
+	// server; the refresh button it may be offering is no longer a thing to
+	// offer. The screen itself stays — the result is on disk.
+	m.roomResult.consent = false
 	// Nothing online runs again after this, rooms included: any open room
 	// connection stops here, and the room finds out through the closing of
 	// its socket rather than through a message it no longer gets.
@@ -146,10 +150,17 @@ type menuCountMsg struct {
 // armed from the one-second clock, so opening the menu needs no call of its
 // own and every way of reaching the menu is covered.
 func (m *Model) menuCountCmd() tea.Cmd {
-	if m.screen != screenMenu || m.menuCountBusy || !m.dailyOnline() {
+	// The cheap questions first: this is called from the one-second clock, and
+	// consent is a live settings read. Nothing may be asked while a count is
+	// already out or the last answer is fresh, so the store need not be opened
+	// to learn that nothing would be sent.
+	if m.screen != screenMenu || m.menuCountBusy {
 		return nil
 	}
 	if !m.menuCountAt.IsZero() && timeNow().Sub(m.menuCountAt) < menuCountEvery {
+		return nil
+	}
+	if !m.dailyOnline() {
 		return nil
 	}
 	m.menuCountBusy = true

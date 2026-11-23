@@ -1,6 +1,7 @@
 package online
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -44,7 +45,7 @@ func (h *HTTP) do(ctx context.Context, method, path string, body, out any, heade
 		if err != nil {
 			return err
 		}
-		reader = strings.NewReader(string(b))
+		reader = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, h.base+path, reader)
 	if err != nil {

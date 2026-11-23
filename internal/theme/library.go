@@ -8,7 +8,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -56,6 +57,12 @@ type Library struct {
 	entries []Entry
 	dir     string // "" for the bundled-only set
 	stamp   string
+
+	// byName collects entries while the directory and the embedded set are
+	// read, so a user file shadowing a bundled one is a map write rather than a
+	// scan of everything loaded so far. Open drops it once entries is built:
+	// the library is read-only after that.
+	byName map[string]Entry
 }
 
 // Dir returns the themes directory for a data dir. It follows -data, so a
@@ -71,12 +78,17 @@ func Open(dir string) *Library {
 	// the next Changed says yes and the edit is picked up on the following
 	// reload. Stamping afterwards would record the new state against the old
 	// contents, and that edit would never be seen again.
-	l := &Library{dir: dir, stamp: Stamp(dir)}
+	l := &Library{dir: dir, stamp: Stamp(dir), byName: map[string]Entry{}}
 	l.loadFS(bundled, "themes", "built-in")
 	if dir != "" {
 		l.loadDir(dir)
 	}
-	sort.Slice(l.entries, func(i, j int) bool { return l.entries[i].Name < l.entries[j].Name })
+	l.entries = make([]Entry, 0, len(l.byName))
+	for _, e := range l.byName {
+		l.entries = append(l.entries, e)
+	}
+	slices.SortFunc(l.entries, func(a, b Entry) int { return strings.Compare(a.Name, b.Name) })
+	l.byName = nil
 	return l
 }
 
@@ -100,21 +112,28 @@ func Stamp(dir string) string {
 	if err != nil {
 		return ""
 	}
-	var b strings.Builder
+	// Appended rather than formatted: this runs once a second while the app is
+	// open, and fmt per file is more work than the stat it is recording.
+	b := make([]byte, 0, len(entries)*48)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
 			continue
 		}
+		b = append(b, e.Name()...)
+		b = append(b, 0)
 		info, err := e.Info()
 		if err != nil {
 			// A file that vanished between the read and the stat is a change in
 			// its own right; name it so the next stamp differs from this one.
-			fmt.Fprintf(&b, "%s\x00gone\n", e.Name())
+			b = append(b, "gone\n"...)
 			continue
 		}
-		fmt.Fprintf(&b, "%s\x00%d\x00%d\n", e.Name(), info.Size(), info.ModTime().UnixNano())
+		b = strconv.AppendInt(b, info.Size(), 10)
+		b = append(b, 0)
+		b = strconv.AppendInt(b, info.ModTime().UnixNano(), 10)
+		b = append(b, '\n')
 	}
-	return b.String()
+	return string(b)
 }
 
 // Dir reports the themes directory this library was opened from, "" for the
@@ -229,16 +248,11 @@ func safeText(s string) string {
 	}, s)
 }
 
-// add appends an entry, replacing any existing one with the same name so user
-// files shadow bundled ones.
+// add records an entry, replacing any existing one with the same name so user
+// files shadow bundled ones. The map makes that the same cost for the first
+// file and the two-hundredth.
 func (l *Library) add(e Entry) {
-	for i, existing := range l.entries {
-		if existing.Name == e.Name {
-			l.entries[i] = e
-			return
-		}
-	}
-	l.entries = append(l.entries, e)
+	l.byName[e.Name] = e
 }
 
 // Entries returns every theme, sorted by name.

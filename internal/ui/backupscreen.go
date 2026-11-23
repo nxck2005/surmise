@@ -223,7 +223,7 @@ func (b *backupScreen) view(h *hitMap) string {
 		sections = append(sections, "", note)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+	return joinVerticalCentre(sections...)
 }
 
 // note is the report, the failure, or the waiting line — whichever the last
@@ -258,20 +258,25 @@ func (b *backupScreen) note() string {
 	return b.centred(lines, style)
 }
 
-// centred pads lines to the width of the blurb, so that a line appearing or
-// changing does not resize the panel around it.
-func (b *backupScreen) centred(lines []string, style lipgloss.Style) string {
+// backupBlurbBox is the blurb's width as a box. The blurb is a constant, so
+// the box is built once rather than re-measured and re-created on every frame
+// that shows a report.
+var backupBlurbBox = func() lipgloss.Style {
 	width := 0
 	for _, l := range backupBlurb {
 		if w := lipgloss.Width(l); w > width {
 			width = w
 		}
 	}
-	box := lipgloss.NewStyle().Width(width).Align(lipgloss.Center)
+	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center)
+}()
 
+// centred pads lines to the width of the blurb, so that a line appearing or
+// changing does not resize the panel around it.
+func (b *backupScreen) centred(lines []string, style lipgloss.Style) string {
 	out := make([]string, len(lines))
 	for i, l := range lines {
-		out[i] = box.Render(style.Render(l))
+		out[i] = backupBlurbBox.Render(style.Render(l))
 	}
 	return strings.Join(out, "\n")
 }

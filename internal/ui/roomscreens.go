@@ -143,8 +143,7 @@ func (m *roomMakeScreen) renderRow(h *hitMap, row int, label, value string) stri
 		if h.hovered(next) {
 			valueStyle = st.hover(valueStyle)
 		}
-		cell := lipgloss.NewStyle().Width(roomMakeValueWidth()).Align(lipgloss.Center).
-			Render(valueStyle.Render(value))
+		cell := roomMakeValueBox.Render(valueStyle.Render(value))
 		cell = h.mark(next, cell)
 		return prefix +
 			labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
@@ -153,11 +152,10 @@ func (m *roomMakeScreen) renderRow(h *hitMap, row int, label, value string) stri
 			arrow(next, st.glyph.ValueNext)
 	}
 
-	valueBox := lipgloss.NewStyle().Width(roomMakeValueWidth()).Align(lipgloss.Center)
 	return prefix +
 		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
 		strings.Repeat(" ", lipgloss.Width(st.glyph.ValuePrev)) +
-		valueBox.Render(valueStyle.Render(value)) +
+		roomMakeValueBox.Render(valueStyle.Render(value)) +
 		strings.Repeat(" ", lipgloss.Width(st.glyph.ValueNext))
 }
 
@@ -175,24 +173,29 @@ func (m *roomMakeScreen) view(h *hitMap) string {
 			noteStyle = st.err
 		}
 	}
-	noteBox := lipgloss.NewStyle().Width(maxNoteWidth()).Align(lipgloss.Center).
-		Render(noteStyle.Render(safeText(note)))
+	noteBox := centreLine(noteStyle.Render(safeText(note)), maxNoteWidth())
 	rows = append(rows, "", noteBox)
-	return lipgloss.JoinVertical(lipgloss.Center,
-		lipgloss.JoinVertical(lipgloss.Left, rows...),
+	return joinVerticalCentre(
+		joinVerticalLeft(rows...),
 	)
 }
 
-// roomMakeValueWidth is the value column: the longest start value with a cell
-// of air on each side, which is wider than settings' column, so no value ever
-// wraps or touches its arrows.
-func roomMakeValueWidth() int {
+// roomMakeValueWidthValue is the value column: the longest start value with a
+// cell of air on each side, which is wider than settings' column, so no value
+// ever wraps or touches its arrows. The values are constants, so it is measured
+// once rather than on every row of every frame.
+var roomMakeValueWidthValue = func() int {
 	widest := valueWidth
 	for _, v := range []string{"when everyone's ready", "when the host starts it", "when you start it"} {
 		widest = max(widest, lipgloss.Width(v)+2)
 	}
 	return widest
-}
+}()
+
+// roomMakeValueBox is the same fixed column as a style, built once.
+var roomMakeValueBox = func() lipgloss.Style {
+	return lipgloss.NewStyle().Width(roomMakeValueWidthValue).Align(lipgloss.Center)
+}()
 
 func makePlayLabel(v bool) string {
 	if v {
@@ -203,14 +206,16 @@ func makePlayLabel(v bool) string {
 
 // maxNoteWidth is the widest of the row notes: the box stays one width so
 // moving the cursor does not resize the panel.
-func maxNoteWidth() int {
+func maxNoteWidth() int { return maxNoteWidthValue }
+
+var maxNoteWidthValue = func() int {
 	widest := lipgloss.Width("everyone in the room gets a word this long")
 	widest = max(widest, lipgloss.Width("everyone plays at once and sees each other guess"))
 	widest = max(widest, lipgloss.Width("friends play whenever they like, for 30 days"))
 	widest = max(widest, lipgloss.Width("the round starts once everyone's ready"))
 	widest = max(widest, lipgloss.Width("everyone readies up, then you start it"))
 	return widest
-}
+}()
 
 func (m *roomMakeScreen) help(h *hitMap) string {
 	return renderHelp(h,
@@ -298,7 +303,7 @@ func (m *roomJoinScreen) view(h *hitMap) string {
 			noteStyle = st.err
 		}
 	}
-	return lipgloss.JoinVertical(lipgloss.Center,
+	return joinVerticalCentre(
 		renderFieldRow(h, 0, true, "room code", &m.entry, "not set"),
 		"",
 		noteStyle.Render(safeText(note)),
@@ -329,12 +334,15 @@ func (m *Model) joinRoom() tea.Cmd {
 		s.entry.begin()
 		return nil
 	}
-	for _, e := range m.activeRooms() {
+	// One read of the list: the two questions — "is this code already ours" and
+	// "is there room for another" — are about the same snapshot.
+	rooms := m.activeRooms()
+	for _, e := range rooms {
 		if e.Code == code {
 			return m.openRoomCode(e.Code, e.Key)
 		}
 	}
-	if len(m.activeRooms()) >= store.MaxRooms {
+	if len(rooms) >= store.MaxRooms {
 		s.noteErr = true
 		s.note = "you're in 5 rooms already — leave one first"
 		return nil
@@ -559,7 +567,7 @@ func (m *roomScreen) view(h *hitMap, r *roomSession) string {
 			lines = append(lines, st.muted.Render("you get 10 minutes once you start"), "")
 		}
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, lines...)
+	return joinVerticalCentre(lines...)
 }
 
 // ceilSeconds is a duration's rounded-up seconds, so a countdown caught
@@ -695,6 +703,11 @@ type roomResultScreen struct {
 	// width and height are the terminal's, pushed down by the root. The
 	// ranking sheds to fit them; zero is unmeasured, which is unbounded.
 	width, height int
+
+	// consent is the player's network consent as it stood when this screen was
+	// opened. It decides whether the refresh hint is shown; the action itself
+	// asks the live question before it calls. See activeScreen.
+	consent bool
 }
 
 // openRoomResultFor shows a saved round: the board we played, the ranking the
@@ -702,6 +715,7 @@ type roomResultScreen struct {
 func (m *Model) openRoomResultFor(g *game.Game) {
 	m.anim.clear()
 	m.roomResult = roomResultScreen{
+		consent: m.consent(),
 		r: roomResult{
 			code:    g.Room.Code,
 			mode:    g.Room.Mode,
@@ -743,7 +757,7 @@ func (m *Model) openRoomResultFromView() {
 		}
 	}
 	m.anim.clear()
-	m.roomResult = roomResultScreen{r: roomResult{
+	m.roomResult = roomResultScreen{consent: m.consent(), r: roomResult{
 		code: r.code, mode: r.mode, round: res.Round,
 		seat: 0, length: r.view.Length, word: res.Word,
 		ranking: ranking,
@@ -830,7 +844,7 @@ func (m *roomResultScreen) view(h *hitMap) string {
 		}
 		cards = append(cards, "", style.Render(safeText(m.note)))
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, cards...)
+	return joinVerticalCentre(cards...)
 }
 
 // answerLine is the word the round kept until now, in capitals.

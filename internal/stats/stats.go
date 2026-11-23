@@ -7,7 +7,7 @@
 package stats
 
 import (
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/daily"
@@ -203,6 +203,24 @@ type accumulator struct {
 	time                  time.Duration
 }
 
+// compareGames is completion order: UpdatedAt, then the id. The id tiebreak
+// exists so two records written in the same instant are ordered the same way
+// on every run — the order a profile's streaks and a mode's trends read is not
+// something to leave to the sort's mood. internal/stats' trends walk already
+// documents the same rule.
+func compareGames(a, b *game.Game) int {
+	if c := a.UpdatedAt.Compare(b.UpdatedAt); c != 0 {
+		return c
+	}
+	switch {
+	case a.ID < b.ID:
+		return -1
+	case a.ID > b.ID:
+		return 1
+	}
+	return 0
+}
+
 // streaks walks finished puzzles in completion order. Unfinished puzzles are
 // ignored rather than treated as breaks, so having a game open does not reset
 // a streak.
@@ -218,6 +236,40 @@ type accumulator struct {
 //     wins on the profile, so it must not lengthen a run either, which keeps
 //     MaxStreak from ever exceeding Won;
 //   - any loss, deleted or not, resets the run.
+//
+// CurrentStreak is the profile's running win streak on its own. The menu shows
+// it beside the day's progress and asks for it every time it is raised, and
+// ComputeAt would also build the per-mode tables, the distributions and the
+// daily calendar walk to answer a question whose only input is the completion
+// order of finished puzzles.
+//
+// It is the same walk streaks does, without the sort: the run is everything
+// after the last loss in completion order, so one pass finds that loss and a
+// second counts the wins that followed it. compareGames is the order both use,
+// which is what lets the two agree on a tie.
+func CurrentStreak(games []*game.Game) int {
+	var lastLoss *game.Game
+	for _, g := range games {
+		if !g.CountsForStats() || !g.Status.Done() || g.Status == game.Won {
+			continue
+		}
+		if lastLoss == nil || compareGames(g, lastLoss) > 0 {
+			lastLoss = g
+		}
+	}
+	run := 0
+	for _, g := range games {
+		if !g.CountsForStats() || g.Status != game.Won || g.Deleted {
+			continue
+		}
+		if lastLoss != nil && compareGames(g, lastLoss) <= 0 {
+			continue
+		}
+		run++
+	}
+	return run
+}
+
 func streaks(games []*game.Game) (current, longest int) {
 	finished := make([]*game.Game, 0, len(games))
 	for _, g := range games {
@@ -233,9 +285,7 @@ func streaks(games []*game.Game) (current, longest int) {
 			finished = append(finished, g)
 		}
 	}
-	sort.Slice(finished, func(i, j int) bool {
-		return finished[i].UpdatedAt.Before(finished[j].UpdatedAt)
-	})
+	slices.SortFunc(finished, compareGames)
 
 	run := 0
 	for _, g := range finished {
@@ -330,7 +380,15 @@ func walkDays(days map[daily.Day]*game.Game, today daily.Day) dailyRun {
 	if len(ordered) == 0 {
 		return dailyRun{}
 	}
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Before(ordered[j]) })
+	slices.SortFunc(ordered, func(a, b daily.Day) int {
+		switch {
+		case a.Before(b):
+			return -1
+		case b.Before(a):
+			return 1
+		}
+		return 0
+	})
 
 	var r dailyRun
 	for i, d := range ordered {

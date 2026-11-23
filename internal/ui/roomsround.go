@@ -433,7 +433,7 @@ func (m *Model) settleRefresh(msg roomResultsMsg) tea.Cmd {
 		m.note = saveFailed(err)
 		return nil
 	}
-	m.roomResult = roomResultScreen{r: buildRoomResult(&g), note: "updated"}
+	m.roomResult = roomResultScreen{consent: m.consent(), r: buildRoomResult(&g), note: "updated"}
 	m.roomResult.resize(m.width, m.height)
 	m.screen = screenRoomResult
 	return nil

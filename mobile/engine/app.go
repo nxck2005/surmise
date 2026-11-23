@@ -250,14 +250,21 @@ type Themes struct {
 }
 
 // library is the bundled themes plus the player's files in <data>/themes,
-// which is where a restored backup writes them. It is read on every ask: the
-// picker asks rarely, and a restore may have added files since.
+// which is where a restored backup writes them. It is kept until the directory
+// stamp moves, so a restore that adds a theme is picked up and an unchanged
+// library is not parsed again.
 func (e *Engine) library() *theme.Library {
 	dir := theme.Dir(e.dir)
 	if _, err := os.Stat(dir); err != nil {
 		dir = ""
 	}
-	return theme.Open(dir)
+	stamp := theme.Stamp(dir)
+	if e.lib != nil && e.libDir == dir && e.libStamp == stamp {
+		return e.lib
+	}
+	lib := theme.Open(dir)
+	e.lib, e.libDir, e.libStamp = lib, dir, stamp
+	return lib
 }
 
 // themesList leaves out a theme built from ANSI numbers (the terminal's own

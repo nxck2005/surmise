@@ -19,6 +19,7 @@ import (
 	"github.com/nxck2005/surmise/internal/online"
 	"github.com/nxck2005/surmise/internal/play"
 	"github.com/nxck2005/surmise/internal/store"
+	"github.com/nxck2005/surmise/internal/theme"
 )
 
 // Engine is one open install. Calls are serialised by a mutex; the app calls
@@ -49,6 +50,14 @@ type Engine struct {
 	// posts carries the network's answers to the one worker that applies
 	// them (startHost); nil with no network.
 	posts chan func()
+
+	// lib caches the theme library, keyed by the directory and its stamp. Both
+	// theme queries open it, and Open parses every bundled theme; the picker
+	// asks on opening the settings tab and again whenever the theme or tile
+	// palette changes.
+	lib      *theme.Library
+	libDir   string
+	libStamp string
 }
 
 // Config is what Open needs from the platform.

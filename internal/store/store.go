@@ -9,6 +9,7 @@ package store
 
 import (
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -28,7 +29,11 @@ var ErrFull = errors.New("storage is full")
 // Summary is the cheap view of a puzzle, for the browse list. It avoids
 // loading and decoding every saved game just to render a menu.
 type Summary struct {
-	ID        string
+	ID string
+	// Code is ID's six-digit display label, derived once when the summary is
+	// built. It is a pure function of ID, and deriving it per row per frame was
+	// a hash on every frame of the list.
+	Code      string
 	Length    int
 	Status    game.Status
 	Attempts  int
@@ -99,9 +104,21 @@ type Writes interface {
 	Writes() uint64
 }
 
+// HasID reports whether id is one of ids, which must be the ascending slice
+// IDs returned. It is the lookup the readers that ask about one puzzle use, so
+// a "does this exist" question costs a binary search rather than a map of the
+// whole history — the daily screen's three tombstone checks and a daily's
+// spent check both ask it, and both used to allocate space for every record
+// on disk to answer about one.
+func HasID(ids []string, id string) bool {
+	_, ok := slices.BinarySearch(ids, id)
+	return ok
+}
+
 func summarize(g *game.Game) Summary {
 	return Summary{
 		ID:        g.ID,
+		Code:      game.Code(g.ID),
 		Length:    g.Length,
 		Status:    g.Status,
 		Attempts:  g.Attempts(),

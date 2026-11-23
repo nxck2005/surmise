@@ -30,6 +30,10 @@ const license = "MIT — deps under their own terms"
 type aboutScreen struct {
 	rows []aboutRow
 
+	// labelWidth is the widest label, measured when the rows are built. The
+	// labels are fixed literals, so the frame need not measure them again.
+	labelWidth int
+
 	// width and height are the terminal's, pushed down by the root. Zero means
 	// unmeasured, which counts as unbounded.
 	width, height int
@@ -52,6 +56,12 @@ type aboutRow struct {
 // told where its files live (a zero Options, as the tests pass).
 func (a *aboutScreen) reload(dataDir string) {
 	a.rows = aboutRows(dataDir)
+	a.labelWidth = 0
+	for _, r := range a.rows {
+		if w := lipgloss.Width(r.label); w > a.labelWidth {
+			a.labelWidth = w
+		}
+	}
 }
 
 // aboutRows is the whole content of the about screen, in display order. Adding,
@@ -119,14 +129,16 @@ func (a *aboutScreen) view(h *hitMap) string {
 	}
 	rows = affordableRows(rows, bodyBudget(a.height))
 
-	width := 0
-	for _, r := range rows {
-		if w := lipgloss.Width(r.label); w > width {
-			width = w
+	width := a.labelWidth
+	if width == 0 {
+		// The screen was opened without reload, and the fallback rows above
+		// have not been measured.
+		for _, r := range rows {
+			if w := lipgloss.Width(r.label); w > width {
+				width = w
+			}
 		}
 	}
-	// The gutter keeps the two columns apart once the labels are padded.
-	label := lipgloss.NewStyle().Width(width + 2)
 	// What is left of the panel for a value. Nothing else on the screen is that
 	// wide, so a value the terminal cannot hold would widen the panel past its
 	// edge rather than wrap; zero is an unmeasured terminal, which is unbounded.
@@ -139,7 +151,9 @@ func (a *aboutScreen) view(h *hitMap) string {
 	for i, r := range rows {
 		// A value can be a path from -data, which is the shell's to choose and
 		// so reaches the frame unvalidated; labels are all literals.
-		lines[i] = label.Render(st.muted.Render(r.label)) + st.text.Render(fitValue(safeText(r.value), room, r.path))
+		// The gutter keeps the two columns apart once the labels are padded.
+		lines[i] = padLine(st.muted.Render(r.label), width+2) +
+			st.text.Render(fitValue(safeText(r.value), room, r.path))
 	}
 
 	return block(strings.Join(lines, "\n"))

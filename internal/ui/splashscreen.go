@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"math"
 	"strconv"
 	"strings"
@@ -236,7 +237,7 @@ func (m *splashScreen) view(h *hitMap) string {
 		art = h.mark(action{kind: actSplashDismiss}, art)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Center,
+	return joinVerticalCentre(
 		art,
 		"",
 		st.muted.Render(tagline),
@@ -252,9 +253,6 @@ const shimmerBand = 14
 // other effect here — and the ramp runs from the lit colour back to the art's
 // own, so a terminal too poor to blend draws the whole line in the art's colour.
 func shimmerLine(line string, sweep float64, width int) string {
-	base := st.splash.GetForeground()
-	ramp := blend(shimmerSteps, lift(base, 0.45), base)
-
 	// The band starts off the left edge and finishes off the right, so the art
 	// is lit from outside rather than the light appearing on top of it.
 	centre := sweep*float64(width+2*shimmerBand) - shimmerBand
@@ -262,10 +260,34 @@ func shimmerLine(line string, sweep float64, width int) string {
 	var b strings.Builder
 	for i, r := range []rune(line) {
 		lit := 1 - min(math.Abs(float64(i)-centre)/shimmerBand, 1)
-		c := colorAt(ramp, int((1-lit)*float64(shimmerSteps-1)))
-		b.WriteString(st.splash.Foreground(c).Render(string(r)))
+		b.WriteString(st.shimmerCell(int((1-lit)*float64(shimmerSteps-1)), r))
 	}
 	return b.String()
+}
+
+// shimmerRamp is the sweep's gradient, built once per style set.
+func (s *styles) shimmerRamp() []color.Color {
+	if s.shimmer.ramp == nil {
+		base := s.splash.GetForeground()
+		s.shimmer.ramp = blend(shimmerSteps, lift(base, 0.45), base)
+		s.shimmer.cells = make(map[shimmerKey]string, 256)
+	}
+	return s.shimmer.ramp
+}
+
+// shimmerCell is one rune of the art in one step of the ramp, rendered once.
+// The art is a few hundred cells and the sweep repaints it at twenty-five
+// frames a second; building a fresh style and rendering each cell every time
+// was the whole cost of the animation.
+func (s *styles) shimmerCell(step int, r rune) string {
+	key := shimmerKey{step: step, r: r}
+	if v, ok := s.shimmer.cells[key]; ok {
+		return v
+	}
+	c := colorAt(s.shimmerRamp(), step)
+	v := s.splash.Foreground(c).Render(string(r))
+	s.shimmer.cells[key] = v
+	return v
 }
 
 // shimmerSteps is how many colours the band is mixed from. More than the eye

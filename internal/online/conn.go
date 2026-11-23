@@ -1,6 +1,7 @@
 package online
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"sync"
@@ -96,7 +97,7 @@ func (w *wsConn) Receive(ctx context.Context) (ServerMsg, error) {
 		if typ != websocket.MessageText {
 			continue
 		}
-		if string(data) == "pong" {
+		if bytes.Equal(data, []byte("pong")) {
 			w.lastPong.Store(time.Now().UnixNano())
 			continue
 		}

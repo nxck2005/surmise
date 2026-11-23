@@ -177,7 +177,6 @@ func TestClientMessagesHaveExactlyTheirFields(t *testing.T) {
 
 func TestReceiveSkipsPongAndJunk(t *testing.T) {
 	block := make(chan struct{})
-	defer close(block)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, nil)
 		if err != nil {
@@ -190,6 +189,7 @@ func TestReceiveSkipsPongAndJunk(t *testing.T) {
 		writeText(t, ctx, conn, `{"t":"welcome","seat":2,"room":{"code":"K7M2QX"}}`)
 		<-block
 	}))
+	// server.Close waits for the handler, which is parked on <-block.
 	defer server.Close()
 
 	client := phonedClient(server.URL)
@@ -200,6 +200,10 @@ func TestReceiveSkipsPongAndJunk(t *testing.T) {
 		t.Fatalf("Dial: %v", err)
 	}
 	defer conn.Close()
+	// Last registered, first run: the handler is parked on <-block, and both
+	// conn.Close and server.Close wait on it. Unblocking it first is what keeps
+	// the client's close handshake from spending the dial timeout in the test.
+	defer close(block)
 
 	msg, err := conn.Receive(context.Background())
 	if err != nil {

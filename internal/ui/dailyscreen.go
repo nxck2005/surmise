@@ -44,6 +44,9 @@ type dailyScreen struct {
 type dailyRow struct {
 	length int
 	id     string
+	// code is id's display label, derived once when the row is built rather
+	// than hashed on every frame the screen draws.
+	code string
 
 	// status is the zero Status when the puzzle has not been started. spent
 	// means it was played and then deleted: the record is a tombstone, and
@@ -84,14 +87,13 @@ func (m *dailyScreen) reload(s store.Store, d daily.Day) {
 	if err != nil {
 		m.err = err
 	}
-	present := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		present[id] = true
-	}
-
 	for _, n := range words.Lengths {
-		row := dailyRow{length: n, id: daily.ID(d, n)}
-		if present[row.id] {
+		id := daily.ID(d, n)
+		row := dailyRow{length: n, id: id, code: game.Code(id)}
+		// IDs comes back ascending, so each of the day's three is a binary
+		// search: this used to build a set of every record on disk to ask
+		// about three of them.
+		if store.HasID(ids, row.id) {
 			g, err := s.Load(row.id)
 			switch {
 			case err == nil:
@@ -206,7 +208,7 @@ func (m *dailyScreen) view(h *hitMap) string {
 	heading := st.muted.Render(when)
 
 	if m.err != nil {
-		return lipgloss.JoinVertical(lipgloss.Center, heading, "",
+		return joinVerticalCentre(heading, "",
 			st.err.Render(safeText(fmt.Sprintf("could not read puzzles: %v", m.err))))
 	}
 
@@ -227,7 +229,7 @@ func (m *dailyScreen) view(h *hitMap) string {
 	if m.copyRequested {
 		sections = append(sections, "", st.muted.Render("copy requested"))
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+	return joinVerticalCentre(sections...)
 }
 
 // renderTrio is the day as one event: how many of its modes are done, and — once
@@ -317,7 +319,7 @@ func (row dailyRow) shareAttempts() string {
 func (m *dailyScreen) renderRow(row dailyRow, selected bool) string {
 	statusText, statusColor := row.describe()
 
-	left := fmt.Sprintf("#%s %-10s ", game.Code(row.id), fmt.Sprintf("%d letters", row.length))
+	left := fmt.Sprintf("#%s %-10s ", row.code, fmt.Sprintf("%d letters", row.length))
 	status := fmt.Sprintf("%-14s", statusText)
 
 	rowStyle := st.muted

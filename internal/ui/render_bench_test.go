@@ -143,3 +143,75 @@ func benchHistory(b *testing.B, n int) []*game.Game {
 	}
 	return out
 }
+
+// benchScreenModel is a model at the menu with a measured terminal, for the
+// screens whose bodies are worth timing. It is the same setup the board
+// benchmark uses, without a puzzle opened.
+func benchScreenModel(b *testing.B) *Model {
+	b.Helper()
+	s, err := store.NewJSON(b.TempDir())
+	if err != nil {
+		b.Fatal(err)
+	}
+	m := New(s, nil, Options{Motion: motionOffName})
+	m.screen = screenMenu
+	m.Update(tea.WindowSizeMsg{Width: testWidth, Height: testHeight})
+	return m
+}
+
+// BenchmarkListFrame renders the browse list over a full window of rows. Every
+// row is three styled segments, so it is the text-heavy screen's cost.
+func BenchmarkListFrame(b *testing.B) {
+	m := benchScreenModel(b)
+	m.list.adoptGames(benchHistory(b, 500), nil)
+	m.screen = screenList
+	m.View()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.View()
+	}
+}
+
+// BenchmarkCalendarFrame renders the year: a square for every day of the range,
+// the widest body the app draws.
+func BenchmarkCalendarFrame(b *testing.B) {
+	m := benchScreenModel(b)
+	m.calendar.reload(benchHistory(b, 500), m.day, time.Local)
+	m.screen = screenCalendar
+	m.View()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.View()
+	}
+}
+
+// BenchmarkThemesFrame renders the picker: a list of theme rows, the tile and
+// keycap preview, and the note box.
+func BenchmarkThemesFrame(b *testing.B) {
+	m := benchScreenModel(b)
+	m.themes.reload(m.themeLib, m.themeName)
+	m.screen = screenThemes
+	m.View()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.View()
+	}
+}
+
+// BenchmarkSettingsFrame renders the appearance page, the tallest of the
+// settings-family screens and the one with the most rows to lay out.
+func BenchmarkSettingsFrame(b *testing.B) {
+	m := benchScreenModel(b)
+	m.settings.reload(m.settingsOf())
+	m.settings.openAppearance()
+	m.screen = screenSettings
+	m.View()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		m.View()
+	}
+}

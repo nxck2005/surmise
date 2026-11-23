@@ -69,8 +69,8 @@ func (m *trendsScreen) view(h *hitMap) string {
 		arrow(action{kind: actTrendsNext}, st.glyph.ValueNext, m.length != words.Lengths[len(words.Lengths)-1])
 
 	if m.trend.AllTime.Games == 0 {
-		return block(lipgloss.JoinVertical(lipgloss.Left, modeLine, "",
-			st.muted.Render(fmt.Sprintf("no finished %d-letter games yet", m.length))))
+		return joinVerticalLeft(modeLine, "",
+			st.muted.Render(fmt.Sprintf("no finished %d-letter games yet", m.length)))
 	}
 
 	row := func(label, recent, all string) string {
@@ -118,7 +118,8 @@ func (m *trendsScreen) view(h *hitMap) string {
 			sections = append(sections, "", extra)
 		}
 	}
-	return block(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	// JoinVertical(Left) squares the block itself, so no second pass is owed.
+	return joinVerticalLeft(sections...)
 }
 
 func (m *trendsScreen) help(h *hitMap) string {

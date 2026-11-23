@@ -19,7 +19,7 @@ import (
 	"io/fs"
 	"math/rand/v2"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -68,7 +68,7 @@ func load() {
 		}
 		loaded = append(loaded, b)
 	}
-	sort.Slice(loaded, func(i, j int) bool { return loaded[i].Name < loaded[j].Name })
+	slices.SortFunc(loaded, func(a, b Banner) int { return strings.Compare(a.Name, b.Name) })
 }
 
 func read(file string) (Banner, error) {

@@ -485,15 +485,15 @@ func TestCalendarShowsTheSelectedDay(t *testing.T) {
 	view := m.calendar.view(nil)
 	l := m.calendar.layout()
 	peak := 3 // the fixture's busiest day in the last year
-	ramp := calendarRamp()
+	cal := st.calendarRamp()
 	level := calendarLevel(m.calendar.tally(m.calendar.cursor).Games, peak)
-	picked := lipgloss.NewStyle().Foreground(ramp[level]).Reverse(true).Render(l.glyph)
+	picked := lipgloss.NewStyle().Foreground(cal.ramp[level]).Reverse(true).Render(l.glyph)
 	if n := strings.Count(view, picked); n != 1 {
 		t.Errorf("the reversed square appears %d times, want once", n)
 	}
 	m.calendar.move(-1)
 	level = calendarLevel(m.calendar.tally(m.calendar.cursor).Games, peak)
-	moved := lipgloss.NewStyle().Foreground(ramp[level]).Reverse(true).Render(l.glyph)
+	moved := lipgloss.NewStyle().Foreground(cal.ramp[level]).Reverse(true).Render(l.glyph)
 	if n := strings.Count(m.calendar.view(nil), moved); n != 1 {
 		t.Errorf("after moving, the reversed square appears %d times, want once", n)
 	}

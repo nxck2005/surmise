@@ -182,11 +182,35 @@ func standingsCompactLine(r *roomSession, p online.PlayerView) string {
 func standingsRow(marks []game.Mark) []string {
 	cells := make([]string, len(marks))
 	for i, m := range marks {
-		cells[i] = lipgloss.NewStyle().
-			Foreground(tileStyle(m).GetBackground()).
-			Render("■")
+		cells[i] = st.standingCell(m)
 	}
 	return cells
+}
+
+// standingCell is the standings' square for one mark, drawn once per style set.
+// It is the board's own tile colour used as the character's foreground, so the
+// column and the board cannot disagree about what a mark looks like — and a
+// room redraws one per mark of every other player's latest row on every frame.
+func (s *styles) standingCell(m game.Mark) string {
+	if !s.standingReady {
+		for _, mark := range []game.Mark{game.Absent, game.Present, game.Correct} {
+			style := s.tileAbsent
+			switch mark {
+			case game.Present:
+				style = s.tilePresent
+			case game.Correct:
+				style = s.tileCorrect
+			}
+			s.standing[mark] = lipgloss.NewStyle().
+				Foreground(style.GetBackground()).
+				Render("■")
+		}
+		s.standingReady = true
+	}
+	if m < game.Absent || m > game.Correct {
+		m = game.Absent
+	}
+	return s.standing[m]
 }
 
 // standingsState is the column's final cell, padded to 4 by the caller

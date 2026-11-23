@@ -45,12 +45,7 @@ func (a *App) exists(id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for _, have := range ids {
-		if have == id {
-			return true, nil
-		}
-	}
-	return false, nil
+	return store.HasID(ids, id), nil
 }
 
 // The states a day's board can be in, as DailyRow.State names them.
@@ -117,14 +112,10 @@ func (a *App) DailyView(day daily.Day) (DailyView, error) {
 	if err != nil {
 		return v, err
 	}
-	present := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		present[id] = true
-	}
 	for _, n := range words.Lengths {
 		id := daily.ID(day, n)
 		row := DailyRow{Length: n, ID: id, Code: game.Code(id), State: DailyNew, MaxAttempts: n + 1, Marks: [][]string{}}
-		if present[id] {
+		if store.HasID(ids, id) {
 			g, err := a.store.Load(id)
 			switch {
 			case err == nil && g.Deleted:

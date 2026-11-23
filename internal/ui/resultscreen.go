@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/game"
@@ -87,7 +86,7 @@ func (m *resultScreen) view(_ *hitMap) string {
 	case m.copyRequested:
 		sections = append(sections, "", st.muted.Render("copy requested"))
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+	return joinVerticalCentre(sections...)
 }
 
 func (m *resultScreen) help(h *hitMap) string {

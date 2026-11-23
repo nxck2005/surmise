@@ -104,6 +104,84 @@ type styles struct {
 	// legendText.
 	panel  *panelRule
 	legend legendCache
+
+	// cells caches the rendered atoms a board and keyboard are made of: one
+	// letter on one tile, one keycap, one empty slot. Each is a function of the
+	// style set and its text, height and tile-outline flag, and nothing else,
+	// and a frame draws seventy or more of them — through lipgloss's Render,
+	// which costs about two microseconds and thirty allocations apiece. The
+	// cache is keyed by the face, the height and the text, and is built lazily:
+	// a theme is not paid for until a cell of it is drawn.
+	//
+	// It lives on the style set so setTheme invalidates it with the styles it
+	// was rendered from. Meaningless after a theme change, it goes with the
+	// styles.
+	cells map[cellKey]string
+
+	// emptyFrame is the box colour for an unscored tile when tile outlines are
+	// on. It used to be built afresh for every empty row of every frame; it is
+	// a function of the palette, so it belongs here. tileRejected is the typed
+	// tile flashing a refusal, derived from tileActive after the theme's
+	// overrides have been applied.
+	emptyFrame   lipgloss.Style
+	tileRejected lipgloss.Style
+	// statValue is the profile's figure style: the accent, bold. Forcing bold
+	// is deliberate (it always has been), so it is built after the overrides
+	// exactly as the call site used to.
+	statValue lipgloss.Style
+
+	// hist caches the histogram's ramp and its rendered whole cells. A bar is
+	// up to 24 styled cells and the profile draws one per attempt count, so
+	// rendering them per frame cost more than the rest of the screen together.
+	hist histCache
+
+	// cal caches the calendar's five shades and the squares drawn in them. The
+	// year is up to 378 squares, each drawn through one of ten styles.
+	cal calCache
+
+	// preview is the theme picker's tile-and-keycap sample, a pure function of
+	// this style set. See renderThemePreview.
+	preview      string
+	previewReady bool
+
+	// shimmer is the splash sweep's material: the ramp and each art rune
+	// already rendered in each of its colours. See styles.shimmerCell.
+	shimmer shimmerCache
+
+	// standing is a live room's standings square in each of the three marks:
+	// the tile's own background as the character's colour. A room draws one per
+	// mark of every other player's latest row, every frame.
+	standing      [3]string
+	standingReady bool
+}
+
+// shimmerCache is the splash's sweep for one style set. A frame of the sweep
+// draws the whole art, one cell at a time, and each cell's colour depends only
+// on its column and the ramp; none of it changes while the style set is live.
+type shimmerCache struct {
+	ramp  []color.Color
+	cells map[shimmerKey]string
+}
+
+type shimmerKey struct {
+	step int
+	r    rune
+}
+
+// calCache is the calendar's material for one style set.
+type calCache struct {
+	ramp   [5]color.Color
+	plain  [5]string
+	picked [5]string
+	ready  bool
+}
+
+// histCache is the profile histogram's material for one style set: the colour
+// ramp and the glyph already rendered in each of its colours.
+type histCache struct {
+	ramp  []color.Color
+	whole [distributionWidth]string
+	ready bool
 }
 
 // panelRule is the panel's border material for one content width: every cell of
@@ -227,6 +305,13 @@ func newStyles(t *theme.Theme) *styles {
 			*target = fg
 		}
 	}
+
+	// Derived cell styles, built after the overrides so a theme that recolours
+	// tile.active or tile.empty moves them with it. Both used to be constructed
+	// afresh on every frame that drew a typed or empty row.
+	s.emptyFrame = lipgloss.NewStyle().Foreground(s.tileEmpty.GetForeground())
+	s.tileRejected = s.tileActive.Foreground(s.err.GetForeground())
+	s.statValue = s.accent.Bold(true)
 	return s
 }
 
@@ -337,20 +422,46 @@ func renderHelp(h *hitMap, items ...helpItem) string {
 // Safe on marked content: hitMap's markers are zero-width, so lipgloss.Width
 // ignores them and the padding lands where it would have anyway
 // (TestMarkersDoNotAffectLayout).
+//
+// Each line is measured once. Measuring is the expensive half — lipgloss.Width
+// runs the ANSI parser and a grapheme iterator over the line — and the old
+// version measured every line twice, once to find the widest and again to pad
+// it. A block that is already square is returned as it is, which is the common
+// case for anything that has just come out of JoinVertical.
 func block(s string) string {
 	lines := strings.Split(s, "\n")
+	widths := make([]int, len(lines))
 	width := 0
-	for _, l := range lines {
-		if w := lipgloss.Width(l); w > width {
+	for i, l := range lines {
+		w := lipgloss.Width(l)
+		widths[i] = w
+		if w > width {
 			width = w
 		}
 	}
-	for i, l := range lines {
-		if pad := width - lipgloss.Width(l); pad > 0 {
-			lines[i] = l + strings.Repeat(" ", pad)
+	square := true
+	for _, w := range widths {
+		if w != width {
+			square = false
+			break
 		}
 	}
-	return strings.Join(lines, "\n")
+	if square {
+		return s
+	}
+
+	var b strings.Builder
+	b.Grow(len(s) + len(lines)*(width+1))
+	for i, l := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(l)
+		if pad := width - widths[i]; pad > 0 {
+			b.WriteString(strings.Repeat(" ", pad))
+		}
+	}
+	return b.String()
 }
 
 // scrollCounter is the "3–14 of 27" line under a scrolling list, with its two
@@ -455,21 +566,196 @@ func panelWidth(content, room int) int {
 	return content
 }
 
-// widen centres a block of equal-width lines in a wider one, padding each line
-// with spaces. It pads rather than restyles, so the hit map's zero-width
-// markers stay exactly where they were placed relative to their text.
-func widen(s string, width int) string {
+// centreLine centres one single-line string in width cells, splitting an odd
+// gap the way lipgloss's Align(Center) does: the extra column goes right.
+//
+// It is the one-line case of lipgloss.NewStyle().Width(width).Align(Center)
+// .Render(s), which re-wraps the whole string — parsing every escape code and
+// grapheme in it — just to put spaces around it. The keyboard centres three
+// already-rendered rows a frame, and each of those rows is a full line of
+// styled keycaps; this pads them without touching what is inside.
+//
+// s must be one line. A multi-line string would need each line centred against
+// the block's widest, which is what JoinVertical does and why callers use that
+// for blocks.
+func centreLine(s string, width int) string {
 	w := lipgloss.Width(s)
-	if width <= w {
+	gap := width - w
+	if gap <= 0 {
 		return s
 	}
-	left := (width - w) / 2
-	l, r := strings.Repeat(" ", left), strings.Repeat(" ", width-w-left)
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = l + line + strings.Repeat(" ", w-lipgloss.Width(line)) + r
+	left := gap / 2
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", gap-left)
+}
+
+// padLine right-pads one line to width cells, the one-line case of
+// lipgloss.NewStyle().Width(width).Render(s) with its default left alignment.
+// It is for a row of labels that are known to fit; a line wider than width is
+// returned whole rather than wrapped, so it is not a general replacement.
+func padLine(s string, width int) string {
+	if w := lipgloss.Width(s); w < width {
+		return s + strings.Repeat(" ", width-w)
 	}
-	return strings.Join(lines, "\n")
+	return s
+}
+
+// joinVerticalCentre and joinVerticalLeft are lipgloss.JoinVertical's two
+// alignments, measuring each line once instead of twice and without its
+// per-line padding of blank lines through an extra style.
+//
+// Both produce exactly the bytes lipgloss does for content this UI writes (no
+// tabs and no CRLF; anything containing either falls back to lipgloss so the
+// helper stays total). JoinVertical measures every line twice — once in
+// getLines and once to compute the padding — and it is called on whole screens,
+// so the second pass is worth not paying. TestJoinVerticalMatchesLipgloss holds
+// the two to the same answer, including the odd-column rule: lipgloss's Join
+// puts the extra space on the left, unlike Align(Center), which puts it on the
+// right.
+func joinVerticalCentre(parts ...string) string {
+	return joinVertical(parts, true)
+}
+
+func joinVerticalLeft(parts ...string) string {
+	return joinVertical(parts, false)
+}
+
+func joinVertical(parts []string, centre bool) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(parts) == 1 {
+		return parts[0]
+	}
+
+	var (
+		lines  []string
+		widths []int
+		maxW   int
+	)
+	for _, part := range parts {
+		if strings.IndexByte(part, '\t') >= 0 || strings.Contains(part, "\r\n") {
+			if centre {
+				return lipgloss.JoinVertical(lipgloss.Center, parts...)
+			}
+			return lipgloss.JoinVertical(lipgloss.Left, parts...)
+		}
+		for line := range strings.SplitSeq(part, "\n") {
+			w := lipgloss.Width(line)
+			lines = append(lines, line)
+			widths = append(widths, w)
+			if w > maxW {
+				maxW = w
+			}
+		}
+	}
+
+	var b strings.Builder
+	size := len(lines) - 1
+	for i := range lines {
+		size += len(lines[i])
+		if pad := maxW - widths[i]; pad > 0 {
+			size += pad
+		}
+	}
+	b.Grow(size)
+	for i, line := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		pad := maxW - widths[i]
+		if pad <= 0 {
+			b.WriteString(line)
+			continue
+		}
+		if centre {
+			// JoinVertical's Center: round(w/2) on the left, the rest right.
+			left := (pad + 1) / 2
+			b.WriteString(strings.Repeat(" ", left))
+			b.WriteString(line)
+			b.WriteString(strings.Repeat(" ", pad-left))
+			continue
+		}
+		b.WriteString(line)
+		b.WriteString(strings.Repeat(" ", pad))
+	}
+	return b.String()
+}
+
+// frameContent joins the body and the help bar the way joinVerticalCentre +
+// frameLines did, in one measurement pass, and returns the finished lines at
+// the panel's content width.
+//
+// The frame is what every screen ends in, and the two joins used to measure
+// every line of it twice: once to centre the body against the help bar, and
+// once more to centre the result in the panel's width. The roundings are the
+// two lipgloss steps applied in order (JoinVertical's extra column goes left,
+// widen's extra column goes right of the enlarged block), so the bytes are the
+// same; there is simply one fewer walk over the frame.
+func frameContent(body, help string, room int) ([]string, int) {
+	parts := [2]string{body, help}
+	var (
+		lines  []string
+		widths []int
+		maxW   int
+	)
+	for _, part := range parts {
+		if strings.IndexByte(part, '\t') >= 0 || strings.Contains(part, "\r\n") {
+			joined := joinVerticalCentre(body, help)
+			return frameLines(joined, room)
+		}
+		for line := range strings.SplitSeq(part, "\n") {
+			w := lipgloss.Width(line)
+			lines = append(lines, line)
+			widths = append(widths, w)
+			if w > maxW {
+				maxW = w
+			}
+		}
+	}
+
+	target := panelWidth(maxW, room)
+	panelLeft := (target - maxW) / 2
+	panelRight := target - maxW - panelLeft
+	for i, line := range lines {
+		gap := maxW - widths[i]
+		// JoinVertical's Centre: the odd column goes left.
+		left := (gap + 1) / 2
+		right := gap - left
+		lines[i] = strings.Repeat(" ", panelLeft+left) + line +
+			strings.Repeat(" ", right+panelRight)
+	}
+	return lines, target
+}
+
+// frameLines squares the frame's lines and centres the block at the panel's
+// width: every line is padded to the widest, then the block is centred in the
+// step panelWidth chooses. It returns the lines and the width they share.
+//
+// It exists so the frame is measured once. The old path measured the composed
+// frame to choose the width, measured it again in widen, and a third time in
+// the panel's padding, then split the joined string apart again. The frame is
+// the widest thing the app draws — the calendar's year is a whole screen of
+// squares — so those passes are the largest single cost left in a render.
+//
+// room is bodyWidth's answer: zero is unmeasured, which is unbounded.
+func frameLines(s string, room int) ([]string, int) {
+	lines := strings.Split(s, "\n")
+	widths := make([]int, len(lines))
+	w := 0
+	for i, line := range lines {
+		widths[i] = lipgloss.Width(line)
+		if widths[i] > w {
+			w = widths[i]
+		}
+	}
+	target := panelWidth(w, room)
+	left := (target - w) / 2
+	right := target - w - left
+	l, r := strings.Repeat(" ", left), strings.Repeat(" ", right)
+	for i, line := range lines {
+		lines[i] = l + line + strings.Repeat(" ", w-widths[i]) + r
+	}
+	return lines, target
 }
 
 // bodyWidth is bodyBudget's other axis: how many columns a screen's body
@@ -494,29 +780,128 @@ func bodyWidth(width int) int {
 // per-cell styling are a function of the width and the palette, and the panel is
 // on every frame. See panelRuleFor.
 func renderPanel(title, status, corner, content string) string {
-	lines, width := panelBody(content)
+	if hasTabsOrCRLF(content) {
+		lines, width := lipglossPanelBody(content)
+		return drawPanel(title, status, corner, lines, width, st.panelRuleFor(width))
+	}
+	lines, contentWidth := squareLines(content)
+	lines, width := panelBodyLines(lines, contentWidth)
 	return drawPanel(title, status, corner, lines, width, st.panelRuleFor(width))
 }
 
-// renderPanelLit draws the same frame in a colour that changes from frame to
-// frame — the win accent easing across the border — so it cannot use the cache
-// and renders its rule material fresh. border is the style the rule is drawn in;
-// callers with nothing to say pass st.border to renderPanel instead.
+// renderPanelLit is renderPanel's win-accent twin: the frame is drawn in a
+// colour that changes from frame to frame, so its rule material cannot be
+// cached. Callers with nothing to say pass st.border to renderPanel instead.
 func renderPanelLit(title, status, corner, content string, border lipgloss.Style) string {
-	lines, width := panelBody(content)
-	return drawPanel(title, status, corner, lines, width, st.litPanelRule(width, border, st.accent.GetForeground()))
+	if hasTabsOrCRLF(content) {
+		lines, width := lipglossPanelBody(content)
+		return drawPanel(title, status, corner, lines, width,
+			st.litPanelRule(width, border, st.accent.GetForeground()))
+	}
+	lines, contentWidth := squareLines(content)
+	lines, width := panelBodyLines(lines, contentWidth)
+	return drawPanel(title, status, corner, lines, width,
+		st.litPanelRule(width, border, st.accent.GetForeground()))
 }
 
-// panelBody pads the content and squares it off, and reports the width the rule
-// has to span. The padding and squaring are the part that genuinely depends on
-// the content, so they stay per-frame.
-func panelBody(content string) ([]string, int) {
+// hasTabsOrCRLF reports content the hand-written padding does not interpret.
+// Tabs are widened and CRLF is folded by lipgloss's reader, and nothing this UI
+// writes contains either; a direct caller (a test, a future screen) that does
+// gets the library's own answer rather than a near miss.
+func hasTabsOrCRLF(s string) bool {
+	return strings.IndexByte(s, '\t') >= 0 || strings.Contains(s, "\r\n")
+}
+
+// lipglossPanelBody is the padding path renderPanel used before the fast one:
+// a style's Padding, which also squares the lines. It is kept for content that
+// needs the library's own interpretation of whitespace.
+func lipglossPanelBody(content string) ([]string, int) {
 	inner := lipgloss.NewStyle().
 		Padding(st.metric.PanelPadY, st.metric.PanelPadX).
 		Render(content)
-	// Squaring the content off gives the border a straight right edge to follow.
-	lines := strings.Split(block(inner), "\n")
+	lines := strings.Split(inner, "\n")
 	return lines, lipgloss.Width(lines[0])
+}
+
+// renderPanelLines draws the frame around lines that have already been squared
+// and centred to contentWidth cells — which is what frameLines produces for the
+// composed frame. It is the frame's own path: the panel is handed the
+// measurement rather than repeating it.
+func renderPanelLines(title, status, corner string, lines []string, contentWidth int) string {
+	lines, width := panelBodyLines(lines, contentWidth)
+	return drawPanel(title, status, corner, lines, width, st.panelRuleFor(width))
+}
+
+// renderPanelLitLines is renderPanelLines for the accent. See renderPanelLit.
+func renderPanelLitLines(title, status, corner string, lines []string, contentWidth int, border lipgloss.Style) string {
+	lines, width := panelBodyLines(lines, contentWidth)
+	return drawPanel(title, status, corner, lines, width,
+		st.litPanelRule(width, border, st.accent.GetForeground()))
+}
+
+// squareLines splits content and pads every line to the widest, reporting the
+// width they share. It is block's work without the join, for a caller that is
+// about to handle the lines one at a time anyway.
+func squareLines(content string) ([]string, int) {
+	lines := strings.Split(content, "\n")
+	widths := make([]int, len(lines))
+	width := 0
+	for i, line := range lines {
+		widths[i] = lipgloss.Width(line)
+		if widths[i] > width {
+			width = widths[i]
+		}
+	}
+	square := true
+	for _, w := range widths {
+		if w != width {
+			square = false
+			break
+		}
+	}
+	if square {
+		return lines, width
+	}
+	for i := range lines {
+		if pad := width - widths[i]; pad > 0 {
+			lines[i] += strings.Repeat(" ", pad)
+		}
+	}
+	return lines, width
+}
+
+// panelBodyLines pads square content lines for the panel and reports the width
+// the rule has to span. Every input line must already be contentWidth cells
+// wide; squareLines and frameLines are the two ways to guarantee it.
+//
+// The padding is written here rather than through a lipgloss style because a
+// style's Render re-parses every line of the content — ANSI state machine,
+// grapheme widths, wrapping and alignment — to put a few spaces around it.
+// The frame is padded once per message, and on a wide screen (the calendar's
+// year, a long profile) that pass cost more than the rest of the frame. The
+// output is the bytes Style.Padding would have produced: `padX` spaces on each
+// side of every line and `padY` blank lines above and below, themselves as wide
+// as the block.
+//
+// TestPanelBodyMatchesLipgloss holds the two to the same answer, so a change in
+// lipgloss's padding shows up as a failing test rather than as a moved frame.
+func panelBodyLines(lines []string, contentWidth int) ([]string, int) {
+	padX, padY := st.metric.PanelPadX, st.metric.PanelPadY
+	width := contentWidth + 2*padX
+
+	out := make([]string, 0, len(lines)+2*padY)
+	blank := strings.Repeat(" ", width)
+	for range padY {
+		out = append(out, blank)
+	}
+	left := strings.Repeat(" ", padX)
+	for _, line := range lines {
+		out = append(out, left+line+left)
+	}
+	for range padY {
+		out = append(out, blank)
+	}
+	return out, width
 }
 
 // panelRuleFor returns the border material for a content width, rendering it
@@ -584,26 +969,25 @@ func drawPanel(title, status, corner string, lines []string, width int, rule *pa
 		fill = 0
 	}
 
-	var top strings.Builder
-	top.WriteString(rule.top[0])
-	top.WriteString(rule.top[1])
-	top.WriteString(st.panelTitle.Render(label))
+	var sb strings.Builder
+	sb.Grow(width*(len(lines)+2) + len(title) + len(status) + len(corner))
+	sb.WriteString(rule.top[0])
+	sb.WriteString(rule.top[1])
+	sb.WriteString(st.panelTitle.Render(label))
 	// Where the fill starts, in rule coordinates: the two runes above plus the
 	// label. Colouring each rune by its real column is what makes the gradient
 	// continue through the inlays instead of restarting after them.
 	start := 2 + lipgloss.Width(label)
 	for i := range fill {
-		top.WriteString(rule.top[start+i])
+		sb.WriteString(rule.top[start+i])
 	}
 	// Muted rather than an element of its own: the status is a label on the
 	// frame, and a new themeable name would cost a theme.Elements entry and a
 	// docs/THEMES.md row for something every theme already colours.
-	top.WriteString(st.muted.Render(status))
-	top.WriteString(corner)
-	top.WriteString(rule.top[width+1])
+	sb.WriteString(st.muted.Render(status))
+	sb.WriteString(corner)
+	sb.WriteString(rule.top[width+1])
 
-	var sb strings.Builder
-	sb.WriteString(top.String())
 	sb.WriteByte('\n')
 	for _, l := range lines {
 		sb.WriteString(rule.left)

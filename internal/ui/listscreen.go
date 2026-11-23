@@ -101,6 +101,15 @@ const (
 var (
 	filterKinds    = []puzzleKind{kindAll, kindRandom, kindDaily, kindChallenge, kindCustom, kindRoom}
 	filterStatuses = []statusFilter{statusAll, statusPlaying, statusWon, statusLost}
+	// The bar's labels, built once: the bar is drawn on every frame of a list
+	// that has it open, and it used to allocate both maps each time.
+	filterKindLabels = map[puzzleKind]string{
+		kindAll: "all", kindRandom: "random", kindDaily: "daily",
+		kindChallenge: "challenge", kindCustom: "custom", kindRoom: "room",
+	}
+	filterStatusLabels = map[statusFilter]string{
+		statusAll: "all", statusPlaying: "in play", statusWon: "won", statusLost: "lost",
+	}
 )
 
 // listScreen browses saved puzzles. Unfinished ones can be resumed, finished
@@ -240,6 +249,24 @@ func (m *listScreen) rows() int {
 // list, no filter, cursor at the top.
 func (m *listScreen) reload(s store.Store) {
 	m.all, m.err = s.List()
+	m.reset()
+}
+
+// adoptGames is reload from a snapshot the caller already holds: the UI's
+// shared history. It is the path the menu and the calendar come through, and
+// it turns opening the list into the summaries alone rather than a second
+// decode of every record.
+func (m *listScreen) adoptGames(games []*game.Game, err error) {
+	if err != nil {
+		m.all, m.err = nil, err
+	} else {
+		m.all, m.err = store.Summaries(games), nil
+	}
+	m.reset()
+}
+
+// reset puts the screen back to the whole list, cursor at the top.
+func (m *listScreen) reset() {
 	m.filtersOpen = false
 	m.filter = listFilter{}
 	m.day = daily.Day{}
@@ -392,13 +419,6 @@ func (m *listScreen) filterBar(h *hitMap) string {
 	if m.filter.length != 0 {
 		mode = fmt.Sprint(m.filter.length)
 	}
-	kinds := map[puzzleKind]string{
-		kindAll: "all", kindRandom: "random", kindDaily: "daily",
-		kindChallenge: "challenge", kindCustom: "custom", kindRoom: "room",
-	}
-	statuses := map[statusFilter]string{
-		statusAll: "all", statusPlaying: "in play", statusWon: "won", statusLost: "lost",
-	}
 	field := func(i int, key, name, value string) string {
 		a := action{kind: actListFilter, index: i}
 		label, val := st.muted, st.text
@@ -409,8 +429,8 @@ func (m *listScreen) filterBar(h *hitMap) string {
 	}
 	sep := st.muted.Render(" · ")
 	return field(filterMode, "m", "mode", mode) + sep +
-		field(filterKind, "t", "kind", kinds[m.filter.kind]) + sep +
-		field(filterStatus, "s", "status", statuses[m.filter.status])
+		field(filterKind, "t", "kind", filterKindLabels[m.filter.kind]) + sep +
+		field(filterStatus, "s", "status", filterStatusLabels[m.filter.status])
 }
 
 func (m *listScreen) view(h *hitMap) string {
@@ -469,7 +489,7 @@ func (m *listScreen) deletePrompt(h *hitMap) string {
 	// A daily is the one delete with a consequence past the record itself: its
 	// id is derived, so the day cannot be played again once its tombstone is
 	// there. Say so while there is still a chance to answer no.
-	question := fmt.Sprintf("delete #%s? ", game.Code(s.ID))
+	question := fmt.Sprintf("delete #%s? ", summaryCode(s))
 	if s.Daily != "" {
 		question = fmt.Sprintf("delete the %s daily? it cannot be played again ", s.Daily)
 	} else if s.Challenge {
@@ -502,7 +522,7 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 	case kindRoom:
 		what = "room"
 	}
-	left := fmt.Sprintf("#%s %-16s ", game.Code(s.ID), what)
+	left := fmt.Sprintf("#%s %-16s ", summaryCode(s), what)
 	status := fmt.Sprintf("%-14s", statusText)
 	right := " " + formatDuration(s.Elapsed)
 
@@ -517,6 +537,16 @@ func (m *listScreen) renderRow(s store.Summary, selected bool) string {
 		rowStyle.Render(left) +
 		lipgloss.NewStyle().Foreground(statusColor).Render(status) +
 		rowStyle.Render(right)
+}
+
+// summaryCode is the puzzle's display code, derived by the store when the
+// summary was built. The fallback is for a summary a test built by hand; no
+// store path leaves it empty.
+func summaryCode(s store.Summary) string {
+	if s.Code != "" {
+		return s.Code
+	}
+	return game.Code(s.ID)
 }
 
 func describeStatus(s store.Summary) (text string, c color.Color) {

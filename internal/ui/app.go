@@ -1044,7 +1044,9 @@ func (m *Model) history() ([]*game.Game, error) {
 // The floor is what an install whose history predates the counter shows, and it
 // is written back the first time it wins, which is the whole of the migration.
 func (m *Model) openProfile(s store.Settings) {
-	games, err := m.store.All()
+	// The shared history snapshot: opening the profile from the menu used to
+	// decode every record a second time, moments after the menu had done it.
+	games, err := m.history()
 	if err != nil {
 		m.err = err
 		return
@@ -1087,9 +1089,23 @@ func (m *Model) openCalendarDay() tea.Cmd {
 	if m.calendar.tally(m.calendar.cursor).Games == 0 {
 		return nil
 	}
-	m.list.openDay(m.store, m.calendar.cursor, m.zone)
+	// The calendar has just read the history for its tallies, so the day's
+	// list is built from that same snapshot rather than decoding it again.
+	games, err := m.history()
+	m.list.adoptGames(games, err)
+	m.list.day, m.list.zone = m.calendar.cursor, m.zone
+	m.list.apply()
 	m.screen = screenList
 	return nil
+}
+
+// openList shows the whole puzzle list from the shared history snapshot. The
+// store's List is All followed by Summaries; the menu has usually just paid
+// for All, so this spends only the summaries.
+func (m *Model) openList() {
+	games, err := m.history()
+	m.list.adoptGames(games, err)
+	m.screen = screenList
 }
 
 // openTrends raises the trends screen on the mode a new board would get.
@@ -2318,8 +2334,7 @@ func (m *Model) applyChoice(c choice) tea.Cmd {
 		m.screen = screenSprint
 
 	case choiceList:
-		m.list.reload(m.store)
-		m.screen = screenList
+		m.openList()
 
 	case choiceProfile:
 		m.openProfile(m.settingsOf())
@@ -2625,12 +2640,7 @@ func dailySpent(s store.Store, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for _, have := range ids {
-		if have == id {
-			return true, nil
-		}
-	}
-	return false, nil
+	return store.HasID(ids, id), nil
 }
 
 func (m *Model) updateList(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -2903,6 +2913,10 @@ func (m *Model) commitSettings(row int) tea.Cmd {
 			m.closeRoom()
 			return nil
 		}
+		// Ask for the menu's count again as soon as it is next shown: the
+		// freshness window is about a consent that has not moved, and this one
+		// has.
+		m.menuCountAt = time.Time{}
 		return m.statusCmd()
 	}
 	return nil
@@ -3028,8 +3042,15 @@ func (m *Model) compose() tea.View {
 	h := &hitMap{hover: m.hover}
 
 	// Composition finished, so the markers left by mark() now sit at their
-	// final coordinates: record them and strip them back out.
-	v.Content = h.scan(m.frame(h))
+	// final coordinates: record them and strip them back out. The panel is
+	// placed first: a marker's position is a terminal cell, and the panel's own
+	// coordinates are relative to it.
+	panel, pw, ph := m.framePanel(h)
+	placed := panel
+	if m.width > 0 && m.height > 0 {
+		placed = placeCentreKnown(m.width, m.height, panel, pw, ph)
+	}
+	v.Content = h.scan(placed)
 	// A frame taller than the terminal is not shown from the top, so the
 	// coordinates just recorded are not the ones clicks arrive in. See clip.
 	// An unmeasured height counts as unbounded, as it does everywhere else.
@@ -3049,28 +3070,39 @@ const (
 	winRampOut = 0.35
 )
 
-// frame composes the whole screen. It is separate from View so a test can
-// compose the same screen with no hit map and prove that marking changes not one
-// cell of the result (TestMarkersDoNotAffectLayout).
+// frame composes the whole screen, placed in the terminal. It is separate from
+// View so a test can compose the same screen with no hit map and prove that
+// marking changes not one cell of the result (TestMarkersDoNotAffectLayout).
 func (m *Model) frame(h *hitMap) string {
+	panel, width, height := m.framePanel(h)
+	if m.width > 0 && m.height > 0 {
+		return placeCentreKnown(m.width, m.height, panel, width, height)
+	}
+	return panel
+}
+
+// framePanel composes the panel itself and reports the size it came out at, so
+// the caller can place it without measuring it again: every line of a panel is
+// the same width by construction (drawPanel draws a rule as wide as the longest
+// content line and a side glyph either side of each line).
+func (m *Model) framePanel(h *hitMap) (panel string, width, height int) {
 	body, help := m.activeScreen(h)
 	if m.err != nil {
 		// Centred, and the body squared off first: joined left, an error wider
 		// than the screen it is reporting on dragged that screen to the left.
-		body = lipgloss.JoinVertical(lipgloss.Center,
+		body = joinVerticalCentre(
 			block(body), "", st.err.Render(safeText(fmt.Sprintf("error: %v", m.err))))
 	} else if m.note != "" {
 		// A note is the softer line — the server's status message, or why an
 		// online part stopped — and is dismissed like an error. An error wins
 		// over a note.
-		body = lipgloss.JoinVertical(lipgloss.Center,
+		body = joinVerticalCentre(
 			block(body), "", st.muted.Render(safeText(m.note)))
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Center, body, help)
-	// Drawn at one of a few widths rather than hugging this screen's content,
-	// so moving between screens does not resize the frame (panelSteps).
-	content = widen(content, panelWidth(lipgloss.Width(content), bodyWidth(m.width)))
+	// Squared and centred at the panel's width once, then handed to the panel
+	// as lines: see frameContent for why the measurement does not repeat there.
+	lines, contentWidth := frameContent(body, help, bodyWidth(m.width))
 
 	// Box the content in a rounded, titled panel (btop-style) and centre that
 	// panel in the terminal. The border hugs the content, not the terminal
@@ -3089,20 +3121,71 @@ func (m *Model) frame(h *hitMap) string {
 	// ordinary frame is the same material every time and is cached, and only the
 	// accent pays to render its rule afresh.
 	title, status, corner := m.screenTitle(), m.screenStatus(), m.closeBox(h)
-	panel := ""
 	if p, winning := m.anim.winning(timeNow()); winning {
 		lit := blend(winSteps, st.border.GetForeground(), st.accent.GetForeground())
 		strength := min(p/winRampIn, (1-p)/winRampOut, 1)
 		border := st.border.Foreground(colorAt(lit, int(max(strength, 0)*float64(winSteps-1))))
-		panel = renderPanelLit(title, status, corner, content, border)
+		panel = renderPanelLitLines(title, status, corner, lines, contentWidth, border)
 	} else {
-		panel = renderPanel(title, status, corner, content)
+		panel = renderPanelLines(title, status, corner, lines, contentWidth)
 	}
-	if m.width > 0 && m.height > 0 {
-		return lipgloss.Place(m.width, m.height,
-			lipgloss.Center, lipgloss.Center, panel)
+	// drawPanel's rule and every content line are contentWidth+2*padX cells
+	// between the two side glyphs, and the two rules add a border row each.
+	return panel, contentWidth + 2 + 2*st.metric.PanelPadX, len(lines) + 2
+}
+
+// placeCentreKnown centres a block whose size the caller already knows in a
+// width×height cell. Every line of the block must be blockWidth cells wide;
+// the panel guarantees that by construction.
+//
+// It is lipgloss.Place(w, h, Center, Center, s) without that function's parse
+// of every line. Place measures the block once to find its widest line and then
+// measures every line again to pad it; the panel is the largest block the app
+// draws and this runs once per message, so both passes are worth not paying.
+//
+// The odd gaps follow lipgloss's own rule and are easy to get backwards: Place
+// puts the extra **right** column and the extra **bottom** row, unlike
+// Align(Center) (extra right) and JoinVertical's Centre (extra left). The
+// fallback exists so content this UI does not write — a tab or a CRLF in some
+// future string — is still placed by the library rather than by a near miss.
+func placeCentreKnown(width, height int, s string, blockWidth, blockHeight int) string {
+	if width <= blockWidth && height <= blockHeight {
+		return s
 	}
-	return panel
+	if strings.IndexByte(s, '\t') >= 0 || strings.Contains(s, "\r\n") {
+		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, s)
+	}
+
+	lines := strings.Split(s, "\n")
+	blankWidth := blockWidth
+	if width > blankWidth {
+		blankWidth = width
+	}
+	if width > blockWidth {
+		gap := width - blockWidth
+		left := gap / 2
+		right := gap - left
+		l, r := strings.Repeat(" ", left), strings.Repeat(" ", right)
+		for i := range lines {
+			lines[i] = l + lines[i] + r
+		}
+	}
+	if height > len(lines) {
+		gap := height - len(lines)
+		top := gap / 2
+		bottom := gap - top
+		blank := strings.Repeat(" ", blankWidth)
+		out := make([]string, 0, height)
+		for range top {
+			out = append(out, blank)
+		}
+		out = append(out, lines...)
+		for range bottom {
+			out = append(out, blank)
+		}
+		lines = out
+	}
+	return strings.Join(lines, "\n")
 }
 
 // closeBox is the × inlaid at the right end of the panel's top border. Quitting
@@ -3273,7 +3356,12 @@ func (m *Model) activeScreen(h *hitMap) (body, help string) {
 	case screenRoom:
 		return m.roomScreen.view(h, m.room), m.roomScreen.help(h, m.room)
 	case screenRoomResult:
-		return m.roomResult.view(h), m.roomResult.help(h, m.room, m.consent())
+		// The consent here is the one read when the screen was opened: asking
+		// the store again would open settings.json on every frame, and this is
+		// a button, not a permission check. The action itself asks live — see
+		// refreshRoomResult — so a stale answer here can only hide or show a
+		// hint, never authorise a call.
+		return m.roomResult.view(h), m.roomResult.help(h, m.room, m.roomResult.consent)
 	case screenHowTo:
 		return m.howTo.view(h), m.howTo.help(h)
 	case screenAbout:
@@ -3318,6 +3406,11 @@ type menuScreen struct {
 	choices []choice
 	cursor  int
 
+	// labelWidth is the widest choice label, measured once when the menu is
+	// built. Labels never change, and the screen centres every row inside this
+	// column on every frame.
+	labelWidth int
+
 	// What the status line under the title is made of: how many of the day's
 	// modes are finished, and the player's current win streak. Derived by
 	// reload from the saved games every time the menu is raised — never
@@ -3340,16 +3433,18 @@ func (m *menuScreen) reload(games []*game.Game, day daily.Day) {
 	if games == nil {
 		return
 	}
-	byID := make(map[string]*game.Game, len(games))
-	for _, g := range games {
-		byID[g.ID] = g
-	}
+	// The day's three ids, then one pass over the history: a map of every
+	// saved id would allocate for the whole library to answer about three.
+	want := make(map[string]bool, len(words.Lengths))
 	for _, n := range words.Lengths {
-		if g, ok := byID[daily.ID(day, n)]; ok && !g.Deleted && g.Status.Done() {
+		want[daily.ID(day, n)] = true
+	}
+	for _, g := range games {
+		if want[g.ID] && !g.Deleted && g.Status.Done() {
 			m.modesDone++
 		}
 	}
-	m.streak = stats.ComputeAt(games, day).CurrentStreak
+	m.streak = stats.CurrentStreak(games)
 }
 
 // status is the line itself, or "" when there is nothing to say: no mode of
@@ -3410,7 +3505,13 @@ func newMenuScreen(transfers bool) menuScreen {
 		choice{kind: choiceAbout, label: "about"},
 		choice{kind: choiceQuit, label: "quit"},
 	)
-	return menuScreen{choices: choices}
+	m := menuScreen{choices: choices}
+	for _, c := range choices {
+		if w := lipgloss.Width(c.label); w > m.labelWidth {
+			m.labelWidth = w
+		}
+	}
+	return m
 }
 
 func (m *menuScreen) update(msg tea.KeyPressMsg) (choice, bool) {
@@ -3459,10 +3560,14 @@ func (m *menuScreen) view(h *hitMap) string {
 	// what this screen got wrong before: it centred marker-plus-label as one
 	// unit, so selecting a row shifted its label sideways. Kept out of the
 	// centring, the markers appear beside a label that has not moved.
-	labelWidth := 0
-	for _, c := range m.choices {
-		if w := lipgloss.Width(c.label); w > labelWidth {
-			labelWidth = w
+	labelWidth := m.labelWidth
+	if labelWidth == 0 {
+		// A menu built by a literal rather than newMenuScreen: measure it here
+		// rather than centring every label in a zero-width column.
+		for _, c := range m.choices {
+			if w := lipgloss.Width(c.label); w > labelWidth {
+				labelWidth = w
+			}
 		}
 	}
 	// Padding goes on before styling: padding an already-styled string counts
@@ -3500,7 +3605,7 @@ func (m *menuScreen) view(h *hitMap) string {
 	// same width, and squaring them off is what makes the outer join slide the
 	// whole list under the heading rather than re-centring each row.
 	list := block(strings.Join(rows, "\n"))
-	return lipgloss.JoinVertical(lipgloss.Center, heading, "", list)
+	return joinVerticalCentre(heading, "", list)
 }
 
 // weight is how an unselected row is drawn. Playing is what the menu is for, so

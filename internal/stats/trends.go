@@ -1,7 +1,8 @@
 package stats
 
 import (
-	"sort"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -67,13 +68,7 @@ func Trends(games []*game.Game, length int) Trend {
 	}
 	// Completion order, as the streaks walk it, with the id breaking ties so
 	// the answer never depends on the order the store listed the files in.
-	sort.Slice(finished, func(i, j int) bool {
-		a, b := finished[i], finished[j]
-		if !a.UpdatedAt.Equal(b.UpdatedAt) {
-			return a.UpdatedAt.Before(b.UpdatedAt)
-		}
-		return a.ID < b.ID
-	})
+	slices.SortFunc(finished, compareGames)
 
 	t.AllTime = formOf(finished)
 	recent := finished
@@ -155,15 +150,14 @@ func openersOf(games []*game.Game) []Opener {
 		}
 		out = append(out, o)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.Games != b.Games {
-			return a.Games > b.Games
+	slices.SortFunc(out, func(a, b Opener) int {
+		switch {
+		case a.Games != b.Games:
+			return b.Games - a.Games
+		case a.Won != b.Won:
+			return b.Won - a.Won
 		}
-		if a.Won != b.Won {
-			return a.Won > b.Won
-		}
-		return a.Word < b.Word
+		return strings.Compare(a.Word, b.Word)
 	})
 	if len(out) > TopOpeners {
 		out = out[:TopOpeners]
@@ -178,9 +172,44 @@ func IsBest(games []*game.Game, g *game.Game) (fastest, fewest bool) {
 	if g == nil || g.Deleted || g.Status != game.Won || !g.CountsForStats() {
 		return false, false
 	}
-	t := Trends(games, g.Length)
-	if t.AllTime.Won < 2 {
+	// One pass, not Trends: the result screen asks this on every finished
+	// puzzle, and Trends sorts the mode's whole history (and tallies its
+	// opening words) to answer two comparisons. A tie still goes to the win
+	// that set the figure first, which is the completion order Trends walks:
+	// UpdatedAt, then the id to break equal clocks.
+	var (
+		wins      int
+		quickest  *game.Game
+		fewestWin *game.Game
+	)
+	for _, other := range games {
+		if other.Deleted || !other.CountsForStats() ||
+			other.Length != g.Length || other.Status != game.Won {
+			continue
+		}
+		wins++
+		if other.ElapsedMS > 0 &&
+			(quickest == nil || other.Elapsed() < quickest.Elapsed() ||
+				(other.Elapsed() == quickest.Elapsed() && earlier(other, quickest))) {
+			quickest = other
+		}
+		if fewestWin == nil || other.Attempts() < fewestWin.Attempts() ||
+			(other.Attempts() == fewestWin.Attempts() && earlier(other, fewestWin)) {
+			fewestWin = other
+		}
+	}
+	if wins < 2 {
 		return false, false
 	}
-	return t.Fastest != nil && t.Fastest.ID == g.ID, t.Fewest != nil && t.Fewest.ID == g.ID
+	return quickest != nil && quickest.ID == g.ID, fewestWin.ID == g.ID
+}
+
+// earlier orders two wins by completion: UpdatedAt, then the id, exactly as
+// Trends sorts them. It is only asked about equal figures, so a tie stays with
+// the game that got there first.
+func earlier(a, b *game.Game) bool {
+	if !a.UpdatedAt.Equal(b.UpdatedAt) {
+		return a.UpdatedAt.Before(b.UpdatedAt)
+	}
+	return a.ID < b.ID
 }

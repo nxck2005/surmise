@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -113,7 +113,7 @@ func Files(dir string) (files []File, linked []string, err error) {
 		}
 		files = append(files, File{Name: e.Name(), Body: string(b)})
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
+	slices.SortFunc(files, func(a, b File) int { return strings.Compare(a.Name, b.Name) })
 	return files, linked, nil
 }
 
