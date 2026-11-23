@@ -64,6 +64,18 @@ When it is on, an old version either works online, or it hides its online
 features and tells you to update. It never stops working offline. The server
 does that with one message that every version since v0.9.0 understands.
 
+## v0.12.4 → v0.12.5: faster screens
+
+The terminal and the web version draw each screen in about a third of the time
+they took, with far less work per frame. You should notice it most in the
+browser and over a slow ssh link.
+
+One small change: if you have two copies of the game open on the same files,
+or two browser tabs, the browse list and the profile now pick up the other
+copy's puzzles once this one saves something. The menu already worked that way.
+
+Nothing is lost and no setting moves. The Android app is unchanged.
+
 ## v0.12.3 → v0.12.4: the Android app is laid out again
 
 The app has three tabs now: **play**, **friends** and **you**. Things moved:
