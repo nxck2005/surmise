@@ -1,6 +1,6 @@
 module github.com/nxck2005/surmise/mobile
 
-go 1.26.10
+go 1.26.11
 
 require github.com/nxck2005/surmise v0.0.0
 
