@@ -121,14 +121,30 @@ func (s *JSON) load(id string) (*game.Game, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := readLimited(path)
+	return s.loadFile(path, id, false)
+}
+
+// loadFile reads one record from a path the caller has already built and an id
+// the caller has already validated — which is what All has after filtering the
+// directory names. load is the outside-facing version that runs pathFor first;
+// this is the one a scan uses so ten thousand records do not re-check an id
+// that came from a file name this package wrote and the filter just accepted.
+func (s *JSON) loadFile(path, id string, listedRegular bool) (*game.Game, error) {
+	var (
+		b   []byte
+		err error
+	)
+	if listedRegular {
+		b, err = readLimitedRegular(path)
+	} else {
+		b, err = readLimited(path)
+	}
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("store: read puzzle %s: %w", id, err)
 	}
-
 	return decodeGame(id, b)
 }
 
@@ -154,7 +170,17 @@ func readLimited(path string) ([]byte, error) {
 	if !before.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
 	}
+	return readLimitedRegular(path)
+}
 
+// readLimitedRegular is readLimited for a path a directory listing has already
+// said is a regular file. It skips the pre-open stat — one metadata call per
+// record, on a scan that opens all of them — and keeps the descriptor check,
+// which is the one that catches a file replaced between the listing and the
+// open. Callers pass true only when the directory entry itself said regular: a
+// symlink or an entry of unknown type still takes readLimited's stat, so the
+// FIFO defence holds for every path that could be one.
+func readLimitedRegular(path string) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -296,7 +322,7 @@ func (s *JSON) All() ([]*game.Game, error) {
 		if !ok {
 			continue
 		}
-		g, err := s.load(id)
+		g, err := s.loadFile(filepath.Join(s.dir, puzzleDir, id+".json"), id, e.Type().IsRegular())
 		if err != nil {
 			continue
 		}
@@ -310,7 +336,7 @@ func (s *JSON) List() ([]Summary, error) {
 	if err != nil {
 		return nil, err
 	}
-	return summaries(games), nil
+	return Summaries(games), nil
 }
 
 // writeFileAtomic writes via a temp file in the same directory, then renames.

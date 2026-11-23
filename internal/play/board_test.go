@@ -623,6 +623,16 @@ func TestKindLabels(t *testing.T) {
 // The package is the front-end-free half of the app: nothing it imports,
 // however indirectly, may be Charm or the TUI.
 func TestImportsNoFrontEnd(t *testing.T) {
+	const module = "github.com/nxck2005/surmise/"
+	forbidden := func(path string) bool {
+		return strings.HasPrefix(path, "charm.land/") || strings.Contains(path, "charmbracelet") ||
+			strings.HasSuffix(path, "/internal/ui")
+	}
+
+	// Only module-local packages are opened. Every import is still checked —
+	// that is the property — but walking into the standard library and the
+	// external modules meant build.Import statting a directory per package in
+	// the whole transitive graph to learn that "errors" is not the TUI.
 	seen := map[string]bool{}
 	var walk func(path string)
 	walk = func(path string) {
@@ -630,18 +640,19 @@ func TestImportsNoFrontEnd(t *testing.T) {
 			return
 		}
 		seen[path] = true
-		if strings.HasPrefix(path, "charm.land/") || strings.Contains(path, "charmbracelet") ||
-			strings.HasSuffix(path, "/internal/ui") {
-			t.Errorf("internal/play reaches %s", path)
-			return
-		}
 		pkg, err := build.Import(path, ".", 0)
 		if err != nil {
-			return // standard library and anything outside the module
+			t.Fatalf("build.Import(%q): %v", path, err)
 		}
 		for _, imp := range pkg.Imports {
-			walk(imp)
+			if forbidden(imp) {
+				t.Errorf("internal/play reaches %s (through %s)", imp, path)
+				continue
+			}
+			if strings.HasPrefix(imp, module) {
+				walk(imp)
+			}
 		}
 	}
-	walk("github.com/nxck2005/surmise/internal/play")
+	walk(module + "internal/play")
 }

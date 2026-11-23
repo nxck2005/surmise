@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/game"
 	"github.com/nxck2005/surmise/internal/words"
@@ -120,8 +119,9 @@ func (s *howToScreen) view(h *hitMap) string {
 	heading := st.muted.Render(page.name) + st.help.Render(st.glyph.Separator) + s.dots(h)
 	// Squared off first, so the join slides the body under the heading as one
 	// block instead of centring every line of it on its own.
-	return lipgloss.JoinVertical(lipgloss.Center, heading, "",
-		block(lipgloss.JoinVertical(lipgloss.Left, sections...)))
+	// The inner join is already square, so the outer one has nothing to fix.
+	return joinVerticalCentre(heading, "",
+		joinVerticalLeft(sections...))
 }
 
 // dots are the position indicator, and each one is also a click target: a

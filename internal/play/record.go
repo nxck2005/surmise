@@ -1,7 +1,8 @@
 package play
 
 import (
-	"sort"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/stats"
@@ -104,7 +105,7 @@ func (a *App) Profile() (ProfileView, error) {
 		}
 		v.Modes = append(v.Modes, mv)
 	}
-	sort.Slice(v.Modes, func(i, j int) bool { return v.Modes[i].Length < v.Modes[j].Length })
+	slices.SortFunc(v.Modes, func(a, b ModeView) int { return a.Length - b.Length })
 	return v, nil
 }
 
@@ -137,7 +138,7 @@ func (a *App) Calendar(zone *time.Location) (CalendarView, error) {
 		v.Days = append(v.Days, DayView{Day: d.String(), Games: t.Games, Won: t.Won, Lost: t.Lost, InPlay: t.InPlay})
 	}
 	// ISO dates sort as text.
-	sort.Slice(v.Days, func(i, j int) bool { return v.Days[i].Day < v.Days[j].Day })
+	slices.SortFunc(v.Days, func(a, b DayView) int { return strings.Compare(a.Day, b.Day) })
 	return v, nil
 }
 

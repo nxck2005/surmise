@@ -240,8 +240,7 @@ func (m *sprintScreen) renderRow(h *hitMap, row int, label, value string) string
 		valueStyle = st.hover(valueStyle)
 	}
 
-	cell := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center).
-		Render(valueStyle.Render(value))
+	cell := valueBoxStyle.Render(valueStyle.Render(value))
 	cell = h.mark(next, cell)
 	return prefix +
 		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
@@ -259,11 +258,10 @@ func (m *sprintScreen) view(h *hitMap) string {
 		m.renderRow(h, sprintRowLength, "length", fmt.Sprintf("%d letters", m.length)),
 		m.renderRow(h, sprintRowTime, "clock", sprintDurationLabel(m.duration)),
 	}
-	note := lipgloss.NewStyle().Width(noteWidth()).Align(lipgloss.Center).
-		Render(st.muted.Render(m.note()))
+	note := centreLine(st.muted.Render(m.note()), noteWidth())
 
-	return lipgloss.JoinVertical(lipgloss.Center,
-		lipgloss.JoinVertical(lipgloss.Left, rows...),
+	return joinVerticalCentre(
+		joinVerticalLeft(rows...),
 		"",
 		note,
 	)
@@ -310,7 +308,7 @@ func (m *sprintScreen) summaryView() string {
 	if len(extra) > 0 {
 		lines = append(lines, "", st.muted.Render(strings.Join(extra, " · ")))
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, lines...)
+	return joinVerticalCentre(lines...)
 }
 
 func (m *sprintScreen) help(h *hitMap) string {

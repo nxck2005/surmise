@@ -102,6 +102,11 @@ const (
 	displayNameMaxWidth = valueWidth - 1
 )
 
+// valueBoxStyle centres a value in the settings column. It is fixed by
+// valueWidth alone, so every screen that borrows the column shares one style
+// rather than building the same one on every row of every frame.
+var valueBoxStyle = lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
+
 // reload takes the saved preferences. A zero length means nothing was ever
 // chosen, which shows as the default the app actually opens on.
 func (m *settingsScreen) reload(s store.Settings) {
@@ -373,11 +378,10 @@ func (m *settingsScreen) view(h *hitMap) string {
 
 	// The note is padded to the widest one there is, so moving the cursor does
 	// not resize the panel around it.
-	note := lipgloss.NewStyle().Width(noteWidth()).Align(lipgloss.Center).
-		Render(st.muted.Render(m.note()))
+	note := centreLine(st.muted.Render(m.note()), noteWidth())
 
-	return lipgloss.JoinVertical(lipgloss.Center,
-		lipgloss.JoinVertical(lipgloss.Left, rows...),
+	return joinVerticalCentre(
+		joinVerticalLeft(rows...),
 		"",
 		note,
 	)
@@ -418,8 +422,7 @@ func (m *settingsScreen) renderRow(h *hitMap, row int, label, value string) stri
 
 	// Both columns are fixed-width so the rows line up under each other: the
 	// label left-aligned, the value centred between its arrows.
-	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
-	cell := valueBox.Render(valueStyle.Render(value))
+	cell := valueBoxStyle.Render(valueStyle.Render(value))
 	if m.enabled(row) {
 		cell = h.mark(next, cell)
 	}
@@ -446,8 +449,7 @@ func (m *settingsScreen) renderLinkRow(h *hitMap, row int, label string) string 
 		valueStyle, arrowStyle = st.hover(valueStyle), st.hover(st.accent)
 	}
 
-	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
-	cell := valueBox.Render(valueStyle.Render("open"))
+	cell := valueBoxStyle.Render(valueStyle.Render("open"))
 	arrow := arrowStyle.Render(st.glyph.ValueNext)
 	if m.enabled(row) {
 		cell, arrow = h.mark(open, cell), h.mark(open, arrow)
@@ -488,8 +490,7 @@ func renderFieldRow(h *hitMap, row int, selected bool, label string, f *textFiel
 		valueStyle = st.hover(valueStyle)
 	}
 
-	valueBox := lipgloss.NewStyle().Width(valueWidth).Align(lipgloss.Center)
-	cell := h.mark(a, valueBox.Render(valueStyle.Render(f.display(placeholder))))
+	cell := h.mark(a, valueBoxStyle.Render(valueStyle.Render(f.display(placeholder))))
 	return prefix +
 		labelStyle.Render(fmt.Sprintf("%-*s", labelWidth, label)) +
 		strings.Repeat(" ", lipgloss.Width(st.glyph.ValuePrev)) +
@@ -586,7 +587,10 @@ func (m *settingsScreen) note() string {
 	}
 }
 
-func noteWidth() int {
+// noteWidthValue is noteWidth computed once. The notes are compile-time
+// constants; the settings-family screens ask for their width on every frame to
+// keep the panel from resizing as the cursor moves.
+var noteWidthValue = func() int {
 	return max(lipgloss.Width(notes.length),
 		lipgloss.Width(notes.remembering),
 		lipgloss.Width(notes.notRemembering),
@@ -606,7 +610,9 @@ func noteWidth() int {
 		lipgloss.Width(notes.appearance),
 		lipgloss.Width(notes.outlinesOff),
 		lipgloss.Width(notes.outlinesOn))
-}
+}()
+
+func noteWidth() int { return noteWidthValue }
 
 func onOff(b bool) string {
 	if b {

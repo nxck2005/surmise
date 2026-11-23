@@ -21,7 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/game"
@@ -397,5 +398,7 @@ func Read(b []byte) (*Archive, []*game.Game, error) {
 }
 
 func sortByID(games []*game.Game) {
-	sort.Slice(games, func(i, j int) bool { return games[i].ID < games[j].ID })
+	slices.SortFunc(games, func(a, b *game.Game) int {
+		return strings.Compare(a.ID, b.ID)
+	})
 }

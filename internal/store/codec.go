@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/nxck2005/surmise/internal/challenge"
@@ -307,10 +307,14 @@ func ValidateSettings(v Settings) error {
 	return nil
 }
 
-// summarise turns records into the browse list every store's List returns:
+// Summaries turns records into the browse list every store's List returns:
 // tombstones dropped, most recently updated first. Tombstones are history, and
 // history belongs to the streak walk, not to a list of puzzles to open.
-func summaries(games []*game.Game) []Summary {
+//
+// It is exported so a caller that already holds All's snapshot — the UI's
+// shared history, read for the menu and the profile — can build the list from
+// it rather than paying a second decode of every record for the same summaries.
+func Summaries(games []*game.Game) []Summary {
 	out := make([]Summary, 0, len(games))
 	for _, g := range games {
 		if g.Deleted {
@@ -318,8 +322,8 @@ func summaries(games []*game.Game) []Summary {
 		}
 		out = append(out, summarize(g))
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].UpdatedAt.After(out[j].UpdatedAt)
+	slices.SortFunc(out, func(a, b Summary) int {
+		return b.UpdatedAt.Compare(a.UpdatedAt)
 	})
 	return out
 }

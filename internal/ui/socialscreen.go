@@ -43,6 +43,11 @@ type socialScreen struct {
 	rows   []socialRow
 	cursor int
 
+	// width is the widest row label, measured when the rows are built. The
+	// labels do not change while the screen is up, and every row is centred in
+	// this column on every frame.
+	width int
+
 	// note is the screen's own message, under the rows. An error shows in the
 	// error style; a notice does not.
 	note    string
@@ -83,6 +88,11 @@ func (m *Model) openSocialScreen() {
 			kind = socialCustom
 		}
 		s.rows = append(s.rows, socialRow{kind: kind, label: label})
+	}
+	for _, row := range s.rows {
+		if w := lipgloss.Width(row.label); w > s.width {
+			s.width = w
+		}
 	}
 	m.social = s
 	m.screen = screenSocial
@@ -141,9 +151,11 @@ func (m *socialScreen) point(row int) bool {
 }
 
 func (m *socialScreen) view(h *hitMap) string {
-	width := 0
-	for _, row := range m.rows {
-		width = max(width, lipgloss.Width(row.label))
+	width := m.width
+	if width == 0 {
+		for _, row := range m.rows {
+			width = max(width, lipgloss.Width(row.label))
+		}
 	}
 	blank := strings.Repeat(" ", lipgloss.Width(st.glyph.Cursor))
 	trail := strings.Repeat(" ", lipgloss.Width(st.glyph.CursorRight))
@@ -155,13 +167,13 @@ func (m *socialScreen) view(h *hitMap) string {
 			suffix = st.cursor.Render(st.glyph.CursorRight)
 			style = st.text
 		}
-		cell := lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(style.Render(row.label))
+		cell := centreLine(style.Render(row.label), width)
 		rows[i] = h.mark(action{kind: actSocialChoice, index: i}, prefix+cell+suffix)
 	}
 
 	sections := []string{block(strings.Join(rows, "\n"))}
 	if len(m.rows) == 0 {
-		return lipgloss.JoinVertical(lipgloss.Center, sections...)
+		return joinVerticalCentre(sections...)
 	}
 	if m.confirmLeave {
 		prompt := st.muted.Render(fmt.Sprintf("leave room %s? ", m.rows[m.cursor].entry.Code)) +
@@ -177,7 +189,7 @@ func (m *socialScreen) view(h *hitMap) string {
 		}
 		sections = append(sections, "", style.Render(safeText(m.note)))
 	}
-	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+	return joinVerticalCentre(sections...)
 }
 
 func (m *socialScreen) markLeave(h *hitMap, s string) string {

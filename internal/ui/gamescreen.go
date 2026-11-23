@@ -550,7 +550,7 @@ func (m *gameScreen) view(h *hitMap) string {
 	// Centre the sections relative to each other so the header and status line
 	// sit under the middle of the board and keyboard rather than hugging the
 	// left edge.
-	return lipgloss.JoinVertical(lipgloss.Center, sections...)
+	return joinVerticalCentre(sections...)
 }
 
 // refusal is what a terminal too short for even the tightest board gets. The
@@ -561,7 +561,7 @@ func (m *gameScreen) view(h *hitMap) string {
 // The numbers are measured, not written out, so they cannot drift from the
 // arithmetic that produced them.
 func (m *gameScreen) refusal(l boardLayout) string {
-	return lipgloss.JoinVertical(lipgloss.Center,
+	return joinVerticalCentre(
 		st.err.Render("this terminal is too short"),
 		"",
 		st.muted.Render(fmt.Sprintf("%d letters needs %d rows · %d here",
@@ -641,21 +641,28 @@ func (m *gameScreen) layout() boardLayout {
 		}
 	}
 
-	for _, give := range []func(*boardLayout){
-		func(l *boardLayout) { l.legend = false },
-		func(l *boardLayout) { l.header = false },
-		func(l *boardLayout) { l.kbdGap = 0 },
-		func(l *boardLayout) { l.boardGap = 0 },
-	} {
+	// The ladder, in the one order it may be walked. Checked before each give,
+	// so the form returned is the first one that fits; the closure slice this
+	// used to range over allocated four functions on every call, and layout()
+	// is asked several times a frame.
+	for step := 0; ; step++ {
 		if l.rows(attempts) <= m.height {
 			return l
 		}
-		give(&l)
+		switch step {
+		case 0:
+			l.legend = false
+		case 1:
+			l.header = false
+		case 2:
+			l.kbdGap = 0
+		case 3:
+			l.boardGap = 0
+		default:
+			l.refuse = true
+			return l
+		}
 	}
-	if l.rows(attempts) > m.height {
-		l.refuse = true
-	}
-	return l
 }
 
 func (l boardLayout) withTiles(tiles int) boardLayout {

@@ -39,8 +39,9 @@ func Parse(name string, data []byte) (*Theme, []Warning) {
 	}
 
 	section := ""
-	for i, raw := range strings.Split(string(data), "\n") {
-		lineNo := i + 1
+	lineNo := 0
+	for raw := range strings.SplitSeq(string(data), "\n") {
+		lineNo++
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -235,18 +236,42 @@ func (t *Theme) valueIsANSI(value string) bool {
 }
 
 func (t *Theme) setGlyph(key, value string) error {
-	targets := map[string]*string{
-		"caret": &t.Glyphs.Caret, "empty": &t.Glyphs.Empty,
-		"cursor": &t.Glyphs.Cursor, "cursor_right": &t.Glyphs.CursorRight,
-		"separator":  &t.Glyphs.Separator,
-		"value_prev": &t.Glyphs.ValuePrev, "value_next": &t.Glyphs.ValueNext,
-		"jump_first": &t.Glyphs.JumpFirst, "jump_last": &t.Glyphs.JumpLast,
-		"enter": &t.Glyphs.Enter, "delete": &t.Glyphs.Delete,
-		"bar": &t.Glyphs.Bar, "day": &t.Glyphs.Day, "close": &t.Glyphs.Close,
-		"border": &t.Glyphs.Border,
-	}
-	p, ok := targets[key]
-	if !ok {
+	// A switch rather than a map: this is called once per glyph key in every
+	// theme file, and building a map of every target to look up one of them was
+	// the larger half of parsing a file.
+	var p *string
+	switch key {
+	case "caret":
+		p = &t.Glyphs.Caret
+	case "empty":
+		p = &t.Glyphs.Empty
+	case "cursor":
+		p = &t.Glyphs.Cursor
+	case "cursor_right":
+		p = &t.Glyphs.CursorRight
+	case "separator":
+		p = &t.Glyphs.Separator
+	case "value_prev":
+		p = &t.Glyphs.ValuePrev
+	case "value_next":
+		p = &t.Glyphs.ValueNext
+	case "jump_first":
+		p = &t.Glyphs.JumpFirst
+	case "jump_last":
+		p = &t.Glyphs.JumpLast
+	case "enter":
+		p = &t.Glyphs.Enter
+	case "delete":
+		p = &t.Glyphs.Delete
+	case "bar":
+		p = &t.Glyphs.Bar
+	case "day":
+		p = &t.Glyphs.Day
+	case "close":
+		p = &t.Glyphs.Close
+	case "border":
+		p = &t.Glyphs.Border
+	default:
 		return fmt.Errorf("unknown glyph %q", key)
 	}
 	if key == "border" && !knownBorder(value) {
@@ -271,12 +296,17 @@ func knownBorder(name string) bool {
 }
 
 func (t *Theme) setMetric(key, value string) error {
-	targets := map[string]*int{
-		"tile_width": &t.Metrics.TileWidth, "key_pad_x": &t.Metrics.KeyPadX,
-		"panel_pad_x": &t.Metrics.PanelPadX, "panel_pad_y": &t.Metrics.PanelPadY,
-	}
-	p, ok := targets[key]
-	if !ok {
+	var p *int
+	switch key {
+	case "tile_width":
+		p = &t.Metrics.TileWidth
+	case "key_pad_x":
+		p = &t.Metrics.KeyPadX
+	case "panel_pad_x":
+		p = &t.Metrics.PanelPadX
+	case "panel_pad_y":
+		p = &t.Metrics.PanelPadY
+	default:
 		return fmt.Errorf("unknown metric %q", key)
 	}
 	n, err := strconv.Atoi(value)

@@ -601,6 +601,24 @@ func TestListCarriesTheStartTime(t *testing.T) {
 	})
 }
 
+// TestListCarriesTheCode: the list draws a row's code on every frame, and it
+// reads the code the store derived rather than hashing the id again.
+func TestListCarriesTheCode(t *testing.T) {
+	eachStore(t, "code", func(t *testing.T, s settingsCapable) {
+		g := wonGame(t)
+		if err := s.Save(g); err != nil {
+			t.Fatal(err)
+		}
+		list, err := s.List()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list) != 1 || list[0].Code != game.Code(g.ID) {
+			t.Errorf("List = %+v, want one summary with code %s", list, game.Code(g.ID))
+		}
+	})
+}
+
 func TestStoreCarriesChallengeOriginWithoutKeepingADeletedCode(t *testing.T) {
 	eachStore(t, "challenge-origin", func(t *testing.T, s settingsCapable) {
 		c, err := challenge.Parse("4500-820C-20A1-G73J")

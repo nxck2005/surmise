@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
-	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/nxck2005/surmise/internal/brand"
 	"github.com/nxck2005/surmise/internal/game"
@@ -115,7 +115,15 @@ func (s *KVStore) load(id string) (*game.Game, error) {
 	if !game.ValidID(id) {
 		return nil, fmt.Errorf("store: invalid puzzle id %q", id)
 	}
-	v, ok := s.kv.Get(kvPuzzleKey(id))
+	return s.loadKey(kvPuzzleKey(id), id)
+}
+
+// loadKey reads the value under a key the caller already has and an id it has
+// already validated. All holds both from its enumeration — rebuilding the key
+// and re-checking the id it just matched are both work for nothing — and every
+// other path comes through load, which does the checks.
+func (s *KVStore) loadKey(key, id string) (*game.Game, error) {
+	v, ok := s.kv.Get(key)
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -181,7 +189,7 @@ func (s *KVStore) All() ([]*game.Game, error) {
 		if !ok {
 			continue
 		}
-		g, err := s.load(id)
+		g, err := s.loadKey(k, id)
 		if err != nil {
 			continue
 		}
@@ -199,7 +207,7 @@ func (s *KVStore) List() ([]Summary, error) {
 	if err != nil {
 		return nil, err
 	}
-	return summaries(games), nil
+	return Summaries(games), nil
 }
 
 // Settings reads the saved preferences. A missing or damaged value yields the
@@ -237,11 +245,25 @@ func (s *KVStore) Usage() int {
 }
 
 // utf16Len is a string's length in UTF-16 code units: one per rune, two for a
-// rune outside the Basic Multilingual Plane.
+// rune outside the Basic Multilingual Plane. It walks bytes rather than runes
+// and takes the ASCII case without decoding at all, because Usage sums this
+// over every value in the origin — up to the five-million-character allowance —
+// and the values are overwhelmingly ASCII.
 func utf16Len(s string) int {
 	n := 0
-	for _, r := range s {
-		n += utf16.RuneLen(r)
+	for i := 0; i < len(s); {
+		if s[i] < utf8.RuneSelf {
+			n++
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r > 0xffff {
+			n += 2
+		} else {
+			n++
+		}
+		i += size
 	}
 	return n
 }

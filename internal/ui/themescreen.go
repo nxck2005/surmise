@@ -25,6 +25,12 @@ type themeScreen struct {
 
 	// saved is the committed choice, restored when the player backs out.
 	saved string
+
+	// noteW and noteH are the box the note lives in: as big as the biggest note
+	// any theme in the list has. They depend on entries, not on the frame or the
+	// previewed theme (styling adds no cells), so they are measured when the
+	// list is loaded rather than on every frame. See measureNotes.
+	noteW, noteH int
 }
 
 func (m *themeScreen) resize(h int) {
@@ -44,7 +50,23 @@ func (m *themeScreen) reload(lib *theme.Library, current string) {
 			m.cursor = i
 		}
 	}
+	m.measureNotes()
 	m.clampOffset()
+}
+
+// measureNotes sizes the note box: the widest and tallest note any theme in
+// the list has. Moving the cursor changes which note is drawn but not the box,
+// so this runs when the entries do — not on every frame, where it used to
+// render every theme's note (error, warning and author alike) just to measure
+// it. The notes are styled with foregrounds only, so their cell sizes are the
+// same whatever theme is previewed.
+func (m *themeScreen) measureNotes() {
+	m.noteW, m.noteH = 0, 1
+	for _, e := range m.entries {
+		n := m.noteFor(e)
+		m.noteW = max(m.noteW, lipgloss.Width(n))
+		m.noteH = max(m.noteH, lipgloss.Height(n))
+	}
 }
 
 // refresh takes a reloaded library without moving the player. Unlike reload it
@@ -61,6 +83,7 @@ func (m *themeScreen) refresh(lib *theme.Library) {
 	}
 
 	m.entries = lib.Entries()
+	m.measureNotes()
 	m.cursor = min(max(m.cursor, 0), max(len(m.entries)-1, 0))
 	for i, e := range m.entries {
 		if e.Name == want {
@@ -189,7 +212,7 @@ func (m *themeScreen) view(h *hitMap) string {
 		rows += "\n\n" + scrollCounter(h, m.offset+1, end, len(m.entries))
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Center,
+	return joinVerticalCentre(
 		rows,
 		"",
 		renderThemePreview(),
@@ -204,12 +227,7 @@ func (m *themeScreen) view(h *hitMap) string {
 // and down as the cursor moved. A fixed box keeps the list and the preview
 // still, and only the words in it change.
 func (m *themeScreen) noteBox() string {
-	w, h := 0, 1
-	for _, e := range m.entries {
-		n := m.noteFor(e)
-		w, h = max(w, lipgloss.Width(n)), max(h, lipgloss.Height(n))
-	}
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Top, m.note())
+	return lipgloss.Place(m.noteW, m.noteH, lipgloss.Center, lipgloss.Top, m.note())
 }
 
 // renderRow lays out one theme: the name, where it came from, and a tick on the
@@ -283,21 +301,31 @@ func (m *themeScreen) noteFor(e theme.Entry) string {
 // renderThemePreview draws a sample of every tile and keycap state in the
 // theme being previewed. The rest of the screen is text; without this the
 // board colours — the ones that actually matter — would be invisible here.
+//
+// It is a function of the style set and nothing else, so it is built once per
+// set rather than once per frame: moving the cursor applies a theme and then
+// redraws, and the preview was paying for eight styled cells each time the
+// pointer crossed a row.
 func renderThemePreview() string {
+	if st.previewReady {
+		return st.preview
+	}
 	tiles := joinTiles([]string{
-		st.tileCorrect.Render("W"),
-		st.tilePresent.Render("O"),
-		st.tileAbsent.Render("R"),
-		st.tileActive.Render("D"),
-		st.tileEmpty.Render(st.glyph.Empty),
+		st.cell(faceCorrect, "W", flatTile, false),
+		st.cell(facePresent, "O", flatTile, false),
+		st.cell(faceAbsent, "R", flatTile, false),
+		st.cell(faceActive, "D", flatTile, false),
+		st.cell(faceEmpty, st.glyph.Empty, flatTile, false),
 	})
 	keys := joinTiles([]string{
-		st.keyUnused.Render("A"),
-		st.keyCorrect.Render("B"),
-		st.keyPresent.Render("C"),
-		st.keyAbsent.Render("D"),
+		st.cell(faceKeyUnused, "A", flatTile, false),
+		st.cell(faceKeyCorrect, "B", flatTile, false),
+		st.cell(faceKeyPresent, "C", flatTile, false),
+		st.cell(faceKeyAbsent, "D", flatTile, false),
 	})
-	return lipgloss.JoinVertical(lipgloss.Center, tiles, "", keys)
+	st.preview = joinVerticalCentre(tiles, "", keys)
+	st.previewReady = true
+	return st.preview
 }
 
 func (m *themeScreen) help(h *hitMap) string {

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/nxck2005/surmise/internal/challenge"
 )
@@ -110,7 +109,7 @@ func (m *challengeScreen) view(h *hitMap) string {
 		if m.msg != "" {
 			note, style = safeText(m.msg), st.err
 		}
-		return lipgloss.JoinVertical(lipgloss.Center,
+		return joinVerticalCentre(
 			st.title.Render("enter code"), "",
 			renderFieldRow(h, challengeRowCode, true, "challenge code", &m.entry, "not set"),
 			"", style.Render(note),
@@ -135,7 +134,7 @@ func (m *challengeScreen) view(h *hitMap) string {
 	if m.msg != "" {
 		note = safeText(m.msg)
 	}
-	return lipgloss.JoinVertical(lipgloss.Center,
+	return joinVerticalCentre(
 		st.title.Render("new challenge"), "", mode, "",
 		h.mark(code, codeStyle.Render(m.code.String())), "", st.muted.Render(note),
 	)

@@ -181,7 +181,18 @@ func (h *hitMap) mark(a action, s string) string {
 		act:  a,
 		rect: rect{w: lipgloss.Width(s), h: lipgloss.Height(s)},
 	})
-	return markerStart + strconv.Itoa(id) + markerEnd + s
+	// One allocation rather than the three the concatenation of four strings
+	// used to make (the number, the join, and the result). A board marks about
+	// thirty atoms a frame, and every frame of every screen goes through here.
+	var digits [8]byte
+	num := strconv.AppendInt(digits[:0], int64(id), 10)
+	var b strings.Builder
+	b.Grow(len(markerStart) + len(num) + len(markerEnd) + len(s))
+	b.WriteString(markerStart)
+	b.Write(num)
+	b.WriteString(markerEnd)
+	b.WriteString(s)
+	return b.String()
 }
 
 // hovered reports whether the pointer is currently over a.

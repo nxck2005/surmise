@@ -40,34 +40,34 @@ func Score(guess, answer string) []Mark {
 		panic("game: Score called with mismatched lengths")
 	}
 
-	g, a := []byte(guess), []byte(answer)
-	marks := make([]Mark, len(g))
+	marks := make([]Mark, len(guess))
 
-	// Count the answer's letters, so the second pass knows how many of each
-	// remain to be claimed.
+	// Index the strings directly. []byte(guess) copies both words onto the
+	// stack for no gain, and this runs once per guess on every save and every
+	// record read (Validate rescores the board it is checking).
 	var remaining [26]int
-	for _, c := range a {
-		if idx := c - 'a'; idx < 26 {
+	for i := 0; i < len(answer); i++ {
+		if idx := answer[i] - 'a'; idx < 26 {
 			remaining[idx]++
 		}
 	}
 
 	// Pass 1: exact positional matches take priority over everything else.
-	for i := range g {
-		if g[i] == a[i] {
+	for i := 0; i < len(guess); i++ {
+		if guess[i] == answer[i] {
 			marks[i] = Correct
-			if idx := g[i] - 'a'; idx < 26 {
+			if idx := guess[i] - 'a'; idx < 26 {
 				remaining[idx]--
 			}
 		}
 	}
 
 	// Pass 2: distribute whatever letters are left over.
-	for i := range g {
+	for i := 0; i < len(guess); i++ {
 		if marks[i] == Correct {
 			continue
 		}
-		idx := g[i] - 'a'
+		idx := guess[i] - 'a'
 		if idx < 26 && remaining[idx] > 0 {
 			marks[i] = Present
 			remaining[idx]--

@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"slices"
 	"time"
 
@@ -318,20 +317,22 @@ func FormatID(b [16]byte, version byte) string {
 	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
-// validID matches the id shapes this app has ever written: the sixteen
-// lowercase hex characters older saves carry, and the canonical lowercase UUID
-// that replaced them (version 4 for random puzzles, version 8 for derived
-// ones). It is deliberately exact rather than a general "safe filename" rule —
-// an id is a persistence key, and a shape that has never been handed out
-// should not start being accepted merely because it survives a path join.
+// ValidID reports whether an id may be persisted as a puzzle's identity: the
+// sixteen lowercase hex characters older saves carry, or the canonical
+// lowercase UUID that replaced them (version 4 for random puzzles, version 8
+// for derived ones).
 //
-// Lowercase-only is load-bearing on case-insensitive filesystems: an uppercase
-// spelling of the same UUID would be a different string on Linux and the same
-// file on macOS and Windows, and the store can only promise one of those
-// readings.
-var validID = regexp.MustCompile(`^(?:[0-9a-f]{16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`)
-
-// ValidID reports whether an id may be persisted as a puzzle's identity.
+// It is deliberately exact rather than a general "safe filename" rule — an id
+// is a persistence key, and a shape that has never been handed out should not
+// start being accepted merely because it survives a path join. Lowercase-only
+// is load-bearing on case-insensitive filesystems: an uppercase spelling of
+// the same UUID would be a different string on Linux and the same file on
+// macOS and Windows, and the store can only promise one of those readings.
+//
+// The shape is checked by hand rather than by a regular expression. This runs
+// once per record in every scan — a list, a restore's duplicate check, a new
+// board's code check — and a regexp match on ten thousand file names costs
+// milliseconds where these comparisons cost microseconds.
 //
 // This is a storage rule, not a display one: Code hashes any string at all.
 // An id read off a save or a backup is about to become a filename (in the
@@ -339,7 +340,30 @@ var validID = regexp.MustCompile(`^(?:[0-9a-f]{16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a
 // id into either goes through here. An id that could climb out of the puzzle
 // directory is refused before it is joined to anything.
 func ValidID(id string) bool {
-	return validID.MatchString(id)
+	switch len(id) {
+	case 16:
+		return lowerHex(id)
+	case 36:
+		return id[8] == '-' && id[13] == '-' && id[18] == '-' && id[23] == '-' &&
+			lowerHex(id[0:8]) && lowerHex(id[9:13]) && lowerHex(id[14:18]) &&
+			lowerHex(id[19:23]) && lowerHex(id[24:])
+	}
+	return false
+}
+
+// lowerHex reports whether s is nothing but the lowercase hex digits, and is
+// not empty.
+func lowerHex(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // codeSpace is how many distinct codes exist: six decimal digits.
@@ -362,7 +386,16 @@ const codeSpace = 1_000_000
 // UUIDs, so old saves need no migration.
 func Code(id string) string {
 	sum := sha256.Sum256([]byte(id))
-	return fmt.Sprintf("%06d", binary.BigEndian.Uint64(sum[:8])%codeSpace)
+	n := binary.BigEndian.Uint64(sum[:8]) % codeSpace
+	// Six digits, zero padded, without fmt: the row of a list or a daily's
+	// three modes asks for this on every frame, and %06d allocates and
+	// reflects its way to the same six characters.
+	var b [6]byte
+	for i := len(b) - 1; i >= 0; i-- {
+		b[i] = '0' + byte(n%10)
+		n /= 10
+	}
+	return string(b[:])
 }
 
 // Guess plays a word. It returns ErrNotAWord or ErrWrongLength for input the

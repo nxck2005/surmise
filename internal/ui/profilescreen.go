@@ -112,7 +112,9 @@ func (m *profileScreen) view(h *hitMap) string {
 			sections = append(sections, "", extra)
 		}
 	}
-	return block(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	// JoinVertical(Left) squares the block itself (it pads every line to the
+	// widest), so wrapping it in block only measured it again.
+	return joinVerticalLeft(sections...)
 }
 
 // affordable returns the leading run of extras that fits under the terminal's
@@ -127,18 +129,29 @@ type stat struct{ label, value string }
 // many cells a row can hold from it.
 const statWidth = 20
 
-// renderStatRow lays out stats as label-over-value blocks.
+// renderStatRow lays out stats as label-over-value blocks. Every block is at
+// least statWidth cells wide and squared to its own two lines, so the row is
+// the concatenation of one label line and one value line — which is what
+// JoinHorizontal(Top, …) would compute, without splitting and re-measuring the
+// blocks to discover it.
 func renderStatRow(stats []stat) string {
-	blocks := make([]string, len(stats))
+	labels := make([]string, len(stats))
+	values := make([]string, len(stats))
 	for i, s := range stats {
-		blocks[i] = lipgloss.NewStyle().Width(statWidth).Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				st.muted.Render(s.label),
-				st.accent.Bold(true).Render(s.value),
-			),
-		)
+		labels[i], values[i] = padPair(
+			st.muted.Render(s.label), st.statValue.Render(s.value), statWidth)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
+	return strings.Join(labels, "") + "\n" + strings.Join(values, "")
+}
+
+// padPair pads two lines to statWidth cells and to each other, the way a
+// Width(statWidth) box around JoinVertical(Left, a, b) does: the block's width
+// is the widest of the two and the fixed width, and the shorter line is padded
+// to it.
+func padPair(a, b string, minWidth int) (string, string) {
+	wa, wb := lipgloss.Width(a), lipgloss.Width(b)
+	w := max(minWidth, wa, wb)
+	return a + strings.Repeat(" ", w-wa), b + strings.Repeat(" ", w-wb)
 }
 
 // renderDistribution draws the guess histogram: how often the player wins in
@@ -163,14 +176,13 @@ func (m *profileScreen) renderDistribution() string {
 	b.WriteString(st.muted.Render("guess distribution"))
 	b.WriteString("\n")
 	// The ramp is the same for every bar — it spans the full width, and a short
-	// bar simply stops early — so it is built once for the histogram rather than
-	// once per bar, and again per frame.
-	ramp := barRamp()
+	// bar simply stops early — so it is built once for the style set, and again
+	// only if the terminal's colour depth changes. See styles.histRamp.
 	for _, a := range attempts {
 		n := dist[a]
 		fmt.Fprintf(&b, "%s %s %s\n",
 			st.muted.Render(fmt.Sprintf("%2d", a)),
-			renderBar(n, peak, ramp),
+			st.renderBar(n, peak),
 			st.text.Render(fmt.Sprint(n)))
 	}
 	return strings.TrimRight(b.String(), "\n")
@@ -186,21 +198,34 @@ const fullBlock = "█"
 
 var eighths = [...]string{"▏", "▎", "▍", "▌", "▋", "▊", "▉"}
 
-// barRamp is the gradient every bar of one histogram is drawn along: from the
+// histRamp is the gradient every bar of one histogram is drawn along: from the
 // theme's bar colour dimmed, up to the colour itself. Shading within the theme's
 // own bar colour rather than toward the accent is deliberate: the two are the
 // same colour in the default theme, and a ramp that vanished depending on the
 // palette would be worse than none.
-func barRamp() []color.Color {
-	full := st.bar.GetForeground()
-	return blend(distributionWidth, dim(full, 0.45), full)
+//
+// It is built once per style set and kept with the glyph already rendered in
+// each colour. The profile is recomputed from the history on opening, but this
+// is the part of drawing it that does not change between frames — or between
+// openings with the same theme — and it used to be rebuilt, blended and
+// rendered cell by cell on every one.
+func (s *styles) histRamp() []color.Color {
+	if s.hist.ready {
+		return s.hist.ramp
+	}
+	full := s.bar.GetForeground()
+	s.hist.ramp = blend(distributionWidth, dim(full, 0.45), full)
+	cells := max(lipgloss.Width(s.glyph.Bar), 1)
+	for i := range distributionWidth {
+		s.hist.whole[i] = s.bar.Foreground(colorAt(s.hist.ramp, i*cells)).Render(s.glyph.Bar)
+	}
+	s.hist.ready = true
+	return s.hist.ramp
 }
 
 // renderBar draws one histogram bar, shaded along its length from a dimmed bar
 // colour up to the bar colour itself, so a long bar arrives brighter than a
 // short one and the row reads as depth rather than as a block of paint.
-//
-// ramp is shared by every bar in the histogram, built once by barRamp.
 //
 // Sub-cell precision is only used when the theme kept the default bar glyph: a
 // theme that chose its own rune means it, and half of somebody else's glyph is
@@ -208,14 +233,14 @@ func barRamp() []color.Color {
 //
 // A glyph wider than one cell is drawn fewer times, so the peak bar is
 // distributionWidth cells whatever the theme chose, not that many glyphs.
-func renderBar(n, peak int, ramp []color.Color) string {
+func (s *styles) renderBar(n, peak int) string {
 	if peak <= 0 {
 		return ""
 	}
-	cells := max(lipgloss.Width(st.glyph.Bar), 1)
+	cells := max(lipgloss.Width(s.glyph.Bar), 1)
 	whole := max(n*distributionWidth/(peak*cells), 1)
 	part := ""
-	if st.glyph.Bar == fullBlock {
+	if s.glyph.Bar == fullBlock {
 		eighth := n * distributionWidth * 8 / peak
 		whole = eighth / 8
 		if rem := eighth % 8; rem > 0 {
@@ -226,12 +251,19 @@ func renderBar(n, peak int, ramp []color.Color) string {
 		}
 	}
 
+	ramp := s.histRamp()
 	var b strings.Builder
 	for i := range whole {
-		b.WriteString(st.bar.Foreground(colorAt(ramp, i*cells)).Render(st.glyph.Bar))
+		if i < distributionWidth {
+			b.WriteString(s.hist.whole[i])
+			continue
+		}
+		// Only a peak that moved under the bar can ask for more than the ramp
+		// has; render that cell the old way rather than invent a short bar.
+		b.WriteString(s.bar.Foreground(colorAt(ramp, i*cells)).Render(s.glyph.Bar))
 	}
 	if part != "" {
-		b.WriteString(st.bar.Foreground(colorAt(ramp, whole)).Render(part))
+		b.WriteString(s.bar.Foreground(colorAt(ramp, whole)).Render(part))
 	}
 	return b.String()
 }
